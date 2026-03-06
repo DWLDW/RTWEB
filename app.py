@@ -22,7 +22,7 @@ ROLE_LABELS = {
     ROLE_PARENT: "학부모",
     ROLE_STUDENT: "학생",
 }
-CURRENT_LANG = "ko"
+CURRENT_LANG = "en"
 LANG_LABELS = {"ko": "한국어", "en": "English", "zh": "中文"}
 NAV_LABELS = {
     "dashboard": "menu.dashboard",
@@ -59,14 +59,14 @@ I18N_TEXTS = {
         "students.detail.title": "학생 상세", "students.detail.back": "학생 목록", "students.detail.edit": "수정",
         "students.detail.section.basic": "기본정보", "students.detail.section.attendance": "최근 출결", "students.detail.section.homework": "최근 숙제 제출/피드백",
         "students.detail.section.exams": "최근 시험/성적", "students.detail.section.counseling": "최근 상담 기록", "students.detail.section.payments": "최근 수납 기록", "students.detail.section.loans": "최근 도서 대출 기록",
-        "students.field.student_no": "학생번호", "students.field.name_ko": "한글이름", "students.field.name_en": "영문이름", "students.field.phone": "연락처",
+        "students.field.student_no": "학생번호", "students.field.name_ko": "중국이름", "students.field.name_en": "영문이름", "students.field.phone": "연락처",
         "students.field.guardian_name": "보호자명", "students.field.guardian_phone": "보호자 연락처", "students.field.class": "현재 반", "students.field.credits": "남은 크레딧",
         "students.field.status": "상태", "students.field.enrolled_at": "입학일", "students.field.leave_period": "휴학 기간", "students.field.memo": "메모",
         "students.field.lesson_date": "날짜", "students.field.note": "메모", "students.field.homework": "숙제", "students.field.submitted": "제출여부", "students.field.submitted_at": "제출일",
         "students.field.feedback": "피드백", "students.field.exam_name": "시험명", "students.field.score": "점수", "students.field.exam_date": "시험일", "students.field.recorded_at": "기록일",
         "students.field.special_note": "특이사항", "students.field.paid_date": "결제일", "students.field.amount": "금액", "students.field.package_hours": "패키지시간",
         "students.field.remaining_classes": "잔여수업수", "students.field.code": "코드", "students.field.title": "제목", "students.field.loaned_at": "대출일", "students.field.returned_at": "반납일",
-        "students.msg.saved": "저장되었습니다", "students.msg.pw_saved": "비밀번호가 변경되었습니다", "students.msg.no_user": "연결된 계정이 없습니다", "students.msg.empty_pw": "비밀번호를 입력하세요",
+        "students.msg.saved": "저장되었습니다", "students.msg.pw_saved": "비밀번호가 변경되었습니다", "students.msg.no_user": "연결된 계정이 없습니다", "students.msg.empty_pw": "비밀번호를 입력하세요", "students.msg.validation_error": "입력값 검증에 실패했습니다. 필수값/날짜/참조값을 확인하세요.",
         "status.active": "정상", "status.leave": "휴학", "status.ended": "종료",
         "counseling.title": "상담 기록/학생 특이사항", "counseling.student_id": "학생ID", "counseling.parent_id": "학부모ID", "counseling.memo": "메모", "counseling.special": "특이사항", "counseling.list": "상담 기록",
         "picker.student": "학생 검색 선택", "picker.class": "반 검색 선택", "picker.teacher": "강사 검색 선택",
@@ -94,14 +94,14 @@ I18N_TEXTS = {
         "students.detail.title": "Student Detail", "students.detail.back": "Student List", "students.detail.edit": "Edit",
         "students.detail.section.basic": "Basic Info", "students.detail.section.attendance": "Recent Attendance", "students.detail.section.homework": "Recent Homework Submissions/Feedback",
         "students.detail.section.exams": "Recent Exams/Scores", "students.detail.section.counseling": "Recent Counseling Records", "students.detail.section.payments": "Recent Payments", "students.detail.section.loans": "Recent Book Loans",
-        "students.field.student_no": "Student No", "students.field.name_ko": "Korean Name", "students.field.name_en": "English Name", "students.field.phone": "Phone",
+        "students.field.student_no": "Student No", "students.field.name_ko": "Chinese Name", "students.field.name_en": "English Name", "students.field.phone": "Phone",
         "students.field.guardian_name": "Guardian", "students.field.guardian_phone": "Guardian Phone", "students.field.class": "Class", "students.field.credits": "Remaining Credits",
         "students.field.status": "Status", "students.field.enrolled_at": "Enrollment Date", "students.field.leave_period": "Leave Period", "students.field.memo": "Memo",
         "students.field.lesson_date": "Date", "students.field.note": "Note", "students.field.homework": "Homework", "students.field.submitted": "Submitted", "students.field.submitted_at": "Submitted At",
         "students.field.feedback": "Feedback", "students.field.exam_name": "Exam", "students.field.score": "Score", "students.field.exam_date": "Exam Date", "students.field.recorded_at": "Recorded At",
         "students.field.special_note": "Special Note", "students.field.paid_date": "Paid Date", "students.field.amount": "Amount", "students.field.package_hours": "Package Hours",
         "students.field.remaining_classes": "Remaining Classes", "students.field.code": "Code", "students.field.title": "Title", "students.field.loaned_at": "Loaned At", "students.field.returned_at": "Returned At",
-        "students.msg.saved": "Saved successfully", "students.msg.pw_saved": "Password updated", "students.msg.no_user": "No linked user account", "students.msg.empty_pw": "Please enter a password",
+        "students.msg.saved": "Saved successfully", "students.msg.pw_saved": "Password updated", "students.msg.no_user": "No linked user account", "students.msg.empty_pw": "Please enter a password", "students.msg.validation_error": "Validation failed. Check required fields, date formats, and references.",
         "status.active": "Active", "status.leave": "Leave", "status.ended": "Ended",
         "counseling.title": "Counseling / Student Notes", "counseling.student_id": "Student ID", "counseling.parent_id": "Parent ID", "counseling.memo": "Memo", "counseling.special": "Special Note", "counseling.list": "Counseling Records",
         "picker.student": "Student Picker", "picker.class": "Class Picker", "picker.teacher": "Teacher Picker",
@@ -129,14 +129,14 @@ I18N_TEXTS = {
         "students.detail.title": "学生详情", "students.detail.back": "学生列表", "students.detail.edit": "编辑",
         "students.detail.section.basic": "基本信息", "students.detail.section.attendance": "最近考勤", "students.detail.section.homework": "最近作业提交/反馈",
         "students.detail.section.exams": "最近考试/成绩", "students.detail.section.counseling": "最近咨询记录", "students.detail.section.payments": "最近缴费记录", "students.detail.section.loans": "最近图书借阅记录",
-        "students.field.student_no": "学号", "students.field.name_ko": "韩文姓名", "students.field.name_en": "英文姓名", "students.field.phone": "联系电话",
+        "students.field.student_no": "学号", "students.field.name_ko": "中文名", "students.field.name_en": "英文名", "students.field.phone": "联系电话",
         "students.field.guardian_name": "监护人", "students.field.guardian_phone": "监护人电话", "students.field.class": "当前班级", "students.field.credits": "剩余学分",
         "students.field.status": "状态", "students.field.enrolled_at": "入学日", "students.field.leave_period": "休学期间", "students.field.memo": "备注",
         "students.field.lesson_date": "日期", "students.field.note": "备注", "students.field.homework": "作业", "students.field.submitted": "是否提交", "students.field.submitted_at": "提交日期",
         "students.field.feedback": "反馈", "students.field.exam_name": "考试名", "students.field.score": "分数", "students.field.exam_date": "考试日期", "students.field.recorded_at": "记录日",
         "students.field.special_note": "特殊事项", "students.field.paid_date": "支付日", "students.field.amount": "金额", "students.field.package_hours": "套餐课时",
         "students.field.remaining_classes": "剩余课次", "students.field.code": "编码", "students.field.title": "标题", "students.field.loaned_at": "借出日", "students.field.returned_at": "归还日",
-        "students.msg.saved": "已保存", "students.msg.pw_saved": "密码已更新", "students.msg.no_user": "未关联用户账号", "students.msg.empty_pw": "请输入密码",
+        "students.msg.saved": "已保存", "students.msg.pw_saved": "密码已更新", "students.msg.no_user": "未关联用户账号", "students.msg.empty_pw": "请输入密码", "students.msg.validation_error": "校验失败，请检查必填项、日期格式与关联引用。",
         "status.active": "正常", "status.leave": "休学", "status.ended": "结束",
         "counseling.title": "咨询记录/学生备注", "counseling.student_id": "学生ID", "counseling.parent_id": "家长ID", "counseling.memo": "备注", "counseling.special": "特殊事项", "counseling.list": "咨询记录",
         "picker.student": "学生搜索选择", "picker.class": "班级搜索选择", "picker.teacher": "教师搜索选择",
@@ -168,7 +168,7 @@ I18N_TEXTS["ko"].update({
     "academics.timetable_title": "시간표 관리", "academics.timetable_desc": "주간 수업 배치와 수업별 업무 이동을 관리합니다.", "academics.filter": "필터", "academics.week_prev": "이전 주", "academics.week_current": "현재 주", "academics.week_next": "다음 주",
     "academics.day_filter": "요일", "academics.teacher_filter": "강사", "academics.classroom_filter": "교실", "academics.course_level_filter": "코스/레벨", "academics.class_filter": "반 검색", "academics.search": "검색", "academics.add_lesson": "새 수업 추가",
     "academics.timetable": "주간 타임테이블", "academics.time_slot": "시간대", "academics.teacher_room": "강사/교실", "academics.students_summary": "학생", "academics.more_students": "+더보기", "academics.view_class": "반 상세", "academics.go_attendance": "출결", "academics.go_homework": "숙제", "academics.go_exams": "성적",
-    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.schedule_pick_class": "반 선택", "academics.schedule_pick_teacher": "강사 선택", "academics.schedule_teacher_auto": "반 담당 강사가 기본 선택됩니다", "academics.schedule_autofill": "선택한 반 정보를 자동으로 불러옵니다", "academics.schedule_pick_day": "요일 선택", "academics.schedule_pick_time": "시간 선택", "academics.schedule_pick_room": "교실 선택", "academics.schedule_pick_status": "상태 선택", "academics.schedule_pick_student": "학생", "academics.go_structure": "학사구조 관리로 이동", "academics.validation_class_required": "반을 먼저 선택하세요", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실"
+    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.schedule_pick_class": "반 선택", "academics.schedule_pick_teacher": "강사 선택", "academics.schedule_teacher_auto": "반 담당 강사가 기본 선택됩니다", "academics.schedule_autofill": "선택한 반 정보를 자동으로 불러옵니다", "academics.schedule_pick_day": "요일 선택", "academics.schedule_pick_time": "시간 선택", "academics.schedule_pick_room": "교실 선택", "academics.schedule_pick_status": "상태 선택", "academics.schedule_pick_student": "학생", "academics.go_structure": "학사구조 관리로 이동", "academics.validation_class_required": "반을 먼저 선택하세요", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실", "academics.action.attendance_eval": "출결 및 평가", "lesson.record.page_title": "수업기록 입력", "lesson.record.header": "학생별 기록 입력", "lesson.record.desc": "시간표에서 선택한 수업의 학생 전체를 한 번에 기록합니다.", "lesson.record.class_info": "수업 정보", "lesson.record.back_schedule": "시간표로 돌아가기", "lesson.record.input_title": "출결 및 평가 입력", "lesson.record.empty_students": "이 반에는 등록된 학생이 없어 입력할 수 없습니다. 학생을 반에 배정한 후 다시 시도하세요.", "lesson.record.invalid_class": "class_id가 올바르지 않습니다.", "lesson.record.not_found_class": "존재하지 않는 반입니다.", "lesson.record.saved": "수업기록(출결/평가)이 저장되었습니다", "lesson.score.participation": "수업참여", "lesson.score.fluency": "유창성", "lesson.score.vocabulary": "어휘", "lesson.score.reading": "읽기", "lesson.score.homework": "숙제", "lesson.score.attitude": "수업태도", "lesson.score.teacher_memo": "교사 메모", "students.detail.section.evaluations": "최근 수업 평가기록", "students.eval.avg.title": "최근 평가 평균(최근 10회)", "students.eval.avg.participation": "평균 수업참여", "students.eval.avg.fluency": "평균 유창성", "students.eval.avg.vocabulary": "평균 어휘", "students.eval.avg.reading": "평균 읽기", "students.eval.avg.homework": "평균 숙제", "students.eval.avg.attitude": "평균 수업태도"
 })
 I18N_TEXTS["en"].update({
     "common.add": "Add", "role.owner": "Owner", "role.manager": "Manager", "role.teacher": "Teacher", "role.parent": "Parent", "role.student": "Student",
@@ -187,7 +187,7 @@ I18N_TEXTS["en"].update({
     "academics.timetable_title": "Timetable Management", "academics.timetable_desc": "Manage weekly lesson placement and quick jumps to class operations.", "academics.filter": "Filters", "academics.week_prev": "Previous Week", "academics.week_current": "Current Week", "academics.week_next": "Next Week",
     "academics.day_filter": "Day", "academics.teacher_filter": "Teacher", "academics.classroom_filter": "Classroom", "academics.course_level_filter": "Course/Level", "academics.class_filter": "Class Search", "academics.search": "Search", "academics.add_lesson": "Add Lesson",
     "academics.timetable": "Weekly Timetable", "academics.time_slot": "Time Slots", "academics.teacher_room": "Teacher/Room", "academics.students_summary": "Students", "academics.more_students": "+more", "academics.view_class": "Class Detail", "academics.go_attendance": "Attendance", "academics.go_homework": "Homework", "academics.go_exams": "Scores",
-    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.schedule_pick_class": "Select Class", "academics.schedule_pick_teacher": "Select Teacher", "academics.schedule_teacher_auto": "Class teacher is selected by default", "academics.schedule_autofill": "Class info is auto-filled from selected class", "academics.schedule_pick_day": "Select Day", "academics.schedule_pick_time": "Select Time", "academics.schedule_pick_room": "Select Classroom", "academics.schedule_pick_status": "Select Status", "academics.schedule_pick_student": "Students", "academics.go_structure": "Go to academic structure management", "academics.validation_class_required": "Please select a class first", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom"
+    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.schedule_pick_class": "Select Class", "academics.schedule_pick_teacher": "Select Teacher", "academics.schedule_teacher_auto": "Class teacher is selected by default", "academics.schedule_autofill": "Class info is auto-filled from selected class", "academics.schedule_pick_day": "Select Day", "academics.schedule_pick_time": "Select Time", "academics.schedule_pick_room": "Select Classroom", "academics.schedule_pick_status": "Select Status", "academics.schedule_pick_student": "Students", "academics.go_structure": "Go to academic structure management", "academics.validation_class_required": "Please select a class first", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom", "academics.action.attendance_eval": "Attendance & Evaluation", "lesson.record.page_title": "Lesson Record Entry", "lesson.record.header": "Student Record Entry", "lesson.record.desc": "Record the full class attendance and evaluation in one pass.", "lesson.record.class_info": "Lesson Info", "lesson.record.back_schedule": "Back to Schedule", "lesson.record.input_title": "Attendance & Evaluation Input", "lesson.record.empty_students": "No students are assigned to this class yet. Assign students to the class and try again.", "lesson.record.invalid_class": "Invalid class_id.", "lesson.record.not_found_class": "Class not found.", "lesson.record.saved": "Lesson record (attendance/evaluation) saved.", "lesson.score.participation": "Participation", "lesson.score.fluency": "Fluency", "lesson.score.vocabulary": "Vocabulary", "lesson.score.reading": "Reading", "lesson.score.homework": "Homework", "lesson.score.attitude": "Attitude", "lesson.score.teacher_memo": "Teacher Memo", "students.detail.section.evaluations": "Recent Lesson Evaluations", "students.eval.avg.title": "Evaluation Averages (Recent 10)", "students.eval.avg.participation": "Avg Participation", "students.eval.avg.fluency": "Avg Fluency", "students.eval.avg.vocabulary": "Avg Vocabulary", "students.eval.avg.reading": "Avg Reading", "students.eval.avg.homework": "Avg Homework", "students.eval.avg.attitude": "Avg Attitude"
 })
 I18N_TEXTS["zh"].update({
     "common.add": "添加", "role.owner": "院长", "role.manager": "经理", "role.teacher": "教师", "role.parent": "家长", "role.student": "学生",
@@ -206,7 +206,7 @@ I18N_TEXTS["zh"].update({
     "academics.timetable_title": "课表管理", "academics.timetable_desc": "管理每周课程排布并快速跳转到班级业务。", "academics.filter": "筛选", "academics.week_prev": "上一周", "academics.week_current": "本周", "academics.week_next": "下一周",
     "academics.day_filter": "星期", "academics.teacher_filter": "教师", "academics.classroom_filter": "教室", "academics.course_level_filter": "课程/级别", "academics.class_filter": "班级搜索", "academics.search": "搜索", "academics.add_lesson": "新增课程",
     "academics.timetable": "周课表", "academics.time_slot": "时间段", "academics.teacher_room": "教师/教室", "academics.students_summary": "学生", "academics.more_students": "+更多", "academics.view_class": "班级详情", "academics.go_attendance": "考勤", "academics.go_homework": "作业", "academics.go_exams": "成绩",
-    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "选择教师", "academics.schedule_teacher_auto": "默认选择班级负责教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室"
+    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "选择教师", "academics.schedule_teacher_auto": "默认选择班级负责教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室", "academics.action.attendance_eval": "考勤与课堂评价", "lesson.record.page_title": "课程记录录入", "lesson.record.header": "学生记录录入", "lesson.record.desc": "一次性录入本节课所有学生的考勤与课堂评价。", "lesson.record.class_info": "课程信息", "lesson.record.back_schedule": "返回课表", "lesson.record.input_title": "考勤与课堂评价录入", "lesson.record.empty_students": "该班级暂无学生，无法录入。请先分配学生后重试。", "lesson.record.invalid_class": "class_id 参数无效。", "lesson.record.not_found_class": "未找到该班级。", "lesson.record.saved": "课程记录（考勤/评价）已保存", "lesson.score.participation": "课堂参与", "lesson.score.fluency": "流利度", "lesson.score.vocabulary": "词汇", "lesson.score.reading": "阅读", "lesson.score.homework": "作业", "lesson.score.attitude": "课堂态度", "lesson.score.teacher_memo": "教师备注", "students.detail.section.evaluations": "最近课堂评价记录", "students.eval.avg.title": "最近10次评价平均分", "students.eval.avg.participation": "平均课堂参与", "students.eval.avg.fluency": "平均流利度", "students.eval.avg.vocabulary": "平均词汇", "students.eval.avg.reading": "平均阅读", "students.eval.avg.homework": "平均作业", "students.eval.avg.attitude": "平均课堂态度"
 })
 
 def load_locale_files():
@@ -592,7 +592,7 @@ def get_lang(environ):
     cookie_lang = (cookies.get("lang") or "").strip().lower()
     if cookie_lang in SUPPORTED_LANGS:
         return cookie_lang
-    return "ko"
+    return "en"
 def parse_body(environ):
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -1181,7 +1181,7 @@ def app(environ, start_response):
         msg_key = query.get("msg", "")
         msg_map = {
             "saved": t("students.msg.saved"),
-            "validation_error": "입력값 검증에 실패했습니다. 필수값/날짜/참조값을 확인하세요.",
+            "validation_error": t("students.msg.validation_error"),
             "pw_saved": t("students.msg.pw_saved"),
             "no_user": t("students.msg.no_user"),
             "empty_pw": t("students.msg.empty_pw"),
@@ -1205,6 +1205,38 @@ def app(environ, start_response):
             (student_user_id,),
             att_page,
         )
+        eval_page = parse_page_param("eval_page")
+        evaluation_rows, evaluation_has_next = fetch_paged(
+            """SELECT a.lesson_date, c.name AS class_name, a.status,
+            a.participation_score, a.fluency_score, a.vocabulary_score, a.reading_score, a.homework_score, a.attitude_score,
+            COALESCE(a.teacher_memo, a.note) AS teacher_memo
+            FROM attendance a LEFT JOIN classes c ON c.id=a.class_id
+            WHERE a.student_id=? AND (
+              a.participation_score IS NOT NULL OR a.fluency_score IS NOT NULL OR a.vocabulary_score IS NOT NULL OR
+              a.reading_score IS NOT NULL OR a.homework_score IS NOT NULL OR a.attitude_score IS NOT NULL OR COALESCE(a.teacher_memo, a.note) IS NOT NULL
+            )
+            ORDER BY a.id DESC""",
+            (student_user_id,),
+            eval_page,
+        )
+        eval_avg = conn.execute(
+            """SELECT AVG(participation_score) AS avg_participation,
+            AVG(fluency_score) AS avg_fluency,
+            AVG(vocabulary_score) AS avg_vocabulary,
+            AVG(reading_score) AS avg_reading,
+            AVG(homework_score) AS avg_homework,
+            AVG(attitude_score) AS avg_attitude
+            FROM (
+              SELECT participation_score, fluency_score, vocabulary_score, reading_score, homework_score, attitude_score
+              FROM attendance
+              WHERE student_id=? AND (
+                participation_score IS NOT NULL OR fluency_score IS NOT NULL OR vocabulary_score IS NOT NULL OR
+                reading_score IS NOT NULL OR homework_score IS NOT NULL OR attitude_score IS NOT NULL
+              )
+              ORDER BY id DESC LIMIT 10
+            ) recent_eval""",
+            (student_user_id,),
+        ).fetchone()
         hw_page = parse_page_param("hw_page")
         submission_rows, submission_has_next = fetch_paged(
             """SELECT hs.id, h.title, hs.submitted, hs.submitted_at, hs.feedback
@@ -1263,7 +1295,7 @@ def app(environ, start_response):
                 out += "<tr>" + "".join(values) + "</tr>"
             return out
         def section_pager(param_name, page, has_next):
-            page_keys = ["att_page", "hw_page", "exam_page", "counseling_page", "payment_page", "loan_page"]
+            page_keys = ["att_page", "eval_page", "hw_page", "exam_page", "counseling_page", "payment_page", "loan_page"]
             def mk_link(target_page):
                 qp = {k: query.get(k, "1") for k in page_keys}
                 qp[param_name] = str(target_page)
@@ -1343,6 +1375,21 @@ def app(environ, start_response):
           {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
         </table>
         {section_pager('att_page', att_page, attendance_has_next)}
+        <h4>{t('students.detail.section.evaluations')}</h4>
+        <div class='muted'>
+          {t('students.eval.avg.title')}: 
+          {t('students.eval.avg.participation')} {f"{eval_avg['avg_participation']:.2f}" if eval_avg and eval_avg['avg_participation'] is not None else '-'} |
+          {t('students.eval.avg.fluency')} {f"{eval_avg['avg_fluency']:.2f}" if eval_avg and eval_avg['avg_fluency'] is not None else '-'} |
+          {t('students.eval.avg.vocabulary')} {f"{eval_avg['avg_vocabulary']:.2f}" if eval_avg and eval_avg['avg_vocabulary'] is not None else '-'} |
+          {t('students.eval.avg.reading')} {f"{eval_avg['avg_reading']:.2f}" if eval_avg and eval_avg['avg_reading'] is not None else '-'} |
+          {t('students.eval.avg.homework')} {f"{eval_avg['avg_homework']:.2f}" if eval_avg and eval_avg['avg_homework'] is not None else '-'} |
+          {t('students.eval.avg.attitude')} {f"{eval_avg['avg_attitude']:.2f}" if eval_avg and eval_avg['avg_attitude'] is not None else '-'}
+        </div>
+        <table>
+          <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('lesson.score.participation')}</th><th>{t('lesson.score.fluency')}</th><th>{t('lesson.score.vocabulary')}</th><th>{t('lesson.score.reading')}</th><th>{t('lesson.score.homework')}</th><th>{t('lesson.score.attitude')}</th><th>{t('lesson.score.teacher_memo')}</th></tr>
+          {rows_html(evaluation_rows, ['lesson_date', 'class_name', 'status', 'participation_score', 'fluency_score', 'vocabulary_score', 'reading_score', 'homework_score', 'attitude_score', 'teacher_memo'], 10)}
+        </table>
+        {section_pager('eval_page', eval_page, evaluation_has_next)}
         <h4>{t('students.detail.section.homework')}</h4>
         <table>
           <tr><th>{t('students.field.homework')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
@@ -2110,7 +2157,7 @@ def app(environ, start_response):
                       <div><span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span></div>
                       <div class='lesson-actions'>
                         <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={ref_date_str}&teacher_id={les['effective_teacher_id'] or ''}'>출결 및 평가</a>
+                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={ref_date_str}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
                         <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
@@ -2222,7 +2269,7 @@ def app(environ, start_response):
               </table>
               <div class='lesson-actions' style='margin-top:10px'>
                 <a class='btn' href='/classes/{selected_schedule['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                <a class='btn' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={selected_schedule['id']}&class_id={selected_schedule['class_id']}&lesson_date={ref_date_str}&teacher_id={selected_schedule['effective_teacher_id'] or ''}'>출결 및 평가</a>
+                <a class='btn' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={selected_schedule['id']}&class_id={selected_schedule['class_id']}&lesson_date={ref_date_str}&teacher_id={selected_schedule['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
                 <a class='btn' href='/homework?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_homework')}</a>
                 <a class='btn' href='/exams?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_exams')}</a>
               </div>
@@ -2336,7 +2383,7 @@ def app(environ, start_response):
         if lesson_mode:
             if not class_id_for_lesson or not str(class_id_for_lesson).isdigit():
                 conn.close()
-                html = render_html(t("attendance.title"), "<div class='card'><div class='flash error'>class_id가 올바르지 않습니다.</div></div>", user, current_menu="attendance")
+                html = render_html(t("attendance.title"), f"<div class='card'><div class='flash error'>{t('lesson.record.invalid_class')}</div></div>", user, current_menu="attendance")
                 status, headers, body = text_resp(html)
                 start_response(status, headers)
                 return [body]
@@ -2354,7 +2401,7 @@ def app(environ, start_response):
             ).fetchone()
             if not class_info:
                 conn.close()
-                html = render_html(t("attendance.title"), "<div class='card'><div class='flash error'>존재하지 않는 반입니다.</div></div>", user, current_menu="attendance")
+                html = render_html(t("attendance.title"), f"<div class='card'><div class='flash error'>{t('lesson.record.not_found_class')}</div></div>", user, current_menu="attendance")
                 status, headers, body = text_resp(html)
                 start_response(status, headers)
                 return [body]
@@ -2379,12 +2426,12 @@ def app(environ, start_response):
 
             score_fields = ["participation_score", "fluency_score", "vocabulary_score", "reading_score", "homework_score", "attitude_score"]
             score_labels = {
-                "participation_score": "수업참여",
-                "fluency_score": "유창성",
-                "vocabulary_score": "어휘",
-                "reading_score": "읽기",
-                "homework_score": "숙제",
-                "attitude_score": "수업태도",
+                "participation_score": t("lesson.score.participation"),
+                "fluency_score": t("lesson.score.fluency"),
+                "vocabulary_score": t("lesson.score.vocabulary"),
+                "reading_score": t("lesson.score.reading"),
+                "homework_score": t("lesson.score.homework"),
+                "attitude_score": t("lesson.score.attitude"),
             }
 
             target_schedule_id = schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None)
@@ -2461,7 +2508,7 @@ def app(environ, start_response):
                             conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
                                          ("absence", row["student_user_id"], json.dumps({"student_id": row["student_user_id"], "date": post_lesson_date}, ensure_ascii=False), now()))
                     conn.commit()
-                    flash_msg = "수업기록(출결/평가)이 저장되었습니다"
+                    flash_msg = t("lesson.record.saved")
                     lesson_date = post_lesson_date
 
             existing_map = {}
@@ -2510,29 +2557,29 @@ def app(environ, start_response):
             time_info = f"{h(schedule_info['day_of_week'])} {h(schedule_info['start_time'])}~{h(schedule_info['end_time'])}" if schedule_info else "-"
             room_info = h(schedule_info['classroom']) if schedule_info and schedule_info['classroom'] else "-"
 
-            empty_student_notice = "<div class='flash error'>이 반에는 등록된 학생이 없어 입력할 수 없습니다. 학생을 반에 배정한 후 다시 시도하세요.</div>" if not students_in_class else ""
-            html = render_html("출결 및 평가 입력", f"""
+            empty_student_notice = f"<div class='flash error'>{t('lesson.record.empty_students')}</div>" if not students_in_class else ""
+            html = render_html(t("lesson.record.page_title"), f"""
             <div class='card'>
-              <h4>학생별 기록 입력</h4>
-              <div class='muted'>시간표에서 선택한 수업의 학생 전체를 한 번에 기록합니다.</div>
+              <h4>{t('lesson.record.header')}</h4>
+              <div class='muted'>{t('lesson.record.desc')}</div>
             </div>
             <div class='card'>
-              <h4>수업 정보</h4>
-              <div><strong>반/코스/레벨/교사:</strong> {lesson_info}</div>
-              <div><strong>날짜:</strong> {h(lesson_date)}</div>
-              <div><strong>시간:</strong> {time_info}</div>
-              <div><strong>교실:</strong> {room_info}</div>
-              <div style='margin-top:8px'><a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>시간표로 돌아가기</a></div>
+              <h4>{t('lesson.record.class_info')}</h4>
+              <div><strong>{t('academics.course_level')} / {t('academics.teacher')}:</strong> {lesson_info}</div>
+              <div><strong>{t('field.date')}:</strong> {h(lesson_date)}</div>
+              <div><strong>{t('academics.time_slot')}:</strong> {time_info}</div>
+              <div><strong>{t('academics.classroom')}:</strong> {room_info}</div>
+              <div style='margin-top:8px'><a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('lesson.record.back_schedule')}</a></div>
             </div>
             <div class='card'>
-              <h4>출결 및 평가 입력</h4>
+              <h4>{t('lesson.record.input_title')}</h4>
               <form method='post'>
                 <input type='hidden' name='lesson_date' value='{h(lesson_date)}'>
                 {empty_student_notice}
                 <table>
                   <tr>
                     <th>학생번호</th><th>학생명</th><th>출결</th>
-                    <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>교사 메모</th>
+                    <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>{t('lesson.score.teacher_memo')}</th>
                   </tr>
                   {student_rows_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
                 </table>
