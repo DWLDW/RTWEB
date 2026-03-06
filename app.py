@@ -352,6 +352,18 @@ def ensure_logs_table(conn):
     )""")
 
 
+def ensure_logs_columns(conn):
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(app_logs)").fetchall()}
+    if "route" not in cols:
+        conn.execute("ALTER TABLE app_logs ADD COLUMN route TEXT")
+    if "user_id" not in cols:
+        conn.execute("ALTER TABLE app_logs ADD COLUMN user_id INTEGER")
+    if "detail" not in cols:
+        conn.execute("ALTER TABLE app_logs ADD COLUMN detail TEXT")
+    if "created_at" not in cols:
+        conn.execute("ALTER TABLE app_logs ADD COLUMN created_at TEXT")
+
+
 def log_event(conn, level, route, message, detail="", user_id=None):
     try:
         conn.execute(
@@ -446,6 +458,7 @@ def init_db():
     ensure_extended_columns(conn)
     ensure_master_tables(conn)
     ensure_logs_table(conn)
+    ensure_logs_columns(conn)
     cur = conn.execute("SELECT COUNT(*) AS c FROM users")
     if cur.fetchone()["c"] == 0:
         users = [
@@ -1728,6 +1741,7 @@ def app(environ, start_response):
             FROM schedules sc
             LEFT JOIN classes c ON c.id=sc.class_id
             LEFT JOIN users u ON u.id=c.teacher_id
+            LEFT JOIN users u2 ON u2.id=sc.teacher_id
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
             WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})"""
