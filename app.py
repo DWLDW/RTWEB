@@ -64,6 +64,15 @@ I18N_TEXTS = {
         "students.msg.saved": "저장되었습니다", "students.msg.pw_saved": "비밀번호가 변경되었습니다", "students.msg.no_user": "연결된 계정이 없습니다", "students.msg.empty_pw": "비밀번호를 입력하세요",
         "status.active": "정상", "status.leave": "휴학", "status.ended": "종료",
         "counseling.title": "상담 기록/학생 특이사항", "counseling.student_id": "학생ID", "counseling.parent_id": "학부모ID", "counseling.memo": "메모", "counseling.special": "특이사항", "counseling.list": "상담 기록",
+        "picker.student": "학생 검색 선택", "picker.class": "반 검색 선택", "picker.teacher": "강사 검색 선택",
+        "attendance.title": "출결 관리", "attendance.input": "출결 입력", "attendance.list": "출결 기록",
+        "homework.title": "숙제 관리", "homework.add": "숙제 등록", "homework.input": "제출/피드백 입력", "homework.list": "숙제 목록", "homework.submissions": "제출/피드백 목록",
+        "exams.title": "시험/성적 관리", "exams.add": "시험 등록", "exams.score_input": "점수 입력", "exams.list": "시험 목록", "exams.scores": "점수 목록",
+        "payments.title": "수납 기록", "payments.input": "결제 입력", "payments.list": "최근 수납 기록",
+        "ann.title": "공지/알림 구조", "ann.write": "공지 작성", "ann.list": "공지 목록", "ann.noti": "알림 데이터",
+        "library.title": "도서 대출 관리", "library.book_add": "도서 등록", "library.loan": "대출 처리", "library.return": "반납 처리", "library.books": "도서 목록", "library.history": "대출/반납 이력",
+        "field.class_id": "반ID", "field.student_id": "학생ID", "field.teacher_id": "강사ID", "field.date": "날짜", "field.status": "상태", "field.note": "메모", "field.title": "제목", "field.content": "내용", "field.type": "유형", "field.target": "대상", "field.data": "데이터", "field.writer": "작성자", "field.created_at": "생성일", "field.score": "점수",
+        "status.present": "출석", "status.late": "지각", "status.absent": "결석", "status.makeup": "보강",
     },
     "en": {
         "menu.dashboard": "Dashboard", "menu.users": "Users", "menu.students": "Students", "menu.academics": "Academics",
@@ -90,6 +99,15 @@ I18N_TEXTS = {
         "students.msg.saved": "Saved successfully", "students.msg.pw_saved": "Password updated", "students.msg.no_user": "No linked user account", "students.msg.empty_pw": "Please enter a password",
         "status.active": "Active", "status.leave": "Leave", "status.ended": "Ended",
         "counseling.title": "Counseling / Student Notes", "counseling.student_id": "Student ID", "counseling.parent_id": "Parent ID", "counseling.memo": "Memo", "counseling.special": "Special Note", "counseling.list": "Counseling Records",
+        "picker.student": "Student Picker", "picker.class": "Class Picker", "picker.teacher": "Teacher Picker",
+        "attendance.title": "Attendance Management", "attendance.input": "Attendance Entry", "attendance.list": "Attendance Records",
+        "homework.title": "Homework Management", "homework.add": "Add Homework", "homework.input": "Submission/Feedback Input", "homework.list": "Homework List", "homework.submissions": "Submission/Feedback List",
+        "exams.title": "Exam/Score Management", "exams.add": "Add Exam", "exams.score_input": "Score Input", "exams.list": "Exam List", "exams.scores": "Score List",
+        "payments.title": "Payment Records", "payments.input": "Payment Entry", "payments.list": "Recent Payments",
+        "ann.title": "Announcements/Notifications", "ann.write": "Write Announcement", "ann.list": "Announcement List", "ann.noti": "Notification Data",
+        "library.title": "Library Loan Management", "library.book_add": "Add Book", "library.loan": "Loan Process", "library.return": "Return Process", "library.books": "Book List", "library.history": "Loan/Return History",
+        "field.class_id": "Class ID", "field.student_id": "Student ID", "field.teacher_id": "Teacher ID", "field.date": "Date", "field.status": "Status", "field.note": "Note", "field.title": "Title", "field.content": "Content", "field.type": "Type", "field.target": "Target", "field.data": "Data", "field.writer": "Writer", "field.created_at": "Created At", "field.score": "Score",
+        "status.present": "Present", "status.late": "Late", "status.absent": "Absent", "status.makeup": "Makeup",
     },
     "zh": {
         "menu.dashboard": "仪表盘", "menu.users": "用户", "menu.students": "学生管理", "menu.academics": "学术结构",
@@ -116,8 +134,63 @@ I18N_TEXTS = {
         "students.msg.saved": "已保存", "students.msg.pw_saved": "密码已更新", "students.msg.no_user": "未关联用户账号", "students.msg.empty_pw": "请输入密码",
         "status.active": "正常", "status.leave": "休学", "status.ended": "结束",
         "counseling.title": "咨询记录/学生备注", "counseling.student_id": "学生ID", "counseling.parent_id": "家长ID", "counseling.memo": "备注", "counseling.special": "特殊事项", "counseling.list": "咨询记录",
+        "picker.student": "学生搜索选择", "picker.class": "班级搜索选择", "picker.teacher": "教师搜索选择",
+        "attendance.title": "考勤管理", "attendance.input": "考勤录入", "attendance.list": "考勤记录",
+        "homework.title": "作业管理", "homework.add": "作业登记", "homework.input": "提交/反馈录入", "homework.list": "作业列表", "homework.submissions": "提交/反馈列表",
+        "exams.title": "考试/成绩管理", "exams.add": "考试登记", "exams.score_input": "成绩录入", "exams.list": "考试列表", "exams.scores": "成绩列表",
+        "payments.title": "缴费记录", "payments.input": "缴费录入", "payments.list": "最近缴费记录",
+        "ann.title": "公告/通知结构", "ann.write": "发布公告", "ann.list": "公告列表", "ann.noti": "通知数据",
+        "library.title": "图书借阅管理", "library.book_add": "登记图书", "library.loan": "借出处理", "library.return": "归还处理", "library.books": "图书列表", "library.history": "借还记录",
+        "field.class_id": "班级ID", "field.student_id": "学生ID", "field.teacher_id": "教师ID", "field.date": "日期", "field.status": "状态", "field.note": "备注", "field.title": "标题", "field.content": "内容", "field.type": "类型", "field.target": "对象", "field.data": "数据", "field.writer": "创建者", "field.created_at": "创建时间", "field.score": "分数",
+        "status.present": "出勤", "status.late": "迟到", "status.absent": "缺勤", "status.makeup": "补课",
     },
 }
+
+I18N_TEXTS["ko"].update({
+    "common.add": "추가", "role.owner": "원장", "role.manager": "매니저", "role.teacher": "강사", "role.parent": "학부모", "role.student": "학생",
+    "login.default_accounts": "기본 계정: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
+    "field.name": "이름", "field.role": "역할", "field.student": "학생", "field.submitted": "제출", "field.homework_title": "숙제명", "field.due_date": "마감일",
+    "field.submission_count": "제출수", "field.total_targets": "총대상(등록수)", "field.avg_score": "평균점수", "field.score_entries": "입력건수",
+    "students.field.leave_start_date": "휴학시작", "students.field.leave_end_date": "휴학종료", "students.password_reset": "학생 계정 비밀번호 변경", "students.new_password": "새 비밀번호",
+    "academics.title": "코스/레벨/반/시간표 관리", "academics.register": "등록", "academics.course": "코스", "academics.level": "레벨", "academics.course_name": "코스명", "academics.level_name": "레벨명",
+    "academics.class_name": "반명", "academics.class_list": "반 목록", "academics.course_id": "코스ID", "academics.level_id": "레벨ID", "academics.schedule_class_id": "시간표 반ID",
+    "academics.day_of_week": "요일", "academics.start_time": "시작", "academics.end_time": "종료", "academics.teacher": "담당 강사", "academics.student_count": "학생 수", "academics.schedule": "시간표",
+    "academics.class_detail.title": "반 상세", "academics.back_to_list": "학사구조 목록", "academics.basic_info": "기본정보", "academics.course_level": "코스/레벨", "academics.students": "소속 학생",
+    "academics.sort": "정렬", "academics.sort_name": "이름 정렬", "academics.sort_student_no": "학생번호 정렬", "academics.sort_status": "상태 정렬", "academics.export_students_csv": "학생 CSV 내보내기", "academics.export_attendance_csv": "출결 CSV 내보내기",
+    "academics.recent_attendance": "최근 출결", "academics.recent_homework": "최근 숙제", "academics.recent_exams": "최근 시험/성적",
+    "forbidden.teacher_class_only": "담당 반만 처리할 수 있습니다", "forbidden.teacher_exam_only": "담당 시험만 처리할 수 있습니다",
+    "library.not_found": "도서를 찾을 수 없습니다", "library.loan_done": "대여 완료", "server.start": "LMS 서버 실행"
+})
+I18N_TEXTS["en"].update({
+    "common.add": "Add", "role.owner": "Owner", "role.manager": "Manager", "role.teacher": "Teacher", "role.parent": "Parent", "role.student": "Student",
+    "login.default_accounts": "Default accounts: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
+    "field.name": "Name", "field.role": "Role", "field.student": "Student", "field.submitted": "Submitted", "field.homework_title": "Homework", "field.due_date": "Due Date",
+    "field.submission_count": "Submissions", "field.total_targets": "Total Targets", "field.avg_score": "Average Score", "field.score_entries": "Score Entries",
+    "students.field.leave_start_date": "Leave Start", "students.field.leave_end_date": "Leave End", "students.password_reset": "Reset Student Password", "students.new_password": "New Password",
+    "academics.title": "Course/Level/Class/Schedule", "academics.register": "Register", "academics.course": "Course", "academics.level": "Level", "academics.course_name": "Course Name", "academics.level_name": "Level Name",
+    "academics.class_name": "Class Name", "academics.class_list": "Class List", "academics.course_id": "Course ID", "academics.level_id": "Level ID", "academics.schedule_class_id": "Schedule Class ID",
+    "academics.day_of_week": "Day", "academics.start_time": "Start", "academics.end_time": "End", "academics.teacher": "Teacher", "academics.student_count": "Students", "academics.schedule": "Schedule",
+    "academics.class_detail.title": "Class Detail", "academics.back_to_list": "Academics List", "academics.basic_info": "Basic Info", "academics.course_level": "Course/Level", "academics.students": "Class Students",
+    "academics.sort": "Sort", "academics.sort_name": "Sort by Name", "academics.sort_student_no": "Sort by Student No", "academics.sort_status": "Sort by Status", "academics.export_students_csv": "Export Students CSV", "academics.export_attendance_csv": "Export Attendance CSV",
+    "academics.recent_attendance": "Recent Attendance", "academics.recent_homework": "Recent Homework", "academics.recent_exams": "Recent Exams/Scores",
+    "forbidden.teacher_class_only": "Teacher can only access assigned classes", "forbidden.teacher_exam_only": "Teacher can only access assigned exams",
+    "library.not_found": "Book not found", "library.loan_done": "Loan completed", "server.start": "LMS server running"
+})
+I18N_TEXTS["zh"].update({
+    "common.add": "添加", "role.owner": "院长", "role.manager": "经理", "role.teacher": "教师", "role.parent": "家长", "role.student": "学生",
+    "login.default_accounts": "默认账号: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
+    "field.name": "姓名", "field.role": "角色", "field.student": "学生", "field.submitted": "提交", "field.homework_title": "作业名", "field.due_date": "截止日",
+    "field.submission_count": "提交数", "field.total_targets": "总对象", "field.avg_score": "平均分", "field.score_entries": "录入数",
+    "students.field.leave_start_date": "休学开始", "students.field.leave_end_date": "休学结束", "students.password_reset": "重置学生密码", "students.new_password": "新密码",
+    "academics.title": "课程/级别/班级/课表管理", "academics.register": "登记", "academics.course": "课程", "academics.level": "级别", "academics.course_name": "课程名", "academics.level_name": "级别名",
+    "academics.class_name": "班级名", "academics.class_list": "班级列表", "academics.course_id": "课程ID", "academics.level_id": "级别ID", "academics.schedule_class_id": "课表班级ID",
+    "academics.day_of_week": "星期", "academics.start_time": "开始", "academics.end_time": "结束", "academics.teacher": "负责教师", "academics.student_count": "学生数", "academics.schedule": "课表",
+    "academics.class_detail.title": "班级详情", "academics.back_to_list": "学术结构列表", "academics.basic_info": "基本信息", "academics.course_level": "课程/级别", "academics.students": "所属学生",
+    "academics.sort": "排序", "academics.sort_name": "按姓名排序", "academics.sort_student_no": "按学号排序", "academics.sort_status": "按状态排序", "academics.export_students_csv": "导出学生CSV", "academics.export_attendance_csv": "导出考勤CSV",
+    "academics.recent_attendance": "最近考勤", "academics.recent_homework": "最近作业", "academics.recent_exams": "最近考试/成绩",
+    "forbidden.teacher_class_only": "仅可处理负责班级", "forbidden.teacher_exam_only": "仅可处理负责考试",
+    "library.not_found": "未找到图书", "library.loan_done": "借阅完成", "server.start": "LMS 服务已启动"
+})
 
 def load_locale_files():
     locales_dir = os.path.join(BASE_DIR, "locales")
@@ -173,6 +246,12 @@ def menu_t(key, lang=None):
     return t(token, lang)
 def status_t(status, lang=None):
     return t(f"status.{status}", lang)
+
+def attendance_status_t(status, lang=None):
+    return t(f"status.{status}", lang)
+
+def role_label(role, lang=None):
+    return t(f"role.{role}", lang)
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -344,7 +423,7 @@ def forbidden_html(user, msg=None):
         msg = t("common.forbidden")
     html = render_html("403 Forbidden", f"<p style='color:red'>{msg}</p>", user)
     return "403 Forbidden", [("Content-Type", "text/html; charset=utf-8")], html
-def forbidden_json(msg="권한 없음"):
+def forbidden_json(msg=t('common.forbidden')):
     return json_resp({"error": msg}, "403 Forbidden")
 def can_view_student_row(user, st):
     if user["role"] in (ROLE_OWNER, ROLE_MANAGER):
@@ -446,7 +525,7 @@ def app(environ, start_response):
         ).fetchone()
         if not user:
             conn.close()
-            status, headers, body = json_resp({"error": "로그인 실패"}, "401 Unauthorized")
+            status, headers, body = json_resp({"error": t('login.failed')}, "401 Unauthorized")
             start_response(status, headers)
             return [body]
         token = str(uuid.uuid4())
@@ -465,7 +544,7 @@ def app(environ, start_response):
               <div>{t('login.password')} <input name='password' type='password'></div>
               <button type='submit'>{t('common.login')}</button>
             </form>
-            <p>기본 계정: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234</p>
+            <p>{t('login.default_accounts')}</p>
             """)
             status, headers, body = text_resp(html)
             start_response(status, headers)
@@ -565,13 +644,13 @@ def app(environ, start_response):
             <div class='card'>
               <h3>{t("users.add")}</h3>
               <form method='post' class='filter-row'>
-                <label>이름 <input name='name'></label>
-                <label>아이디 <input name='username'></label>
-                <label>비밀번호 <input name='password' type='password'></label>
-                <label>역할
+                <label>{t('field.name')} <input name='name'></label>
+                <label>{t('login.username')} <input name='username'></label>
+                <label>{t('login.password')} <input name='password' type='password'></label>
+                <label>{t('field.role')}
                 <select name='role'>
-                  <option value='owner'>원장</option><option value='manager'>매니저</option><option value='teacher'>강사</option>
-                  <option value='parent'>학부모</option><option value='student'>학생</option>
+                  <option value='owner'>{role_label('owner')}</option><option value='manager'>{role_label('manager')}</option><option value='teacher'>{role_label('teacher')}</option>
+                  <option value='parent'>{role_label('parent')}</option><option value='student'>{role_label('student')}</option>
                 </select></label>
                 <button>{t("common.save")}</button>
               </form>
@@ -581,8 +660,8 @@ def app(environ, start_response):
         <div class='card'>
           <h3>{t("users.list")}</h3>
           <table>
-            <tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>
-            {rows or "<tr><td colspan='4' class='empty-msg'>데이터 없음</td></tr>"}
+            <tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th></tr>
+            {rows or "<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
         """
@@ -761,32 +840,32 @@ def app(environ, start_response):
             edit_form = f"""
             <form id='student-edit' method='post' style='margin-bottom:16px'>
               <input type='hidden' name='action' value='save'>
-              <h4>수정 / Edit / 编辑</h4>
-              학생번호 <input name='student_no' value='{student['student_no'] or ''}'>
-              한글이름 <input name='name_ko' value='{student['name_ko'] or ''}'>
-              영문이름 <input name='name_en' value='{student['name_en'] or ''}'><br>
-              연락처 <input name='phone' value='{student['phone'] or ''}'>
-              보호자명 <input name='guardian_name' value='{student['guardian_name'] or ''}'>
-              보호자연락처 <input name='guardian_phone' value='{student['guardian_phone'] or ''}'><br>
-              현재 반 <select name='current_class_id'>{class_options}</select>
-              남은 크레딧 <input name='remaining_credits' value='{student['remaining_credits'] or 0}'>
-              상태 <select name='status'>
+              <h4>{t('common.edit')}</h4>
+              {t('students.field.student_no')} <input name='student_no' value='{student['student_no'] or ''}'>
+              {t('students.field.name_ko')} <input name='name_ko' value='{student['name_ko'] or ''}'>
+              {t('students.field.name_en')} <input name='name_en' value='{student['name_en'] or ''}'><br>
+              {t('students.field.phone')} <input name='phone' value='{student['phone'] or ''}'>
+              {t('students.field.guardian_name')} <input name='guardian_name' value='{student['guardian_name'] or ''}'>
+              {t('students.field.guardian_phone')} <input name='guardian_phone' value='{student['guardian_phone'] or ''}'><br>
+              {t('students.field.class')} <select name='current_class_id'>{class_options}</select>
+              {t('students.field.credits')} <input name='remaining_credits' value='{student['remaining_credits'] or 0}'>
+              {t('students.field.status')} <select name='status'>
                 <option value='active' {'selected' if student['status']=='active' else ''}>{status_t('active')}</option>
                 <option value='leave' {'selected' if student['status']=='leave' else ''}>{status_t('leave')}</option>
                 <option value='ended' {'selected' if student['status']=='ended' else ''}>{status_t('ended')}</option>
               </select><br>
-              입학일 <input name='enrolled_at' value='{student['enrolled_at'] or ''}'>
-              휴학시작 <input name='leave_start_date' value='{student['leave_start_date'] or ''}'>
-              휴학종료 <input name='leave_end_date' value='{student['leave_end_date'] or ''}'><br>
-              메모 <input name='memo' style='width:500px' value='{student['memo'] or ''}'><br>
+              {t('students.field.enrolled_at')} <input name='enrolled_at' value='{student['enrolled_at'] or ''}'>
+              {t('students.field.leave_start_date')} <input name='leave_start_date' value='{student['leave_start_date'] or ''}'>
+              {t('students.field.leave_end_date')} <input name='leave_end_date' value='{student['leave_end_date'] or ''}'><br>
+              {t('students.field.memo')} <input name='memo' style='width:500px' value='{student['memo'] or ''}'><br>
               <button>{t('common.save')}</button>
             </form>
             """
             pw_form = f"""
             <form method='post'>
               <input type='hidden' name='action' value='password'>
-              <h4>학생 계정 비밀번호 변경 / Password Reset / 重置密码</h4>
-              새 비밀번호 <input name='new_password' type='password'>
+              <h4>{t('students.password_reset')}</h4>
+              {t('students.new_password')} <input name='new_password' type='password'>
               <button>{t('common.edit')}</button>
             </form>
             """
@@ -923,14 +1002,14 @@ def app(environ, start_response):
               <td><span class='badge {st['status'] or ''}'>{status_t(st['status']) if st['status'] else '-'}</span></td>
             </tr>
             """
-        html = render_html("학생 관리 / Student Management / 学生管理", f"""
+        html = render_html(t('menu.students'), f"""
         <div class='card'>
           <h3>{t("students.search")}</h3>
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
-            <label>이름 <input name='name' value='{q_name}'></label>
-            <label>학생번호 <input name='student_no' value='{q_student_no}'></label>
-            <label>연락처 <input name='phone' value='{q_phone}'></label>
+            <label>{t('field.name')} <input name='name' value='{q_name}'></label>
+            <label>{t('students.field.student_no')} <input name='student_no' value='{q_student_no}'></label>
+            <label>{t('students.field.phone')} <input name='phone' value='{q_phone}'></label>
             <button>{t("common.search")}</button>
             <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>{t('common.reset')}</a>
           </form>
@@ -941,7 +1020,7 @@ def app(environ, start_response):
             <tr>
               <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
             </tr>
-            {rows or "<tr><td colspan='9' class='empty-msg'>데이터 없음 / No Data / 无数据</td></tr>"}
+            {rows or "<tr><td colspan='9' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
         """, user, current_menu="students")
@@ -1058,59 +1137,59 @@ def app(environ, start_response):
         homework_html = rows_html(homework_rows, ["title", "due_date", "submitted_count", "total_submissions"])
         exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
         next_order = "desc" if student_order == "asc" else "asc"
-        html = render_html("반 상세 / Class Detail / 班级详情", f"""
+        html = render_html(t('academics.class_detail.title'), f"""
         <div class='card'>
-        <div><a href='/academics?lang={CURRENT_LANG}'>← 학사구조 목록</a></div>
+        <div><a href='/academics?lang={CURRENT_LANG}'>← {t('academics.back_to_list')}</a></div>
         <h3>{class_row['name']}</h3>
         <table>
-          <tr><th>기본정보</th><td>반명: {class_row['name']}</td></tr>
-          <tr><th>코스/레벨</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
-          <tr><th>담당 강사</th><td>{class_row['teacher_name'] or '-'}</td></tr>
-          <tr><th>학생 수</th><td>{len(students)}</td></tr>
+          <tr><th>{t('academics.basic_info')}</th><td>{t('academics.class_name')}: {class_row['name']}</td></tr>
+          <tr><th>{t('academics.course_level')}</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.teacher')}</th><td>{class_row['teacher_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.student_count')}</th><td>{len(students)}</td></tr>
         </table>
         </div>
         <div class='card'>
-        <h4>소속 학생</h4>
+        <h4>{t('academics.students')}</h4>
         <div style='margin-bottom:8px'>
-          정렬: {student_sort} ({student_order}) |
-          <a href='?lang={CURRENT_LANG}&student_sort=name_ko&student_order={next_order}'>이름 정렬</a> |
-          <a href='?lang={CURRENT_LANG}&student_sort=student_no&student_order={next_order}'>학생번호 정렬</a> |
-          <a href='?lang={CURRENT_LANG}&student_sort=status&student_order={next_order}'>상태 정렬</a> |
-          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=students_csv'>학생 CSV 내보내기</a>
+          {t('academics.sort')}: {student_sort} ({student_order}) |
+          <a href='?lang={CURRENT_LANG}&student_sort=name_ko&student_order={next_order}'>{t('academics.sort_name')}</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort=student_no&student_order={next_order}'>{t('academics.sort_student_no')}</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort=status&student_order={next_order}'>{t('academics.sort_status')}</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=students_csv'>{t('academics.export_students_csv')}</a>
         </div>
         <table>
-          <tr><th>학생번호</th><th>이름</th><th>연락처</th><th>상태</th></tr>
+          <tr><th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('students.field.phone')}</th><th>{t('field.status')}</th></tr>
           {student_rows}
         </table>
         </div>
         <div class='card'>
-        <h4>시간표</h4>
+        <h4>{t('academics.schedule')}</h4>
         <table>
-          <tr><th>요일</th><th>시작</th><th>종료</th></tr>
+          <tr><th>{t('academics.day_of_week')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th></tr>
           {schedule_rows}
         </table>
         </div>
         <div class='card'>
-        <h4>최근 출결</h4>
+        <h4>{t('academics.recent_attendance')}</h4>
         <div style='margin-bottom:8px'>
-          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=attendance_csv'>출결 CSV 내보내기</a>
+          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=attendance_csv'>{t('academics.export_attendance_csv')}</a>
         </div>
         <table>
-          <tr><th>날짜</th><th>학생</th><th>상태</th><th>메모</th></tr>
+          <tr><th>{t('field.date')}</th><th>{t('field.student')}</th><th>{t('field.status')}</th><th>{t('field.note')}</th></tr>
           {attendance_html}
         </table>
         </div>
         <div class='card'>
-        <h4>최근 숙제</h4>
+        <h4>{t('academics.recent_homework')}</h4>
         <table>
-          <tr><th>숙제명</th><th>마감일</th><th>제출수</th><th>총대상(등록수)</th></tr>
+          <tr><th>{t('field.homework_title')}</th><th>{t('field.due_date')}</th><th>{t('field.submission_count')}</th><th>{t('field.total_targets')}</th></tr>
           {homework_html}
         </table>
         </div>
         <div class='card'>
-        <h4>최근 시험/성적</h4>
+        <h4>{t('academics.recent_exams')}</h4>
         <table>
-          <tr><th>시험명</th><th>시험일</th><th>평균점수</th><th>입력건수</th></tr>
+          <tr><th>{t('field.exam_name')}</th><th>{t('field.exam_date')}</th><th>{t('field.avg_score')}</th><th>{t('field.score_entries')}</th></tr>
           {exam_html}
         </table>
         </div>
@@ -1179,7 +1258,7 @@ def app(environ, start_response):
         level_rows = rows_html(levels, ["id", "name", "course_name", "created_at"])
         class_rows = ""
         if not classes:
-            class_rows = "<tr><td colspan='6'>데이터 없음</td></tr>"
+            class_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
         else:
             for c in classes:
                 class_rows += f"""
@@ -1192,39 +1271,39 @@ def app(environ, start_response):
                 </tr>
                 """
         schedule_rows = rows_html(schedules, ["id", "class_name", "day_of_week", "start_time", "end_time"])
-        html = render_html("코스/레벨/반/시간표 관리", f"""
+        html = render_html(t('academics.title'), f"""
         <div class='card'>
-        <h3>등록</h3>
-        <form method='post' class='filter-row'><label>코스 <input name='name'></label><input type='hidden' name='type' value='course'><button>추가</button></form>
-        <form method='post' class='filter-row'><label>레벨명 <input name='name'></label><label>코스ID <input name='course_id'></label><input type='hidden' name='type' value='level'><button>추가</button></form>
-        <form method='post' class='filter-row'><label>반명 <input name='name'></label><label>코스ID <input name='course_id'></label><label>레벨ID <input name='level_id'></label><label>강사ID <input name='teacher_id'></label><input type='hidden' name='type' value='class'><button>추가</button></form>
-        <form method='post' class='filter-row'><label>시간표 반ID <input name='class_id'></label><label>요일 <input name='day_of_week'></label><label>시작 <input name='start_time'></label><label>종료 <input name='end_time'></label><input type='hidden' name='type' value='schedule'><button>추가</button></form>
+        <h3>{t('academics.register')}</h3>
+        <form method='post' class='filter-row'><label>{t('academics.course')} <input name='name'></label><input type='hidden' name='type' value='course'><button>{t('common.add')}</button></form>
+        <form method='post' class='filter-row'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><input type='hidden' name='type' value='level'><button>{t('common.add')}</button></form>
+        <form method='post' class='filter-row'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><label>{t('academics.level_id')} <input name='level_id'></label><label>{t('field.teacher_id')} <input name='teacher_id'></label><input type='hidden' name='type' value='class'><button>{t('common.add')}</button></form>
+        <form method='post' class='filter-row'><label>{t('academics.schedule_class_id')} <input name='class_id'></label><label>{t('academics.day_of_week')} <input name='day_of_week'></label><label>{t('academics.start_time')} <input name='start_time'></label><label>{t('academics.end_time')} <input name='end_time'></label><input type='hidden' name='type' value='schedule'><button>{t('common.add')}</button></form>
         </div>
         <div class='card'>
-        <h4>코스</h4>
+        <h4>{t('academics.course')}</h4>
         <table>
-          <tr><th>ID</th><th>코스명</th><th>생성일</th></tr>
+          <tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th></tr>
           {course_rows}
         </table>
         </div>
         <div class='card'>
-        <h4>레벨</h4>
+        <h4>{t('academics.level')}</h4>
         <table>
-          <tr><th>ID</th><th>레벨명</th><th>코스</th><th>생성일</th></tr>
+          <tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th></tr>
           {level_rows}
         </table>
         </div>
         <div class='card'>
-        <h4>반 목록</h4>
+        <h4>{t('academics.class_list')}</h4>
         <table>
-          <tr><th>반명</th><th>코스</th><th>레벨</th><th>담당 강사</th><th>학생 수</th></tr>
+          <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>
           {class_rows}
         </table>
         </div>
         <div class='card'>
-        <h4>시간표</h4>
+        <h4>{t('academics.schedule')}</h4>
         <table>
-          <tr><th>ID</th><th>반</th><th>요일</th><th>시작</th><th>종료</th></tr>
+          <tr><th>{t('field.id')}</th><th>{t('academics.class_name')}</th><th>{t('academics.day_of_week')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th></tr>
           {schedule_rows}
         </table>
         </div>
@@ -1260,7 +1339,7 @@ def app(environ, start_response):
                 class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
                 if not class_ok:
                     conn.close()
-                    status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
+                    status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                     start_response(status, headers)
                     return [body]
             created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
@@ -1280,43 +1359,43 @@ def app(environ, start_response):
         else:
             rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
 
-        student_picker = render_picker_block("학생 검색 선택", "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
+        student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/attendance", CURRENT_LANG,
                                             {"selected_class_id": selected_class_id, "selected_teacher_id": selected_teacher_id, "class_q": query.get("class_q", ""), "teacher_q": query.get("teacher_q", "")})
-        class_picker = render_picker_block("반 검색 선택", "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
+        class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""),
                                           class_candidates, "/attendance", CURRENT_LANG,
                                           {"selected_student_id": selected_student_id, "selected_teacher_id": selected_teacher_id, "student_q": query.get("student_q", ""), "teacher_q": query.get("teacher_q", "")})
-        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+        teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
                                             (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
                                             teacher_candidates, "/attendance", CURRENT_LANG,
                                             {"selected_student_id": selected_student_id, "selected_class_id": selected_class_id, "student_q": query.get("student_q", ""), "class_q": query.get("class_q", "")})
 
         row_html = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['student_id']}</td><td>{r['lesson_date']}</td><td>{r['status']}</td><td>{r['note'] or '-'}</td></tr>" for r in rows])
-        html = render_html("출결 관리", f"""
+        html = render_html(t("attendance.title"), f"""
         {student_picker}
         {class_picker}
         {teacher_picker}
         <div class='card'>
-          <h4>출결 입력</h4>
+          <h4>{t("attendance.input")}</h4>
           <form method='post' class='filter-row'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
             <input type='hidden' name='teacher_id' value='{selected_teacher_id}'>
-            <label>학생ID <input value='{selected_student_id}' readonly></label>
-            <label>반ID <input value='{selected_class_id}' readonly></label>
-            <label>강사ID <input value='{selected_teacher_id}' readonly></label>
-            <label>날짜 <input name='lesson_date' placeholder='2026-03-06'></label>
-            <label>상태 <select name='status'><option value='present'>출석</option><option value='late'>지각</option><option value='absent'>결석</option><option value='makeup'>보강</option></select></label>
-            <label>메모 <input name='note'></label>
+            <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
+            <label>{t('field.class_id')} <input value='{selected_class_id}' readonly></label>
+            <label>{t('field.teacher_id')} <input value='{selected_teacher_id}' readonly></label>
+            <label>{t('field.date')} <input name='lesson_date' placeholder='2026-03-06'></label>
+            <label>{t('field.status')} <select name='status'><option value='present'>{attendance_status_t('present')}</option><option value='late'>{attendance_status_t('late')}</option><option value='absent'>{attendance_status_t('absent')}</option><option value='makeup'>{attendance_status_t('makeup')}</option></select></label>
+            <label>{t('field.note')} <input name='note'></label>
             <button>{t("common.save")}</button>
           </form>
         </div>
         <div class='card'>
-          <h4>출결 기록</h4>
+          <h4>{t("attendance.list")}</h4>
           <table>
-            <tr><th>ID</th><th>반ID</th><th>학생ID</th><th>날짜</th><th>상태</th><th>메모</th></tr>
+            <tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.student_id")}</th><th>{t("field.date")}</th><th>{t("field.status")}</th><th>{t("field.note")}</th></tr>
             {row_html or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
@@ -1347,7 +1426,7 @@ def app(environ, start_response):
                     class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
                     if not class_ok:
                         conn.close()
-                        status, headers, body = forbidden_html(user, "담당 반만 등록 가능 / Teacher class only / 仅限负责班级")
+                        status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                         start_response(status, headers)
                         return [body]
                 created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
@@ -1372,38 +1451,38 @@ def app(environ, start_response):
             hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
             sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
 
-        class_picker = render_picker_block("반 검색 선택", "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
+        class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
                                           {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
-        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+        teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
                                             (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""), teacher_candidates, "/homework", CURRENT_LANG,
                                             {"selected_class_id": selected_class_id, "class_q": query.get("class_q", "")})
         hw_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['title']}</td><td>{r['due_date'] or '-'}</td><td>{r['created_by']}</td></tr>" for r in hw])
         sub_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['homework_id']}</td><td>{r['student_id']}</td><td>{'Y' if r['submitted'] else '-'}</td><td>{r['feedback'] or '-'}</td></tr>" for r in sub])
 
-        html = render_html("숙제 관리", f"""
+        html = render_html(t("homework.title"), f"""
         {class_picker}
         {teacher_picker}
         <div class='card'>
-          <h4>숙제 등록</h4>
+          <h4>{t("homework.add")}</h4>
           <form method='post' class='filter-row'>
             <input type='hidden' name='type' value='homework'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
             <input type='hidden' name='teacher_id' value='{selected_teacher_id}'>
-            <label>반ID <input value='{selected_class_id}' readonly></label>
-            <label>강사ID <input value='{selected_teacher_id}' readonly></label>
-            <label>제목 <input name='title'></label>
-            <label>마감일 <input name='due_date' placeholder='2026-03-15'></label>
+            <label>{t('field.class_id')} <input value='{selected_class_id}' readonly></label>
+            <label>{t('field.teacher_id')} <input value='{selected_teacher_id}' readonly></label>
+            <label>{t('field.title')} <input name='title'></label>
+            <label>{t("field.due_date")} <input name='due_date' placeholder='2026-03-15'></label>
             <button>{t('common.save')}</button>
           </form>
         </div>
         <div class='card'>
-          <h4>제출/피드백 입력</h4>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='submission'>숙제ID<input name='homework_id'> 제출<input type='checkbox' name='submitted' value='1'><button>{t('common.save')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='feedback'>제출ID<input name='submission_id'> 피드백<input name='feedback'><button>{t('common.save')}</button></form>
+          <h4>{t("homework.input")}</h4>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='submission'>{t("field.homework_id")}<input name='homework_id'> {t('field.submitted')}<input type='checkbox' name='submitted' value='1'><button>{t('common.save')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='feedback'>{t("field.submission_id")}<input name='submission_id'> {t("field.feedback")}<input name='feedback'><button>{t('common.save')}</button></form>
         </div>
-        <div class='card'><h4>숙제 목록</h4><table><tr><th>ID</th><th>반ID</th><th>제목</th><th>마감일</th><th>등록자</th></tr>{hw_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>제출/피드백 목록</h4><table><tr><th>ID</th><th>숙제ID</th><th>학생ID</th><th>제출</th><th>피드백</th></tr>{sub_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("homework.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.title")}</th><th>{t("field.due_date")}</th><th>{t("field.writer")}</th></tr>{hw_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("homework.submissions")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.homework_id")}</th><th>{t("field.student_id")}</th><th>{t("common.selected")}</th><th>{t("field.feedback")}</th></tr>{sub_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="homework")
         status, headers, body = text_resp(html)
         conn.close()
@@ -1423,14 +1502,14 @@ def app(environ, start_response):
                     class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
                     if not class_ok:
                         conn.close()
-                        status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
+                        status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                         start_response(status, headers)
                         return [body]
                 elif typ == "score":
                     exam_ok = conn.execute("""SELECT e.id FROM exams e JOIN classes c ON c.id=e.class_id WHERE e.id=? AND c.teacher_id=?""", (d.get("exam_id"), user["id"])).fetchone()
                     if not exam_ok:
                         conn.close()
-                        status, headers, body = forbidden_html(user, "담당 시험만 처리할 수 있습니다 / Teacher exam only / 仅限负责考试")
+                        status, headers, body = forbidden_html(user, t('forbidden.teacher_exam_only'))
                         start_response(status, headers)
                         return [body]
             if typ == "exam":
@@ -1453,11 +1532,11 @@ def app(environ, start_response):
 
         exam_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['name']}</td><td>{r['exam_date'] or '-'}</td><td>{r['report'] or '-'}</td></tr>" for r in exams])
         score_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['exam_id']}</td><td>{r['student_id']}</td><td>{r['score']}</td></tr>" for r in scores])
-        html = render_html("시험/성적 관리", f"""
-        <div class='card'><h4>시험 등록</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='exam'>반ID<input name='class_id'> 시험명<input name='name'> 날짜<input name='exam_date'> 리포트<input name='report'> 연계도서ID<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>점수 입력</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='score'>시험ID<input name='exam_id'> 학생ID<input name='student_id'> 점수<input name='score'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>시험 목록</h4><table><tr><th>ID</th><th>반ID</th><th>시험명</th><th>시험일</th><th>리포트</th></tr>{exam_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>점수 목록</h4><table><tr><th>ID</th><th>시험ID</th><th>학생ID</th><th>점수</th></tr>{score_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        html = render_html(t("exams.title"), f"""
+        <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("exams.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.exam_name")}</th><th>{t("field.exam_date")}</th><th>{t("field.report")}</th></tr>{exam_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("exams.scores")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.exam_id")}</th><th>{t("field.student_id")}</th><th>{t("field.score")}</th></tr>{score_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="exams")
         status, headers, body = text_resp(html)
         conn.close()
@@ -1523,25 +1602,25 @@ def app(environ, start_response):
         else:
             rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
 
-        student_picker = render_picker_block("학생 검색 선택", "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
+        student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/payments", CURRENT_LANG, {})
         row_html = "".join([f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['paid_date']}</td><td>{r['amount']}</td><td>{r['package_hours']}</td><td>{r['remaining_classes']}</td></tr>" for r in rows])
-        html = render_html("수납 기록", f"""
+        html = render_html(t("payments.title"), f"""
         {student_picker if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
         <div class='card'>
-          <h4>결제 입력</h4>
+          <h4>{t("payments.input")}</h4>
           <form method='post' class='filter-row'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
-            <label>학생ID <input value='{selected_student_id}' readonly></label>
-            <label>결제일 <input name='paid_date' placeholder='2026-03-06'></label>
-            <label>금액 <input name='amount'></label>
-            <label>패키지시간 <input name='package_hours'></label>
-            <label>잔여수업수 <input name='remaining_classes'></label>
+            <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
+            <label>{t("field.paid_date")} <input name='paid_date' placeholder='2026-03-06'></label>
+            <label>{t("field.amount")} <input name='amount'></label>
+            <label>{t("field.package_hours")} <input name='package_hours'></label>
+            <label>{t("field.remaining_classes")} <input name='remaining_classes'></label>
             <button>{t('common.save')}</button>
           </form>
         </div>
-        <div class='card'><h4>최근 수납 기록</h4><table><tr><th>ID</th><th>학생ID</th><th>결제일</th><th>금액</th><th>패키지시간</th><th>잔여수업수</th></tr>{row_html or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("payments.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.student_id")}</th><th>{t("field.paid_date")}</th><th>{t("field.amount")}</th><th>{t("field.package_hours")}</th><th>{t("field.remaining_classes")}</th></tr>{row_html or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="payments")
         status, headers, body = text_resp(html)
         conn.close()
@@ -1556,10 +1635,10 @@ def app(environ, start_response):
         noti = conn.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 50").fetchall()
         ann_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['title']}</td><td>{r['content']}</td><td>{r['created_by']}</td><td>{r['created_at']}</td></tr>" for r in rows])
         noti_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['type']}</td><td>{r['target_user_id'] or '-'}</td><td>{r['payload']}</td><td>{r['created_at']}</td></tr>" for r in noti])
-        html = render_html("공지/알림 구조", f"""
-        <div class='card'><h4>공지 작성</h4><form method='post' class='filter-row'>제목<input name='title'> 내용<input name='content'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>공지 목록</h4><table><tr><th>ID</th><th>제목</th><th>내용</th><th>작성자</th><th>작성일</th></tr>{ann_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>알림 데이터</h4><table><tr><th>ID</th><th>유형</th><th>대상</th><th>데이터</th><th>생성일</th></tr>{noti_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        html = render_html(t("ann.title"), f"""
+        <div class='card'><h4>{t("ann.write")}</h4><form method='post' class='filter-row'>{t("field.title")}<input name='title'> {t('field.content')}<input name='content'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("ann.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.title")}</th><th>{t("field.content")}</th><th>{t("field.writer")}</th><th>{t("field.created_at")}</th></tr>{ann_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("ann.noti")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.type")}</th><th>{t("field.target")}</th><th>{t("field.data")}</th><th>{t("field.created_at")}</th></tr>{noti_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="announcements")
         status, headers, body = text_resp(html)
         conn.close()
@@ -1598,24 +1677,24 @@ def app(environ, start_response):
             conn.commit()
         books = conn.execute("SELECT * FROM books ORDER BY id DESC").fetchall()
         loans = conn.execute("SELECT * FROM book_loans ORDER BY id DESC").fetchall()
-        student_picker = render_picker_block("학생 검색 선택", "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
+        student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/library", CURRENT_LANG,
                                             {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
-        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+        teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
                                             (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
                                             teacher_candidates, "/library", CURRENT_LANG,
                                             {"selected_student_id": selected_student_id, "student_q": query.get("student_q", "")})
         book_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['code']}</td><td>{r['title']}</td><td>{r['status']}</td></tr>" for r in books])
         loan_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['book_id']}</td><td>{r['student_id']}</td><td>{r['loaned_at']}</td><td>{r['returned_at'] or '-'}</td><td>{r['handled_by']}</td></tr>" for r in loans])
-        html = render_html("도서 대출 관리", f"""
+        html = render_html(t("library.title"), f"""
         {student_picker}
         {teacher_picker}
-        <div class='card'><h4>도서 등록</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='book'>코드<input name='code'> 제목<input name='title'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>대출 처리</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>코드<input name='code'> 학생ID<input value='{selected_student_id}' readonly> 강사ID<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>반납 처리</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='return'>코드<input name='code'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>도서 목록</h4><table><tr><th>ID</th><th>코드</th><th>제목</th><th>상태</th></tr>{book_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>대출/반납 이력</h4><table><tr><th>ID</th><th>도서ID</th><th>학생ID</th><th>대출일</th><th>반납일</th><th>처리자</th></tr>{loan_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.return")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.books")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("library.history")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.book_id")}</th><th>{t("field.student_id")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="library")
         status, headers, body = text_resp(html)
         conn.close()
@@ -1631,13 +1710,13 @@ def app(environ, start_response):
         d = parse_body(environ)
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
-            status, headers, body = forbidden_json("권한 없음")
+            status, headers, body = forbidden_json()
             start_response(status, headers)
             return [body]
         book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
         if not book:
             conn.close()
-            status, headers, body = json_resp({"error": "도서 없음"}, "404 Not Found")
+            status, headers, body = json_resp({"error": t('library.not_found')}, "404 Not Found")
             start_response(status, headers)
             return [body]
         conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
@@ -1647,7 +1726,7 @@ def app(environ, start_response):
         conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_user_id, now(), user["id"], now()))
         conn.commit()
         conn.close()
-        status, headers, body = json_resp({"message": "대여 완료"})
+        status, headers, body = json_resp({"message": t('library.loan_done')})
         start_response(status, headers)
         return [body]
     conn.close()
@@ -1656,5 +1735,5 @@ def app(environ, start_response):
 if __name__ == "__main__":
     init_db()
     with make_server("0.0.0.0", 8000, app) as httpd:
-        print("LMS 서버 실행: http://127.0.0.1:8000")
+        print(t('server.start') + ': http://127.0.0.1:8000')
         httpd.serve_forever()
