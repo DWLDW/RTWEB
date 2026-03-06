@@ -154,6 +154,14 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ## 9) i18n 기본 구조 (ko/zh/en)
 
+### 언어 파일 분리/확장 (Addon 방식)
+- `locales/*.json` 파일을 자동 로드합니다.
+- 예: `locales/ja.json` 추가 시 `ja` 언어 코드가 자동으로 지원 목록에 포함됩니다.
+- 파일 형식:
+  - `__labels__.lang`: 드롭다운 표시명
+  - 나머지 키: 번역 키-값(`menu.dashboard`, `common.save` 등)
+- 앱 내 기본 사전(`I18N_TEXTS`)을 기본값으로 두고, 파일의 값이 있으면 덮어씁니다.
+
 - 현재 언어 저장: `lang` 쿠키 (`?lang=ko|zh|en` 선택 시 자동 저장)
 - 공통 번역 사전: `app.py`의 `I18N_TEXTS`
 - 공통 함수:
