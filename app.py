@@ -470,7 +470,7 @@ def ensure_master_tables(conn):
       created_at TEXT NOT NULL
     )""")
 
-
+ 
 def repair_profile_integrity(conn):
     # 학생 role 사용자 -> students 프로필 보강
     student_users = conn.execute("SELECT id, name FROM users WHERE role=?", (ROLE_STUDENT,)).fetchall()
