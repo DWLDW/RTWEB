@@ -175,7 +175,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 공통 버튼 일부(저장/검색/로그인/로그아웃)
 - 학생 상태값(active/leave/ended) 표기
 
-### 향후 확대 적용 포인트
+### 향후 확대 적용 포인트https://github.com/DWLDW/RTWEB/pull/27/conflict?name=app.py&base_oid=9d099f1d2052c7a8d69f7218565d42da74c74705&head_oid=9278b4dedd0626b0af4e906296f948ddd7da3f81
 1. 페이지 제목/폼 라벨을 `t()`로 단계적 치환
 2. 에러/알림 메시지 키 분리
 3. 상태값 외 도메인 코드(출결 상태 등) 번역 테이블화
