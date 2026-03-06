@@ -53,7 +53,19 @@ I18N_TEXTS = {
         "common.login_as": "로그인", "common.language": "언어", "common.login": "로그인", "common.logout": "로그아웃",
         "common.save": "저장", "common.edit": "수정", "common.delete": "삭제", "common.search": "검색",
         "common.no_data": "데이터 없음", "common.selected": "선택됨", "common.forbidden": "접근 권한이 없습니다",
+        "common.yes": "예", "common.no": "아니오", "common.prev": "이전", "common.next": "다음",
         "login.title": "LMS 로그인", "login.username": "아이디", "login.password": "비밀번호", "login.failed": "로그인 실패",
+        "students.detail.title": "학생 상세", "students.detail.back": "학생 목록", "students.detail.edit": "수정",
+        "students.detail.section.basic": "기본정보", "students.detail.section.attendance": "최근 출결", "students.detail.section.homework": "최근 숙제 제출/피드백",
+        "students.detail.section.exams": "최근 시험/성적", "students.detail.section.counseling": "최근 상담 기록", "students.detail.section.payments": "최근 수납 기록", "students.detail.section.loans": "최근 도서 대출 기록",
+        "students.field.student_no": "학생번호", "students.field.name_ko": "한글이름", "students.field.name_en": "영문이름", "students.field.phone": "연락처",
+        "students.field.guardian_name": "보호자명", "students.field.guardian_phone": "보호자 연락처", "students.field.class": "현재 반", "students.field.credits": "남은 크레딧",
+        "students.field.status": "상태", "students.field.enrolled_at": "입학일", "students.field.leave_period": "휴학 기간", "students.field.memo": "메모",
+        "students.field.lesson_date": "날짜", "students.field.note": "메모", "students.field.homework": "숙제", "students.field.submitted": "제출여부", "students.field.submitted_at": "제출일",
+        "students.field.feedback": "피드백", "students.field.exam_name": "시험명", "students.field.score": "점수", "students.field.exam_date": "시험일", "students.field.recorded_at": "기록일",
+        "students.field.special_note": "특이사항", "students.field.paid_date": "결제일", "students.field.amount": "금액", "students.field.package_hours": "패키지시간",
+        "students.field.remaining_classes": "잔여수업수", "students.field.code": "코드", "students.field.title": "제목", "students.field.loaned_at": "대출일", "students.field.returned_at": "반납일",
+        "students.msg.saved": "저장되었습니다", "students.msg.pw_saved": "비밀번호가 변경되었습니다", "students.msg.no_user": "연결된 계정이 없습니다", "students.msg.empty_pw": "비밀번호를 입력하세요",
         "status.active": "정상", "status.leave": "휴학", "status.ended": "종료",
     },
     "en": {
@@ -63,7 +75,19 @@ I18N_TEXTS = {
         "common.login_as": "Signed in", "common.language": "Language", "common.login": "Login", "common.logout": "Logout",
         "common.save": "Save", "common.edit": "Edit", "common.delete": "Delete", "common.search": "Search",
         "common.no_data": "No Data", "common.selected": "Selected", "common.forbidden": "Forbidden",
+        "common.yes": "Yes", "common.no": "No", "common.prev": "Prev", "common.next": "Next",
         "login.title": "LMS Login", "login.username": "Username", "login.password": "Password", "login.failed": "Login failed",
+        "students.detail.title": "Student Detail", "students.detail.back": "Student List", "students.detail.edit": "Edit",
+        "students.detail.section.basic": "Basic Info", "students.detail.section.attendance": "Recent Attendance", "students.detail.section.homework": "Recent Homework Submissions/Feedback",
+        "students.detail.section.exams": "Recent Exams/Scores", "students.detail.section.counseling": "Recent Counseling Records", "students.detail.section.payments": "Recent Payments", "students.detail.section.loans": "Recent Book Loans",
+        "students.field.student_no": "Student No", "students.field.name_ko": "Korean Name", "students.field.name_en": "English Name", "students.field.phone": "Phone",
+        "students.field.guardian_name": "Guardian", "students.field.guardian_phone": "Guardian Phone", "students.field.class": "Class", "students.field.credits": "Remaining Credits",
+        "students.field.status": "Status", "students.field.enrolled_at": "Enrollment Date", "students.field.leave_period": "Leave Period", "students.field.memo": "Memo",
+        "students.field.lesson_date": "Date", "students.field.note": "Note", "students.field.homework": "Homework", "students.field.submitted": "Submitted", "students.field.submitted_at": "Submitted At",
+        "students.field.feedback": "Feedback", "students.field.exam_name": "Exam", "students.field.score": "Score", "students.field.exam_date": "Exam Date", "students.field.recorded_at": "Recorded At",
+        "students.field.special_note": "Special Note", "students.field.paid_date": "Paid Date", "students.field.amount": "Amount", "students.field.package_hours": "Package Hours",
+        "students.field.remaining_classes": "Remaining Classes", "students.field.code": "Code", "students.field.title": "Title", "students.field.loaned_at": "Loaned At", "students.field.returned_at": "Returned At",
+        "students.msg.saved": "Saved successfully", "students.msg.pw_saved": "Password updated", "students.msg.no_user": "No linked user account", "students.msg.empty_pw": "Please enter a password",
         "status.active": "Active", "status.leave": "Leave", "status.ended": "Ended",
     },
     "zh": {
@@ -73,7 +97,19 @@ I18N_TEXTS = {
         "common.login_as": "当前登录", "common.language": "语言", "common.login": "登录", "common.logout": "退出登录",
         "common.save": "保存", "common.edit": "编辑", "common.delete": "删除", "common.search": "搜索",
         "common.no_data": "无数据", "common.selected": "已选择", "common.forbidden": "无权限",
+        "common.yes": "是", "common.no": "否", "common.prev": "上一页", "common.next": "下一页",
         "login.title": "LMS 登录", "login.username": "账号", "login.password": "密码", "login.failed": "登录失败",
+        "students.detail.title": "学生详情", "students.detail.back": "学生列表", "students.detail.edit": "编辑",
+        "students.detail.section.basic": "基本信息", "students.detail.section.attendance": "最近考勤", "students.detail.section.homework": "最近作业提交/反馈",
+        "students.detail.section.exams": "最近考试/成绩", "students.detail.section.counseling": "最近咨询记录", "students.detail.section.payments": "最近缴费记录", "students.detail.section.loans": "最近图书借阅记录",
+        "students.field.student_no": "学号", "students.field.name_ko": "韩文姓名", "students.field.name_en": "英文姓名", "students.field.phone": "联系电话",
+        "students.field.guardian_name": "监护人", "students.field.guardian_phone": "监护人电话", "students.field.class": "当前班级", "students.field.credits": "剩余学分",
+        "students.field.status": "状态", "students.field.enrolled_at": "入学日", "students.field.leave_period": "休学期间", "students.field.memo": "备注",
+        "students.field.lesson_date": "日期", "students.field.note": "备注", "students.field.homework": "作业", "students.field.submitted": "是否提交", "students.field.submitted_at": "提交日期",
+        "students.field.feedback": "反馈", "students.field.exam_name": "考试名", "students.field.score": "分数", "students.field.exam_date": "考试日期", "students.field.recorded_at": "记录日",
+        "students.field.special_note": "特殊事项", "students.field.paid_date": "支付日", "students.field.amount": "金额", "students.field.package_hours": "套餐课时",
+        "students.field.remaining_classes": "剩余课次", "students.field.code": "编码", "students.field.title": "标题", "students.field.loaned_at": "借出日", "students.field.returned_at": "归还日",
+        "students.msg.saved": "已保存", "students.msg.pw_saved": "密码已更新", "students.msg.no_user": "未关联用户账号", "students.msg.empty_pw": "请输入密码",
         "status.active": "正常", "status.leave": "休学", "status.ended": "结束",
     },
 }
@@ -570,57 +606,115 @@ def app(environ, start_response):
             return [body]
         msg_key = query.get("msg", "")
         msg_map = {
-            "saved": "저장되었습니다 / Saved / 已保存",
-            "pw_saved": "비밀번호가 변경되었습니다 / Password updated / 密码已更新",
-            "no_user": "연결된 계정이 없습니다 / No linked user / 未关联用户账号",
-            "empty_pw": "비밀번호를 입력하세요 / Enter password / 请输入密码",
+            "saved": t("students.msg.saved"),
+            "pw_saved": t("students.msg.pw_saved"),
+            "no_user": t("students.msg.no_user"),
+            "empty_pw": t("students.msg.empty_pw"),
         }
         message = msg_map.get(msg_key, "")
+
+        detail_page_size = 10
+
+        def parse_page_param(name):
+            raw = query.get(name, "1")
+            return int(raw) if raw.isdigit() and int(raw) > 0 else 1
+
+        def fetch_paged(sql, params, page):
+            offset = (page - 1) * detail_page_size
+            rows = conn.execute(sql + " LIMIT ? OFFSET ?", (*params, detail_page_size + 1, offset)).fetchall()
+            has_next = len(rows) > detail_page_size
+            return rows[:detail_page_size], has_next
+
         student_user_id = student["user_id"]
-        attendance_rows = conn.execute(
+
+        att_page = parse_page_param("att_page")
+        attendance_rows, attendance_has_next = fetch_paged(
             """SELECT a.lesson_date, a.status, a.note, c.name AS class_name
             FROM attendance a LEFT JOIN classes c ON c.id=a.class_id
-            WHERE a.student_id=? ORDER BY a.id DESC LIMIT 10""",
+            WHERE a.student_id=? ORDER BY a.id DESC""",
             (student_user_id,),
-        ).fetchall()
-        submission_rows = conn.execute(
+            att_page,
+        )
+
+        hw_page = parse_page_param("hw_page")
+        submission_rows, submission_has_next = fetch_paged(
             """SELECT hs.id, h.title, hs.submitted, hs.submitted_at, hs.feedback
             FROM homework_submissions hs LEFT JOIN homework h ON h.id=hs.homework_id
-            WHERE hs.student_id=? ORDER BY hs.id DESC LIMIT 10""",
+            WHERE hs.student_id=? ORDER BY hs.id DESC""",
             (student_user_id,),
-        ).fetchall()
-        exam_rows = conn.execute(
+            hw_page,
+        )
+
+        exam_page = parse_page_param("exam_page")
+        exam_rows, exam_has_next = fetch_paged(
             """SELECT e.name AS exam_name, es.score, e.exam_date
             FROM exam_scores es LEFT JOIN exams e ON e.id=es.exam_id
-            WHERE es.student_id=? ORDER BY es.id DESC LIMIT 10""",
+            WHERE es.student_id=? ORDER BY es.id DESC""",
             (student_user_id,),
-        ).fetchall()
-        counseling_rows = conn.execute(
-            """SELECT recorded_at, memo, is_special_note FROM (
-            SELECT c.created_at AS recorded_at, c.memo, c.is_special_note
-            FROM counseling c WHERE c.student_id=? ORDER BY c.id DESC LIMIT 10
-            )""",
+            exam_page,
+        )
+
+        counseling_page = parse_page_param("counseling_page")
+        counseling_rows, counseling_has_next = fetch_paged(
+            """SELECT c.created_at AS recorded_at, c.memo, c.is_special_note
+            FROM counseling c WHERE c.student_id=? ORDER BY c.id DESC""",
             (student_user_id,),
-        ).fetchall()
-        payment_rows = conn.execute(
+            counseling_page,
+        )
+
+        payment_page = parse_page_param("payment_page")
+        payment_rows, payment_has_next = fetch_paged(
             """SELECT paid_date, amount, package_hours, remaining_classes
-            FROM payments WHERE student_id=? ORDER BY id DESC LIMIT 10""",
+            FROM payments WHERE student_id=? ORDER BY id DESC""",
             (student_user_id,),
-        ).fetchall()
-        loan_rows = conn.execute(
+            payment_page,
+        )
+
+        loan_page = parse_page_param("loan_page")
+        loan_rows, loan_has_next = fetch_paged(
             """SELECT b.code, b.title, bl.loaned_at, bl.returned_at
             FROM book_loans bl LEFT JOIN books b ON b.id=bl.book_id
-            WHERE bl.student_id=? ORDER BY bl.id DESC LIMIT 10""",
+            WHERE bl.student_id=? ORDER BY bl.id DESC""",
             (student_user_id,),
-        ).fetchall()
+            loan_page,
+        )
 
         def rows_html(rows, cols, empty_colspan):
             if not rows:
-                return f"<tr><td colspan='{empty_colspan}'>데이터 없음</td></tr>"
+                return f"<tr><td colspan='{empty_colspan}'>{t('common.no_data')}</td></tr>"
             out = ""
             for r in rows:
-                out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
+                values = []
+                for c in cols:
+                    v = r[c]
+                    if c == "status" and v:
+                        v = status_t(v)
+                    elif c == "submitted":
+                        v = t("common.yes") if str(v) == "1" else t("common.no")
+                    elif c == "is_special_note":
+                        v = t("common.yes") if str(v) == "1" else t("common.no")
+                    if v in (None, ""):
+                        v = "-"
+                    values.append(f"<td>{v}</td>")
+                out += "<tr>" + "".join(values) + "</tr>"
             return out
+
+        def section_pager(param_name, page, has_next):
+            page_keys = ["att_page", "hw_page", "exam_page", "counseling_page", "payment_page", "loan_page"]
+
+            def mk_link(target_page):
+                qp = {k: query.get(k, "1") for k in page_keys}
+                qp[param_name] = str(target_page)
+                qp["lang"] = CURRENT_LANG
+                qstr = "&".join([f"{k}={v}" for k, v in qp.items()])
+                return f"?{qstr}"
+
+            prev_link = f"<a href='{mk_link(page-1)}'>{t('common.prev')}</a>" if page > 1 else ""
+            next_link = f"<a href='{mk_link(page+1)}'>{t('common.next')}</a>" if has_next else ""
+            if not prev_link and not next_link:
+                return ""
+            sep = " | " if prev_link and next_link else ""
+            return f"<div style='margin:4px 0 12px 0'>{prev_link}{sep}{next_link}</div>"
 
         class_opts = ["<option value=''>-</option>"]
         for c in classes:
@@ -651,76 +745,89 @@ def app(environ, start_response):
               휴학시작 <input name='leave_start_date' value='{student['leave_start_date'] or ''}'>
               휴학종료 <input name='leave_end_date' value='{student['leave_end_date'] or ''}'><br>
               메모 <input name='memo' style='width:500px' value='{student['memo'] or ''}'><br>
-              <button>저장 / Save / 保存</button>
+              <button>{t('common.save')}</button>
             </form>
             """
-            pw_form = """
+            pw_form = f"""
             <form method='post'>
               <input type='hidden' name='action' value='password'>
               <h4>학생 계정 비밀번호 변경 / Password Reset / 重置密码</h4>
               새 비밀번호 <input name='new_password' type='password'>
-              <button>변경 / Update / 更新</button>
+              <button>{t('common.edit')}</button>
             </form>
             """
 
         edit_button_html = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            edit_button_html = '<div style="margin:8px 0"><button type="button" onclick="location.hash=\'student-edit\'">수정</button></div>'
+            edit_button_html = f'<div style="margin:8px 0"><button type="button" onclick="location.hash=\'student-edit\'">{t("students.detail.edit")}</button></div>'
 
         body_html = f"""
-        <div><a href='/students?lang={CURRENT_LANG}'>← 학생 목록 / Student List / 学生列表</a></div>
+        <div><a href='/students?lang={CURRENT_LANG}'>← {t("students.detail.back")}</a></div>
         {f"<p style='color:green'>{message}</p>" if message else ''}
         <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>{edit_button_html}
-        <table border='1' cellpadding='6'>
-          <tr><th>기본정보 / Basic / 基本信息</th><td>한글이름: {student['name_ko'] or '-'} / 영문이름: {student['name_en'] or '-'} / 연락처: {student['phone'] or '-'}</td></tr>
-          <tr><th>보호자정보 / Guardian / 监护人</th><td>{student['guardian_name'] or '-'} ({student['guardian_phone'] or '-'})</td></tr>
-          <tr><th>현재반 / Class / 当前班级</th><td>{student['class_name'] or '-'}</td></tr>
-          <tr><th>남은크레딧 / Credits / 剩余学分</th><td>{student['remaining_credits'] or 0}</td></tr>
-          <tr><th>상태 / Status / 状态</th><td>{status_t(student['status']) if student['status'] else '-'}</td></tr>
-          <tr><th>입/휴학 / Enrollment-Leave / 入学休学</th><td>입학일: {student['enrolled_at'] or '-'} / 휴학: {student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
-          <tr><th>메모 / Memo / 备注</th><td>{student['memo'] or '-'}</td></tr>
+        <h4>{t('students.detail.section.basic')}</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>{t('students.field.student_no')}</th><td>{student['student_no'] or '-'}</td></tr>
+          <tr><th>{t('students.field.name_ko')}</th><td>{student['name_ko'] or '-'}</td></tr>
+          <tr><th>{t('students.field.name_en')}</th><td>{student['name_en'] or '-'}</td></tr>
+          <tr><th>{t('students.field.phone')}</th><td>{student['phone'] or '-'}</td></tr>
+          <tr><th>{t('students.field.guardian_name')}</th><td>{student['guardian_name'] or '-'}</td></tr>
+          <tr><th>{t('students.field.guardian_phone')}</th><td>{student['guardian_phone'] or '-'}</td></tr>
+          <tr><th>{t('students.field.class')}</th><td>{student['class_name'] or '-'}</td></tr>
+          <tr><th>{t('students.field.credits')}</th><td>{student['remaining_credits'] or 0}</td></tr>
+          <tr><th>{t('students.field.status')}</th><td>{status_t(student['status']) if student['status'] else '-'}</td></tr>
+          <tr><th>{t('students.field.enrolled_at')}</th><td>{student['enrolled_at'] or '-'}</td></tr>
+          <tr><th>{t('students.field.leave_period')}</th><td>{student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
+          <tr><th>{t('students.field.memo')}</th><td>{student['memo'] or '-'}</td></tr>
         </table>
 
-        <h4>출결 (최근)</h4>
+        <h4>{t('students.detail.section.attendance')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>날짜</th><th>반</th><th>상태</th><th>메모</th></tr>
+          <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('students.field.note')}</th></tr>
           {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
         </table>
+        {section_pager('att_page', att_page, attendance_has_next)}
 
-        <h4>숙제 (최근 제출)</h4>
+        <h4>{t('students.detail.section.homework')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>숙제</th><th>제출여부</th><th>제출일</th><th>피드백</th></tr>
+          <tr><th>{t('students.field.homework')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
           {rows_html(submission_rows, ['title', 'submitted', 'submitted_at', 'feedback'], 4)}
         </table>
+        {section_pager('hw_page', hw_page, submission_has_next)}
 
-        <h4>시험 (점수 목록)</h4>
+        <h4>{t('students.detail.section.exams')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>시험명</th><th>점수</th><th>시험일</th></tr>
+          <tr><th>{t('students.field.exam_name')}</th><th>{t('students.field.score')}</th><th>{t('students.field.exam_date')}</th></tr>
           {rows_html(exam_rows, ['exam_name', 'score', 'exam_date'], 3)}
         </table>
+        {section_pager('exam_page', exam_page, exam_has_next)}
 
-        <h4>상담 기록</h4>
+        <h4>{t('students.detail.section.counseling')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>기록일</th><th>메모</th><th>특이사항</th></tr>
+          <tr><th>{t('students.field.recorded_at')}</th><th>{t('students.field.memo')}</th><th>{t('students.field.special_note')}</th></tr>
           {rows_html(counseling_rows, ['recorded_at', 'memo', 'is_special_note'], 3)}
         </table>
+        {section_pager('counseling_page', counseling_page, counseling_has_next)}
 
-        <h4>수납 기록</h4>
+        <h4>{t('students.detail.section.payments')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>결제일</th><th>금액</th><th>패키지시간</th><th>잔여수업수</th></tr>
+          <tr><th>{t('students.field.paid_date')}</th><th>{t('students.field.amount')}</th><th>{t('students.field.package_hours')}</th><th>{t('students.field.remaining_classes')}</th></tr>
           {rows_html(payment_rows, ['paid_date', 'amount', 'package_hours', 'remaining_classes'], 4)}
         </table>
+        {section_pager('payment_page', payment_page, payment_has_next)}
 
-        <h4>도서 대출 기록</h4>
+        <h4>{t('students.detail.section.loans')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
-          <tr><th>코드</th><th>제목</th><th>대출일</th><th>반납일</th></tr>
+          <tr><th>{t('students.field.code')}</th><th>{t('students.field.title')}</th><th>{t('students.field.loaned_at')}</th><th>{t('students.field.returned_at')}</th></tr>
           {rows_html(loan_rows, ['code', 'title', 'loaned_at', 'returned_at'], 4)}
         </table>
+        {section_pager('loan_page', loan_page, loan_has_next)}
 
         {edit_form}
         {pw_form}
         """
-        html = render_html("학생 상세 / Student Detail / 学生详情", body_html, user)
+        html = render_html(t("students.detail.title"), body_html, user)
+
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -809,7 +916,7 @@ def app(environ, start_response):
         </form>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr>
-            <th>학생번호</th><th>한글이름</th><th>영문이름</th><th>연락처</th><th>보호자명</th><th>보호자 연락처</th><th>현재 반</th><th>남은 크레딧</th><th>상태</th>
+            <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
           </tr>
           {rows or "<tr><td colspan='9'>데이터 없음 / No Data / 无数据</td></tr>"}
         </table>
