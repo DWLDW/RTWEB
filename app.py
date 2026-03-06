@@ -392,10 +392,38 @@ def ensure_schedule_columns(conn):
         conn.execute("ALTER TABLE schedules ADD COLUMN teacher_id INTEGER")
 
 
-def ensure_extended_columns(conn):
+def ensure_user_columns(conn):
     ucols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "name" not in ucols:
+        conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
+        conn.execute("UPDATE users SET name=COALESCE(username, 'user_' || id) WHERE name IS NULL OR TRIM(name)=''")
     if "teacher_type" not in ucols:
         conn.execute("ALTER TABLE users ADD COLUMN teacher_type TEXT")
+
+
+def ensure_teacher_table(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS teachers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      teacher_type TEXT NOT NULL DEFAULT 'foreign',
+      memo TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )""")
+    tcols = {r["name"] for r in conn.execute("PRAGMA table_info(teachers)").fetchall()}
+    if "teacher_type" not in tcols:
+        conn.execute("ALTER TABLE teachers ADD COLUMN teacher_type TEXT")
+    if "memo" not in tcols:
+        conn.execute("ALTER TABLE teachers ADD COLUMN memo TEXT")
+    if "created_at" not in tcols:
+        conn.execute("ALTER TABLE teachers ADD COLUMN created_at TEXT")
+    if "updated_at" not in tcols:
+        conn.execute("ALTER TABLE teachers ADD COLUMN updated_at TEXT")
+
+
+def ensure_extended_columns(conn):
+    ensure_user_columns(conn)
 
     ccols = {r["name"] for r in conn.execute("PRAGMA table_info(classes)").fetchall()}
     if "foreign_teacher_id" not in ccols:
@@ -426,6 +454,8 @@ def ensure_extended_columns(conn):
         conn.execute("ALTER TABLE classrooms ADD COLUMN status TEXT DEFAULT 'active'")
     if "memo" not in rcols:
         conn.execute("ALTER TABLE classrooms ADD COLUMN memo TEXT")
+
+
 def ensure_master_tables(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS classrooms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -440,23 +470,60 @@ def ensure_master_tables(conn):
       created_at TEXT NOT NULL
     )""")
 
+ 
+def repair_profile_integrity(conn):
+    # 학생 role 사용자 -> students 프로필 보강
+    student_users = conn.execute("SELECT id, name FROM users WHERE role=?", (ROLE_STUDENT,)).fetchall()
+    for su in student_users:
+        exists = conn.execute("SELECT id FROM students WHERE user_id=?", (su["id"],)).fetchone()
+        if not exists:
+            conn.execute(
+                """INSERT INTO students(
+                user_id, student_no, name_ko, status, created_at
+                ) VALUES(?,?,?,?,?)""",
+                (su["id"], f"S{su['id']:04d}", su["name"] or su["id"], "active", now()),
+            )
+
+    # 교사 role 사용자 -> teachers 프로필 보강 + teacher_type 정규화
+    teacher_users = conn.execute("SELECT id, teacher_type FROM users WHERE role=?", (ROLE_TEACHER,)).fetchall()
+    for tu in teacher_users:
+        default_type = (tu["teacher_type"] or "").strip() or "foreign"
+        if default_type not in ("foreign", "chinese"):
+            default_type = "foreign"
+        trow = conn.execute("SELECT id, teacher_type FROM teachers WHERE user_id=?", (tu["id"],)).fetchone()
+        if not trow:
+            conn.execute(
+                "INSERT INTO teachers(user_id, teacher_type, created_at, updated_at) VALUES(?,?,?,?)",
+                (tu["id"], default_type, now(), now()),
+            )
+        else:
+            t_type = (trow["teacher_type"] or "").strip()
+            if t_type not in ("foreign", "chinese"):
+                conn.execute("UPDATE teachers SET teacher_type=?, updated_at=? WHERE id=?", (default_type, now(), trow["id"]))
+        conn.execute("UPDATE users SET teacher_type=? WHERE id=?", (default_type, tu["id"]))
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 def hash_pw(pw: str) -> str:
     # 단순 데모용
     import hashlib
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
+
 def now():
     return datetime.utcnow().isoformat()
+
 def init_db():
     conn = get_db()
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
-    ensure_extended_columns(conn)
     ensure_master_tables(conn)
+    ensure_extended_columns(conn)
+    ensure_teacher_table(conn)
     ensure_logs_table(conn)
     ensure_logs_columns(conn)
     cur = conn.execute("SELECT COUNT(*) AS c FROM users")
@@ -473,19 +540,10 @@ def init_db():
                 "INSERT INTO users(name, username, password_hash, role, created_at) VALUES(?,?,?,?,?)",
                 (name, username, hash_pw(pw), role, now()),
             )
-    # 기존 student 역할 사용자에 대한 학생 프로필 보강
-    student_users = conn.execute("SELECT id, name FROM users WHERE role=?", (ROLE_STUDENT,)).fetchall()
-    for su in student_users:
-        exists = conn.execute("SELECT id FROM students WHERE user_id=?", (su["id"],)).fetchone()
-        if not exists:
-            conn.execute(
-                """INSERT INTO students(
-                user_id, student_no, name_ko, status, created_at
-                ) VALUES(?,?,?,?,?)""",
-                (su["id"], f"S{su['id']:04d}", su["name"], "active", now()),
-            )
+    repair_profile_integrity(conn)
     conn.commit()
     conn.close()
+
 def parse_query(environ):
     return {k: v[0] for k, v in parse_qs(environ.get("QUERY_STRING", "")).items()}
 def get_lang(environ):
@@ -677,16 +735,46 @@ def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
         ORDER BY c.id DESC LIMIT ?""",
         tuple(params),
     ).fetchall()
+def list_teacher_profiles(conn, limit=200):
+    return conn.execute(
+        """SELECT t.user_id AS id, u.name, u.username, t.teacher_type
+        FROM teachers t
+        JOIN users u ON u.id=t.user_id
+        WHERE u.role='teacher'
+        ORDER BY t.id DESC
+        LIMIT ?""",
+        (limit,),
+    ).fetchall()
+
+
+def fetch_teacher_by_id(conn, teacher_user_id):
+    if not teacher_user_id or not str(teacher_user_id).isdigit():
+        return None
+    return conn.execute(
+        """SELECT t.user_id AS id, u.name, u.username, t.teacher_type
+        FROM teachers t
+        JOIN users u ON u.id=t.user_id
+        WHERE t.user_id=? AND u.role='teacher'""",
+        (teacher_user_id,),
+    ).fetchone()
+
+
 def fetch_teacher_candidates(conn, keyword, limit=10):
     kw = (keyword or "").strip()
-    if not kw:
-        return []
-    like = f"%{kw}%"
+    params = []
+    where_sql = ""
+    if kw:
+        like = f"%{kw}%"
+        where_sql = "AND (u.name LIKE ? OR u.username LIKE ?)"
+        params.extend([like, like])
+    params.append(limit)
     return conn.execute(
-        """SELECT id, name, username FROM users
-        WHERE role='teacher' AND (name LIKE ? OR username LIKE ?)
-        ORDER BY id DESC LIMIT ?""",
-        (like, like, limit),
+        f"""SELECT t.user_id AS id, u.name, u.username, t.teacher_type
+        FROM teachers t
+        JOIN users u ON u.id=t.user_id
+        WHERE u.role='teacher' {where_sql}
+        ORDER BY t.id DESC LIMIT ?""",
+        tuple(params),
     ).fetchall()
 def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None):
     query_keep = query_keep or {}
@@ -879,17 +967,60 @@ def app(environ, start_response):
             start_response(status, headers)
             return [body]
         flash_msg = ""
+        flash_type = "success"
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
-            conn.execute(
-                "INSERT INTO users(name, username, password_hash, role, created_at) VALUES(?,?,?,?,?)",
-                (data.get("name"), data.get("username"), hash_pw(data.get("password", "1234")), data.get("role"), now()),
-            )
-            conn.commit()
-            flash_msg = t("users.saved")
+            errs = []
+            name = (data.get("name") or "").strip()
+            username = (data.get("username") or "").strip()
+            role = (data.get("role") or "").strip()
+            password = data.get("password", "1234")
+            teacher_type = (data.get("teacher_type") or "foreign").strip() or "foreign"
+            if not name:
+                add_error(errs, "name", "필수값입니다")
+            if not username:
+                add_error(errs, "username", "필수값입니다")
+            if role not in (ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT):
+                add_error(errs, "role", "허용되지 않는 역할입니다")
+            if role == ROLE_TEACHER and teacher_type not in ("foreign", "chinese"):
+                add_error(errs, "teacher_type", "foreign/chinese 중 하나여야 합니다")
+            if conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+                add_error(errs, "username", "이미 사용 중입니다")
+
+            if errs:
+                flash_msg = format_errors(errs)
+                flash_type = "error"
+            else:
+                try:
+                    conn.execute("BEGIN")
+                    conn.execute(
+                        "INSERT INTO users(name, username, password_hash, role, teacher_type, created_at) VALUES(?,?,?,?,?,?)",
+                        (name, username, hash_pw(password), role, teacher_type if role == ROLE_TEACHER else None, now()),
+                    )
+                    user_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+                    if role == ROLE_STUDENT:
+                        conn.execute(
+                            """INSERT INTO students(user_id, student_no, name_ko, status, created_at, updated_at)
+                            VALUES(?,?,?,?,?,?)""",
+                            (user_id, f"S{user_id:04d}", name, "active", now(), now()),
+                        )
+                    elif role == ROLE_TEACHER:
+                        conn.execute(
+                            "INSERT INTO teachers(user_id, teacher_type, created_at, updated_at) VALUES(?,?,?,?)",
+                            (user_id, teacher_type, now(), now()),
+                        )
+                    conn.commit()
+                    flash_msg = t("users.saved")
+                except Exception:
+                    conn.rollback()
+                    flash_msg = "사용자 저장 실패: 입력값/중복값을 확인하세요"
+                    flash_type = "error"
+                    log_event(conn, "ERROR", path, "사용자 저장 실패", traceback.format_exc(), user["id"])
+                    conn.commit()
+
         users = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
         rows = "".join([
-            f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td></tr>"
+            f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(u['teacher_type'] or '-')}</td></tr>"
             for u in users
         ])
         form = ""
@@ -898,14 +1029,20 @@ def app(environ, start_response):
             <div class='card'>
               <h3>{t("users.add")}</h3>
               <form method='post' class='filter-row'>
-                <label>{t('field.name')} <input name='name'></label>
-                <label>{t('login.username')} <input name='username'></label>
+                <label>{t('field.name')} <input name='name' required></label>
+                <label>{t('login.username')} <input name='username' required></label>
                 <label>{t('login.password')} <input name='password' type='password'></label>
                 <label>{t('field.role')}
                 <select name='role'>
                   <option value='owner'>{role_label('owner')}</option><option value='manager'>{role_label('manager')}</option><option value='teacher'>{role_label('teacher')}</option>
                   <option value='parent'>{role_label('parent')}</option><option value='student'>{role_label('student')}</option>
                 </select></label>
+                <label>teacher_type
+                  <select name='teacher_type'>
+                    <option value='foreign'>외국교사</option>
+                    <option value='chinese'>중국교사</option>
+                  </select>
+                </label>
                 <button>{t("common.save")}</button>
               </form>
             </div>
@@ -914,12 +1051,12 @@ def app(environ, start_response):
         <div class='card'>
           <h3>{t("users.list")}</h3>
           <table>
-            <tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th></tr>
-            {rows or "<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+            <tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th><th>teacher_type</th></tr>
+            {rows or "<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
         """
-        html = render_html(t("users.page_title"), body_html, user, current_menu="users", flash_msg=flash_msg)
+        html = render_html(t("users.page_title"), body_html, user, current_menu="users", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -1353,7 +1490,6 @@ def app(environ, start_response):
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
                 LEFT JOIN users u ON u.id=c.teacher_id
-            LEFT JOIN users u2 ON u2.id=sc.teacher_id
                 WHERE c.id=? AND c.teacher_id=?""",
                 (class_id, user["id"]),
             ).fetchone()
@@ -1547,7 +1683,7 @@ def app(environ, start_response):
                         add_error(errs, "class.course_id", "존재하지 않는 코스입니다")
                     if data.get("level_id") and not ensure_exists(conn, "levels", data.get("level_id")):
                         add_error(errs, "class.level_id", "존재하지 않는 레벨입니다")
-                    if data.get("teacher_id") and not ensure_exists(conn, "users", data.get("teacher_id"), extra_where="role='teacher'"):
+                    if data.get("teacher_id") and not ensure_exists(conn, "teachers", data.get("teacher_id"), field="user_id"):
                         add_error(errs, "class.teacher_id", "존재하지 않는 강사입니다")
                     if not (data.get("name") or "").strip():
                         add_error(errs, "class.name", "필수값입니다")
@@ -1607,11 +1743,11 @@ def app(environ, start_response):
                 LEFT JOIN levels l ON l.id=c.level_id
                 LEFT JOIN users u ON u.id=c.teacher_id
                 ORDER BY c.id DESC""").fetchall()
-        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
+        teachers = list_teacher_profiles(conn)
         classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
         time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
 
-        teacher_options = "".join([f"<option value='{tr['id']}'>{tr['name']} ({tr['username']})</option>" for tr in teachers])
+        teacher_options = "".join([f"<option value='{tr['id']}'>{tr['name']} ({tr['username']}, {tr['teacher_type'] or '-'})</option>" for tr in teachers])
 
         def rows_html(rows, cols):
             if not rows:
@@ -1731,7 +1867,7 @@ def app(environ, start_response):
                 elif not ensure_exists(conn, "classes", class_id):
                     flash_msg = "class_id: 존재하지 않는 반입니다"
                     flash_type = "error"
-                elif form_teacher_id and not ensure_exists(conn, "users", form_teacher_id, extra_where="role='teacher'"):
+                elif form_teacher_id and not ensure_exists(conn, "teachers", form_teacher_id, field="user_id"):
                     flash_msg = "teacher_id: 존재하지 않는 강사입니다"
                     flash_type = "error"
                 elif classroom and not ensure_exists(conn, "classrooms", classroom, field="name") and not ensure_exists(conn, "classrooms", classroom, field="room_name"):
@@ -1854,7 +1990,7 @@ def app(environ, start_response):
         if has_role(user, [ROLE_TEACHER]):
             teacher_rows = [user]
         else:
-            teacher_rows = conn.execute("SELECT id, name FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
+            teacher_rows = list_teacher_profiles(conn)
 
         day_values = sorted({(r["day_of_week"] or "").strip() for r in schedules if (r["day_of_week"] or "").strip()}, key=day_sort_value)
         time_slots = sorted({f"{r['start_time']}~{r['end_time']}" for r in schedules if r['start_time'] and r['end_time']})
@@ -2148,7 +2284,7 @@ def app(environ, start_response):
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
-        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+        selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
@@ -2251,7 +2387,7 @@ def app(environ, start_response):
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
-        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+        selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
 
         if method == "POST":
             d = parse_body(environ)
@@ -2554,7 +2690,7 @@ def app(environ, start_response):
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
-        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+        selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
@@ -2605,6 +2741,8 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
+        ensure_logs_table(conn)
+        ensure_logs_columns(conn)
         rows = conn.execute("SELECT id, level, route, user_id, message, detail, created_at FROM app_logs ORDER BY id DESC LIMIT 300").fetchall()
         row_html = "".join([
             f"<tr><td>{r['id']}</td><td>{r['level']}</td><td>{r['route'] or '-'}</td><td>{r['user_id'] or '-'}</td><td>{r['message']}</td><td>{(r['detail'] or '-')}</td><td>{r['created_at']}</td></tr>"

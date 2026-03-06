@@ -6,6 +6,7 @@ from collections import defaultdict
 REQUIRED = {
     "users": ["id", "name", "username", "password_hash", "role", "teacher_type"],
     "students": ["id", "user_id", "student_no", "name_ko", "current_class_id", "status"],
+    "teachers": ["id", "user_id", "teacher_type"],
     "courses": ["id", "name"],
     "levels": ["id", "course_id", "name"],
     "classes": ["id", "course_id", "level_id", "name", "teacher_id", "foreign_teacher_id", "chinese_teacher_id"],
@@ -71,12 +72,28 @@ def required_check(conn):
 def orphan_checks(conn):
     print("=== ORPHAN / INTEGRITY CHECKS ===")
     checks = []
+    tables = {r[0] for r in q(conn, "SELECT name FROM sqlite_master WHERE type='table'")}
     checks.append(("student role without students profile", """
         SELECT u.id, u.username FROM users u
         LEFT JOIN students s ON s.user_id=u.id
         WHERE u.role='student' AND s.id IS NULL
     """))
-    checks.append(("teacher role with NULL teacher_type", """
+    if "teachers" in tables:
+        checks.append(("teacher role without teachers profile", """
+            SELECT u.id, u.username FROM users u
+            LEFT JOIN teachers t ON t.user_id=u.id
+            WHERE u.role='teacher' AND t.id IS NULL
+        """))
+        checks.append(("teachers profile linked to non-teacher user", """
+            SELECT t.id, t.user_id FROM teachers t
+            LEFT JOIN users u ON u.id=t.user_id
+            WHERE u.id IS NULL OR u.role<>'teacher'
+        """))
+        checks.append(("teachers.teacher_type invalid", """
+            SELECT t.id, t.user_id, t.teacher_type FROM teachers t
+            WHERE t.teacher_type IS NULL OR t.teacher_type='' OR t.teacher_type NOT IN ('foreign','chinese')
+        """))
+    checks.append(("teacher role with NULL teacher_type on users", """
         SELECT id, username FROM users WHERE role='teacher' AND (teacher_type IS NULL OR teacher_type='')
     """))
     checks.append(("students.current_class_id missing class", """

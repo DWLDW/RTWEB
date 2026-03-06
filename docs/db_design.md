@@ -7,6 +7,7 @@
 
 - 인증/권한: `users`, `sessions`
 - 학생 프로필: `students`
+- 교사 프로필: `teachers`
 - 학사 마스터: `courses`, `levels`, `classes`, `classrooms`, `time_slots`
 - 운영 스케줄: `schedules`
 - 학습 운영: `attendance`, `homework`, `homework_submissions`, `exams`, `exam_scores`, `counseling`, `payments`
@@ -26,6 +27,13 @@
 - FK: 없음
 - 사용 화면/기능: 로그인, 권한체크, 모든 화면의 사용자 참조
 - 이슈: parent/teacher 전용 프로필 테이블이 없음(학생만 `students` 분리)
+
+### teachers
+- 역할: 교사 프로필(Source of truth: 교사 표시/유형)
+- 주요 필드: `id*`, `user_id*`, `teacher_type*`, `memo`, `created_at*`, `updated_at`
+- FK: `user_id -> users.id`
+- 사용 화면/기능: 마스터데이터 교사 목록, 스케줄/도서 교사 선택
+- 이슈: 과거 DB에는 미존재 가능(런타임 보정 및 backfill 필요)
 
 ### sessions
 - 역할: 세션 토큰
@@ -159,7 +167,7 @@
 
 - 로그인/권한: `users`
 - 학생 검색/운영 프로필: `students` (계정 연결은 `students.user_id -> users.id`)
-- 교사 기본 엔티티: 현재는 `users(role='teacher')` (별도 `teachers` 테이블 없음)
+- 교사 검색/운영 프로필: `teachers` + `users` 조인 (`teachers.user_id -> users.id`)
 - 반 목록/기본 구조: `classes` (+ `courses`/`levels` 조인)
 - 시간표: `schedules` 중심, 표시 보강은 `classes/classrooms/users` 조인
 - 출결: `attendance`
@@ -178,7 +186,7 @@
 ## 5) 현재 문제점 목록
 
 1. **학생-학부모 연결 정규화 부족**: `guardian_name` 문자열 매칭에 의존.
-2. **교사 모델 불충분**: `teacher_type`는 `users`에 있으나 교사 프로필/자격/소속 모델 부재.
+2. **교사 모델 이행 단계**: `teachers` 테이블이 도입됐지만 기존 `users.teacher_type`와 이중 관리 구간이 있어 동기화 규칙이 필요.
 3. **스케줄 시간 이중 구조**: `schedules.start/end` vs `time_slots` 동시 존재.
 4. **수업 회차(session) 부재**: 출결/숙제/시험이 동일 수업 인스턴스를 공유하지 못함.
 5. **FK 일관성 격차**: 코드상 컬럼은 있으나 실제 DB마다 FK/컬럼 누락 가능(런타임 ALTER 보정 의존).
@@ -195,7 +203,7 @@
 - 스케줄 기준 통일용 `schedules.time_slot_id` (선택형 UX와 DB 정합)
 
 ### 나중에 필요한 것(권장 2~3차)
-- `teachers` 테이블(또는 `teacher_profiles`) 분리
+- `teachers` 상세 확장(자격/소속/언어/활성상태)
 - `student_parents` 관계 테이블
 - `class_enrollments` (학생-반 이력)
 - `class_sessions` / `session_student_records` (수업 회차 중심 출결/학습 기록)
