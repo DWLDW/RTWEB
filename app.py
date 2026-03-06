@@ -209,6 +209,70 @@ I18N_TEXTS["zh"].update({
     "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "选择教师", "academics.schedule_teacher_auto": "默认选择班级负责教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室", "academics.action.attendance_eval": "考勤与课堂评价", "lesson.record.page_title": "课程记录录入", "lesson.record.header": "学生记录录入", "lesson.record.desc": "一次性录入本节课所有学生的考勤与课堂评价。", "lesson.record.class_info": "课程信息", "lesson.record.back_schedule": "返回课表", "lesson.record.input_title": "考勤与课堂评价录入", "lesson.record.empty_students": "该班级暂无学生，无法录入。请先分配学生后重试。", "lesson.record.invalid_class": "class_id 参数无效。", "lesson.record.not_found_class": "未找到该班级。", "lesson.record.saved": "课程记录（考勤/评价）已保存", "lesson.score.participation": "课堂参与", "lesson.score.fluency": "流利度", "lesson.score.vocabulary": "词汇", "lesson.score.reading": "阅读", "lesson.score.homework": "作业", "lesson.score.attitude": "课堂态度", "lesson.score.teacher_memo": "教师备注", "students.detail.section.evaluations": "最近课堂评价记录", "students.eval.avg.title": "最近10次评价平均分", "students.eval.avg.participation": "平均课堂参与", "students.eval.avg.fluency": "平均流利度", "students.eval.avg.vocabulary": "平均词汇", "students.eval.avg.reading": "平均阅读", "students.eval.avg.homework": "平均作业", "students.eval.avg.attitude": "平均课堂态度", "academics.copy_week.button": "本周复制到下周", "academics.copy_week.desc": "将当前选择周的课表安全复制到下一周（重复项自动跳过）。", "academics.copy_week.source": "源周", "academics.copy_week.target": "目标周", "academics.copy_week.result": "复制结果", "academics.copy_week.none": "没有可复制的课表", "academics.copy_week.done": "周复制完成", "academics.copy_week.copied": "已复制", "academics.copy_week.skipped": "已跳过（重复）", "academics.week_label": "周", "academics.week_range": "周范围", "academics.ref_date": "基准日期", "academics.selected_day": "所选星期", "academics.selected_date": "日期", "attendance.manual_input_title": "手动考勤录入（应急/管理员用，非主流程）", "lesson.record.weekday_mismatch": "课程日期的星期必须与课表星期一致", "lesson.record.no_students": "该班级没有学生", "lesson.record.score_range": "必须是 1 到 5 的整数", "validation.date": "必须是 YYYY-MM-DD 格式", "validation.status_invalid": "状态值无效", "users.teacher_type": "教师类型", "users.teacher_type.foreign": "外教", "users.teacher_type.chinese": "中文教师"
 })
 
+I18N_TEXTS["en"].update({
+    "homework.class_context": "Class Context",
+    "homework.class_required": "Please select a class",
+    "homework.teacher": "Teacher",
+    "homework.description": "Description",
+    "homework.status": "Status",
+    "homework.progress": "Submission Progress",
+    "homework.select_homework": "Select Homework",
+    "homework.targets": "Targets",
+    "homework.submission_panel": "Submission & Feedback",
+    "homework.save_students": "Save Student Rows",
+    "homework.student_not_in_class": "Student is not in this homework class",
+    "homework.saved": "Homework saved",
+    "homework.rows_saved": "Submission rows saved",
+    "homework.validation.title_required": "Title is required",
+    "homework.validation.due_date": "Due date must be YYYY-MM-DD",
+    "homework.validation.homework_required": "Homework is required",
+    "homework.validation.no_targets": "No students found in class",
+    "homework.status.active": "Active",
+    "homework.status.closed": "Closed"
+})
+I18N_TEXTS["ko"].update({
+    "homework.class_context": "반 컨텍스트",
+    "homework.class_required": "반을 선택하세요",
+    "homework.teacher": "강사",
+    "homework.description": "설명",
+    "homework.status": "상태",
+    "homework.progress": "제출 진행률",
+    "homework.select_homework": "숙제 선택",
+    "homework.targets": "대상 학생",
+    "homework.submission_panel": "제출/피드백",
+    "homework.save_students": "학생별 저장",
+    "homework.student_not_in_class": "학생이 숙제 반 소속이 아닙니다",
+    "homework.saved": "숙제가 저장되었습니다",
+    "homework.rows_saved": "학생 제출/피드백이 저장되었습니다",
+    "homework.validation.title_required": "제목은 필수입니다",
+    "homework.validation.due_date": "마감일은 YYYY-MM-DD 형식이어야 합니다",
+    "homework.validation.homework_required": "숙제를 선택하세요",
+    "homework.validation.no_targets": "반에 학생이 없습니다",
+    "homework.status.active": "진행중",
+    "homework.status.closed": "종료"
+})
+I18N_TEXTS["zh"].update({
+    "homework.class_context": "班级上下文",
+    "homework.class_required": "请选择班级",
+    "homework.teacher": "教师",
+    "homework.description": "说明",
+    "homework.status": "状态",
+    "homework.progress": "提交进度",
+    "homework.select_homework": "选择作业",
+    "homework.targets": "目标学生",
+    "homework.submission_panel": "提交/反馈",
+    "homework.save_students": "保存学生行",
+    "homework.student_not_in_class": "学生不属于该作业班级",
+    "homework.saved": "作业已保存",
+    "homework.rows_saved": "学生提交/反馈已保存",
+    "homework.validation.title_required": "标题必填",
+    "homework.validation.due_date": "截止日期必须是 YYYY-MM-DD",
+    "homework.validation.homework_required": "请选择作业",
+    "homework.validation.no_targets": "班级下没有学生",
+    "homework.status.active": "进行中",
+    "homework.status.closed": "已结束"
+})
+
 def load_locale_files():
     locales_dir = os.path.join(BASE_DIR, "locales")
     if not os.path.isdir(locales_dir):
@@ -418,6 +482,28 @@ def ensure_attendance_columns(conn):
             conn.execute(f"ALTER TABLE attendance ADD COLUMN {col} {typ}")
 
 
+def ensure_homework_columns(conn):
+    hcols = {r["name"] for r in conn.execute("PRAGMA table_info(homework)").fetchall()}
+    if "teacher_id" not in hcols:
+        conn.execute("ALTER TABLE homework ADD COLUMN teacher_id INTEGER")
+    if "description" not in hcols:
+        conn.execute("ALTER TABLE homework ADD COLUMN description TEXT")
+    if "status" not in hcols:
+        conn.execute("ALTER TABLE homework ADD COLUMN status TEXT DEFAULT 'active'")
+    if "updated_at" not in hcols:
+        conn.execute("ALTER TABLE homework ADD COLUMN updated_at TEXT")
+    if "created_by" in hcols and "teacher_id" in {r["name"] for r in conn.execute("PRAGMA table_info(homework)").fetchall()}:
+        conn.execute("UPDATE homework SET teacher_id=COALESCE(teacher_id, created_by) WHERE teacher_id IS NULL")
+
+    hscols = {r["name"] for r in conn.execute("PRAGMA table_info(homework_submissions)").fetchall()}
+    if "feedback_teacher_id" not in hscols:
+        conn.execute("ALTER TABLE homework_submissions ADD COLUMN feedback_teacher_id INTEGER")
+    if "updated_at" not in hscols:
+        conn.execute("ALTER TABLE homework_submissions ADD COLUMN updated_at TEXT")
+    if "feedback_by" in hscols and "feedback_teacher_id" in {r["name"] for r in conn.execute("PRAGMA table_info(homework_submissions)").fetchall()}:
+        conn.execute("UPDATE homework_submissions SET feedback_teacher_id=COALESCE(feedback_teacher_id, feedback_by) WHERE feedback_teacher_id IS NULL")
+
+
 def ensure_user_columns(conn):
     ucols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "name" not in ucols:
@@ -615,6 +701,7 @@ def init_db():
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
     ensure_attendance_columns(conn)
+    ensure_homework_columns(conn)
     ensure_master_tables(conn)
     ensure_extended_columns(conn)
     ensure_teacher_table(conn)
@@ -2812,18 +2899,45 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
-        selected_class_id = query.get("selected_class_id", "")
-        selected_teacher_id = query.get("selected_teacher_id", "")
-        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10, show_all_when_empty=True)
-        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
-        selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
-        selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
 
-        if method == "POST":
+        flash_msg = ""
+        flash_type = "success"
+        selected_class_id = (query.get("selected_class_id", "") or "").strip()
+        selected_homework_id = (query.get("selected_homework_id", "") or "").strip()
+
+        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=20, show_all_when_empty=True)
+        selected_class = conn.execute(
+            """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+            FROM classes c
+            LEFT JOIN courses co ON co.id=c.course_id
+            LEFT JOIN levels l ON l.id=c.level_id
+            LEFT JOIN users u ON u.id=c.teacher_id
+            WHERE c.id=?""",
+            (selected_class_id,),
+        ).fetchone() if selected_class_id and selected_class_id.isdigit() else None
+
+        if has_role(user, [ROLE_TEACHER]) and selected_class and str(selected_class["teacher_id"] or "") != str(user["id"]):
+            conn.close()
+            status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+            start_response(status, headers)
+            return [body]
+
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
-            if typ == "homework" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
-                class_id = d.get("class_id") or selected_class_id
+            errs = []
+            if typ == "homework_create":
+                class_id = (d.get("class_id") or selected_class_id or "").strip()
+                title = (d.get("title") or "").strip()
+                description = (d.get("description") or "").strip()
+                due_date = (d.get("due_date") or "").strip()
+                hw_status = (d.get("status") or "active").strip() or "active"
+                teacher_id = (d.get("teacher_id") or user["id"])
+
+                if not class_id:
+                    add_error(errs, "class_id", t("homework.class_required"))
+                elif not ensure_exists(conn, "classes", class_id):
+                    add_error(errs, "class_id", "invalid class")
                 if has_role(user, [ROLE_TEACHER]):
                     class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
                     if not class_ok:
@@ -2831,74 +2945,206 @@ def app(environ, start_response):
                         status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                         start_response(status, headers)
                         return [body]
-                created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
-                conn.execute("INSERT INTO homework(class_id, title, due_date, created_by, created_at) VALUES(?,?,?,?,?)", (class_id, d.get("title"), d.get("due_date"), created_by, now()))
-                conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)", ("homework", None, json.dumps({"title": d.get("title")}, ensure_ascii=False), now()))
-            elif typ == "submission" and has_role(user, [ROLE_STUDENT]):
-                conn.execute("INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at) VALUES(?,?,?,?)", (d.get("homework_id"), user["id"], 1 if d.get("submitted") else 0, now()))
-            elif typ == "feedback" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
-                submission_id = d.get("submission_id")
-                can_update = False
-                if str(submission_id).isdigit():
-                    if has_role(user, [ROLE_TEACHER]):
-                        can_update = conn.execute(
-                            "SELECT hs.id FROM homework_submissions hs JOIN homework h ON h.id=hs.homework_id JOIN classes c ON c.id=h.class_id WHERE hs.id=? AND c.teacher_id=?",
-                            (submission_id, user["id"]),
-                        ).fetchone() is not None
-                    else:
-                        can_update = conn.execute("SELECT id FROM homework_submissions WHERE id=?", (submission_id,)).fetchone() is not None
-                if can_update:
-                    conn.execute("UPDATE homework_submissions SET feedback=?, feedback_by=?, feedback_at=? WHERE id=?", (d.get("feedback"), user["id"], now(), submission_id))
+                if not title:
+                    add_error(errs, "title", t("homework.validation.title_required"))
+                if due_date and not is_valid_date(due_date):
+                    add_error(errs, "due_date", t("homework.validation.due_date"))
+                if hw_status not in ("active", "closed"):
+                    add_error(errs, "status", "invalid status")
+
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
                 else:
-                    log_event(conn, "ERROR", path, "숙제 피드백 권한/대상 검증 실패", f"submission_id={submission_id}", user["id"])
-            conn.commit()
+                    conn.execute(
+                        """INSERT INTO homework(class_id, teacher_id, title, description, due_date, status, created_by, created_at, updated_at)
+                        VALUES(?,?,?,?,?,?,?,?,?)""",
+                        (class_id, teacher_id, title, description or None, due_date or None, hw_status, teacher_id, now(), now()),
+                    )
+                    homework_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+                    # safer/simpler choice: initialize all class students immediately
+                    class_students = conn.execute("SELECT user_id FROM students WHERE current_class_id=? ORDER BY id", (class_id,)).fetchall()
+                    if not class_students:
+                        add_error(errs, "targets", t("homework.validation.no_targets"))
+                    for st in class_students:
+                        exists = conn.execute("SELECT id FROM homework_submissions WHERE homework_id=? AND student_id=?", (homework_id, st["user_id"])).fetchone()
+                        if not exists:
+                            conn.execute(
+                                """INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at, feedback, feedback_teacher_id, updated_at)
+                                VALUES(?,?,?,?,?,?,?)""",
+                                (homework_id, st["user_id"], 0, None, None, None, now()),
+                            )
+                    conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)", ("homework", None, json.dumps({"homework_id": homework_id, "title": title}, ensure_ascii=False), now()))
+                    conn.commit()
+                    flash_msg = t("homework.saved")
+                    selected_homework_id = str(homework_id)
+                    selected_class_id = str(class_id)
+                    if errs:
+                        flash_msg = f"{flash_msg} ({t('homework.validation.no_targets')})"
 
+            elif typ == "submission_bulk":
+                homework_id = (d.get("homework_id") or selected_homework_id or "").strip()
+                if not homework_id or not homework_id.isdigit():
+                    add_error(errs, "homework_id", t("homework.validation.homework_required"))
+                hw_row = conn.execute("SELECT id, class_id, teacher_id FROM homework WHERE id=?", (homework_id,)).fetchone() if homework_id.isdigit() else None
+                if not hw_row:
+                    add_error(errs, "homework", "invalid homework")
+                elif has_role(user, [ROLE_TEACHER]) and str(hw_row["teacher_id"] or "") != str(user["id"]):
+                    conn.close()
+                    status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+                    start_response(status, headers)
+                    return [body]
+
+                if not errs:
+                    class_students = conn.execute("SELECT user_id, student_no, name_ko FROM students WHERE current_class_id=? ORDER BY name_ko, id", (hw_row["class_id"],)).fetchall()
+                    valid_student_ids = {str(st["user_id"]) for st in class_students}
+                    for sid in valid_student_ids:
+                        submitted = 1 if d.get(f"submitted_{sid}") else 0
+                        feedback = (d.get(f"feedback_{sid}") or "").strip()
+                        submitted_at = now() if submitted else None
+                        existing = conn.execute("SELECT id FROM homework_submissions WHERE homework_id=? AND student_id=?", (homework_id, sid)).fetchone()
+                        if existing:
+                            conn.execute(
+                                """UPDATE homework_submissions
+                                SET submitted=?, submitted_at=COALESCE(?, submitted_at), feedback=?, feedback_teacher_id=?, updated_at=?
+                                WHERE id=?""",
+                                (submitted, submitted_at, feedback or None, user["id"], now(), existing["id"]),
+                            )
+                        else:
+                            conn.execute(
+                                """INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at, feedback, feedback_teacher_id, updated_at)
+                                VALUES(?,?,?,?,?,?,?)""",
+                                (homework_id, sid, submitted, submitted_at, feedback or None, user["id"], now()),
+                            )
+                    conn.commit()
+                    flash_msg = t("homework.rows_saved")
+                    selected_homework_id = str(homework_id)
+                    selected_class_id = str(hw_row["class_id"])
+                else:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+
+        # access scoped homework list
+        hw_params = []
+        hw_where = []
+        if selected_class_id and selected_class_id.isdigit():
+            hw_where.append("h.class_id=?")
+            hw_params.append(selected_class_id)
         if has_role(user, [ROLE_TEACHER]):
-            hw = conn.execute("SELECT h.* FROM homework h JOIN classes c ON c.id=h.class_id WHERE c.teacher_id=? ORDER BY h.id DESC", (user["id"],)).fetchall()
-            sub = conn.execute("SELECT hs.* FROM homework_submissions hs JOIN homework h ON h.id=hs.homework_id JOIN classes c ON c.id=h.class_id WHERE c.teacher_id=? ORDER BY hs.id DESC", (user["id"],)).fetchall()
+            hw_where.append("h.teacher_id=?")
+            hw_params.append(user["id"])
         elif has_role(user, [ROLE_STUDENT]):
-            hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
-            sub = conn.execute("SELECT * FROM homework_submissions WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+            hw_where.append("hs.student_id=?")
+            hw_params.append(user["id"])
         elif has_role(user, [ROLE_PARENT]):
-            hw = conn.execute("SELECT DISTINCT h.* FROM homework h JOIN homework_submissions hs ON hs.homework_id=h.id JOIN students s ON s.user_id=hs.student_id WHERE s.guardian_name=? ORDER BY h.id DESC", (user["name"],)).fetchall()
-            sub = conn.execute("""SELECT hs.* FROM homework_submissions hs JOIN students s ON s.user_id=hs.student_id WHERE s.guardian_name=? ORDER BY hs.id DESC""", (user["name"],)).fetchall()
-        else:
-            hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
-            sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
+            hw_where.append("s.guardian_name=?")
+            hw_params.append(user["name"])
+        where_sql = ("WHERE " + " AND ".join(hw_where)) if hw_where else ""
+        homework_rows = conn.execute(
+            f"""SELECT DISTINCT h.id, h.class_id, h.teacher_id, h.title, h.description, h.due_date, h.status, h.created_at,
+            c.name AS class_name, u.name AS teacher_name,
+            (SELECT COUNT(*) FROM students st WHERE st.current_class_id=h.class_id) AS target_count,
+            (SELECT COUNT(*) FROM homework_submissions hs2 WHERE hs2.homework_id=h.id AND hs2.submitted=1) AS submitted_count
+            FROM homework h
+            LEFT JOIN classes c ON c.id=h.class_id
+            LEFT JOIN users u ON u.id=h.teacher_id
+            LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
+            LEFT JOIN students s ON s.user_id=hs.student_id
+            {where_sql}
+            ORDER BY h.id DESC LIMIT 200""",
+            tuple(hw_params),
+        ).fetchall()
 
-        class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
-                                          (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
-                                          {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
-        teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
-                                            (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""), teacher_candidates, "/homework", CURRENT_LANG,
-                                            {"selected_class_id": selected_class_id, "class_q": query.get("class_q", "")})
-        hw_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['title']}</td><td>{r['due_date'] or '-'}</td><td>{r['created_by']}</td></tr>" for r in hw])
-        sub_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['homework_id']}</td><td>{r['student_id']}</td><td>{'Y' if r['submitted'] else '-'}</td><td>{r['feedback'] or '-'}</td></tr>" for r in sub])
+        selected_homework = None
+        if selected_homework_id.isdigit():
+            selected_homework = conn.execute(
+                """SELECT h.*, c.name AS class_name, u.name AS teacher_name
+                FROM homework h
+                LEFT JOIN classes c ON c.id=h.class_id
+                LEFT JOIN users u ON u.id=h.teacher_id
+                WHERE h.id=?""",
+                (selected_homework_id,),
+            ).fetchone()
+            if selected_homework and has_role(user, [ROLE_TEACHER]) and str(selected_homework["teacher_id"] or "") != str(user["id"]):
+                selected_homework = None
+
+        submission_rows = []
+        if selected_homework:
+            class_students = conn.execute("SELECT user_id, student_no, name_ko FROM students WHERE current_class_id=? ORDER BY name_ko, id", (selected_homework["class_id"],)).fetchall()
+            sub_map = {
+                str(r["student_id"]): r
+                for r in conn.execute("SELECT * FROM homework_submissions WHERE homework_id=?", (selected_homework["id"],)).fetchall()
+            }
+            for st in class_students:
+                submission_rows.append((st, sub_map.get(str(st["user_id"]))))
+
+        class_picker = render_picker_block(
+            t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
+            (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
+            {"selected_homework_id": selected_homework_id},
+        )
+
+        hw_list_html = ""
+        for hrow in homework_rows:
+            progress = f"{hrow['submitted_count'] or 0}/{hrow['target_count'] or 0}"
+            hw_list_html += f"<tr><td><a href='/homework?lang={CURRENT_LANG}&selected_class_id={hrow['class_id']}&selected_homework_id={hrow['id']}'>{hrow['title']}</a></td><td>{hrow['class_name'] or '-'}</td><td>{hrow['due_date'] or '-'}</td><td>{hrow['teacher_name'] or '-'}</td><td>{progress}</td></tr>"
+
+        sub_table_rows = ""
+        for st, sub in submission_rows:
+            submitted_checked = "checked" if sub and str(sub["submitted"]) == "1" else ""
+            submitted_at = (sub["submitted_at"] if sub and sub["submitted_at"] else "-")
+            feedback_val = h(sub["feedback"] if sub and sub["feedback"] else "")
+            sub_table_rows += f"""
+            <tr>
+              <td>{h(st['student_no'] or '-')}</td><td>{h(st['name_ko'] or '-')}</td>
+              <td><input type='checkbox' name='submitted_{st['user_id']}' value='1' {submitted_checked}></td>
+              <td>{h(submitted_at)}</td>
+              <td><input name='feedback_{st['user_id']}' value='{feedback_val}' style='min-width:240px'></td>
+            </tr>
+            """
 
         html = render_html(t("homework.title"), f"""
         {class_picker}
-        {teacher_picker}
         <div class='card'>
-          <h4>{t("homework.add")}</h4>
+          <h4>{t('homework.class_context')}</h4>
+          <div>{t('academics.class_name')}: <strong>{selected_class['name'] if selected_class else '-'}</strong></div>
+          <div>{t('homework.teacher')}: <strong>{selected_class['teacher_name'] if selected_class and selected_class['teacher_name'] else '-'}</strong></div>
+          <div>{t('academics.course_level')}: <strong>{selected_class['course_name'] if selected_class and selected_class['course_name'] else '-'} / {selected_class['level_name'] if selected_class and selected_class['level_name'] else '-'}</strong></div>
+        </div>
+        <div class='card'>
+          <h4>{t('homework.add')}</h4>
           <form method='post' class='filter-row'>
-            <input type='hidden' name='type' value='homework'>
+            <input type='hidden' name='type' value='homework_create'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
-            <input type='hidden' name='teacher_id' value='{selected_teacher_id}'>
-            <label>{t('field.class_id')} <input value='{selected_class_id}' readonly></label>
-            <label>{t('field.teacher_id')} <input value='{selected_teacher_id}' readonly></label>
-            <label>{t('field.title')} <input name='title'></label>
-            <label>{t("field.due_date")} <input name='due_date' placeholder='2026-03-15'></label>
+            <label>{t('academics.class_name')} <input value='{selected_class['name'] if selected_class else '-'}' readonly></label>
+            <label>{t('field.title')} <input name='title' required></label>
+            <label>{t('homework.description')} <input name='description' style='min-width:220px'></label>
+            <label>{t('field.due_date')} <input name='due_date' placeholder='2026-03-15'></label>
+            <label>{t('homework.status')} <select name='status'><option value='active'>{t('homework.status.active')}</option><option value='closed'>{t('homework.status.closed')}</option></select></label>
             <button>{t('common.save')}</button>
           </form>
         </div>
         <div class='card'>
-          <h4>{t("homework.input")}</h4>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='submission'>{t("field.homework_id")}<input name='homework_id'> {t('field.submitted')}<input type='checkbox' name='submitted' value='1'><button>{t('common.save')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='feedback'>{t("field.submission_id")}<input name='submission_id'> {t("field.feedback")}<input name='feedback'><button>{t('common.save')}</button></form>
+          <h4>{t('homework.list')}</h4>
+          <table>
+            <tr><th>{t('field.title')}</th><th>{t('academics.class_name')}</th><th>{t('field.due_date')}</th><th>{t('field.writer')}</th><th>{t('homework.progress')}</th></tr>
+            {hw_list_html or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+          </table>
         </div>
-        <div class='card'><h4>{t("homework.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.title")}</th><th>{t("field.due_date")}</th><th>{t("field.writer")}</th></tr>{hw_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t("homework.submissions")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.homework_id")}</th><th>{t("field.student_id")}</th><th>{t("common.selected")}</th><th>{t("field.feedback")}</th></tr>{sub_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        """, user, current_menu="homework")
+        <div class='card'>
+          <h4>{t('homework.submission_panel')}</h4>
+          <div>{t('homework.select_homework')}: <strong>{selected_homework['title'] if selected_homework else '-'}</strong></div>
+          <form method='post'>
+            <input type='hidden' name='type' value='submission_bulk'>
+            <input type='hidden' name='homework_id' value='{selected_homework['id'] if selected_homework else ''}'>
+            <table>
+              <tr><th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
+              {sub_table_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+            </table>
+            <div style='margin-top:10px'><button>{t('homework.save_students')}</button></div>
+          </form>
+        </div>
+        """, user, current_menu="homework", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)

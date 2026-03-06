@@ -129,11 +129,16 @@ CREATE TABLE IF NOT EXISTS attendance (
 CREATE TABLE IF NOT EXISTS homework (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   class_id INTEGER NOT NULL,
+  teacher_id INTEGER,
   title TEXT NOT NULL,
+  description TEXT,
   due_date TEXT,
+  status TEXT DEFAULT 'active',
   created_by INTEGER NOT NULL,
   created_at TEXT NOT NULL,
+  updated_at TEXT,
   FOREIGN KEY(class_id) REFERENCES classes(id),
+  FOREIGN KEY(teacher_id) REFERENCES users(id),
   FOREIGN KEY(created_by) REFERENCES users(id)
 );
 
@@ -144,10 +149,13 @@ CREATE TABLE IF NOT EXISTS homework_submissions (
   submitted INTEGER DEFAULT 0,
   submitted_at TEXT,
   feedback TEXT,
+  feedback_teacher_id INTEGER,
   feedback_by INTEGER,
   feedback_at TEXT,
+  updated_at TEXT,
   FOREIGN KEY(homework_id) REFERENCES homework(id),
-  FOREIGN KEY(student_id) REFERENCES users(id)
+  FOREIGN KEY(student_id) REFERENCES users(id),
+  FOREIGN KEY(feedback_teacher_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS books (
