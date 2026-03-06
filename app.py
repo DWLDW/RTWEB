@@ -908,22 +908,24 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       * { box-sizing: border-box; }
       body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; }
       .app { display:flex; min-height:100vh; }
-      .sidebar { width:240px; background:#111827; color:#e5e7eb; padding:18px 14px; }
+      .sidebar { width:240px; background:#111827; color:#e5e7eb; padding:18px 14px; flex-shrink:0; }
       .brand { font-size:18px; font-weight:700; margin-bottom:18px; }
       .nav-link { display:block; color:#cbd5e1; text-decoration:none; padding:8px 10px; border-radius:8px; margin-bottom:6px; }
       .nav-link:hover { background:#1f2937; color:white; }
       .nav-link.active { background:#2563eb; color:white; }
-      .main { flex:1; padding:18px 22px; }
-      .topbar { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
-      .page-title { margin:0 0 14px 0; font-size:24px; }
-      .card { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:14px; margin-bottom:14px; }
-      .card h3, .card h4 { margin:0 0 10px 0; }
+      .main { flex:1; min-width:0; padding:18px 22px; }
+      .topbar { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; }
+      .page-title { margin:0 0 14px 0; font-size:24px; overflow-wrap:anywhere; }
+      .card { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:14px; margin-bottom:14px; overflow:hidden; }
+      .card h3, .card h4 { margin:0 0 10px 0; overflow-wrap:anywhere; }
       .filter-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-      input, select, textarea { border:1px solid #d1d5db; border-radius:8px; padding:7px 9px; }
-      button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 12px; text-decoration:none; display:inline-block; }
+      .filter-row label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+      input, select, textarea { max-width:100%; border:1px solid #d1d5db; border-radius:8px; padding:9px 10px; }
+      textarea { width:100%; }
+      button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:9px 12px; text-decoration:none; display:inline-block; }
       .btn.secondary { background:#6b7280; }
       table { width:100%; border-collapse:collapse; background:white; }
-      th, td { border:1px solid #e5e7eb; padding:8px; text-align:left; vertical-align:top; }
+      th, td { border:1px solid #e5e7eb; padding:8px; text-align:left; vertical-align:top; word-break:break-word; }
       th { background:#f9fafb; }
       .badge { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#e5e7eb; }
       .badge.active { background:#dcfce7; color:#166534; }
@@ -942,8 +944,29 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
       .mini-link { font-size:11px; padding:4px 6px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; }
       .two-col { display:grid; grid-template-columns:2fr 1fr; gap:14px; }
-      .muted { color:#6b7280; font-size:12px; }
-      @media (max-width: 1100px) { .two-col { grid-template-columns:1fr; } }
+      .muted { color:#6b7280; font-size:12px; overflow-wrap:anywhere; }
+      @media (max-width: 1100px) {
+        .two-col { grid-template-columns:1fr; }
+      }
+      @media (max-width: 900px) {
+        .app { flex-direction:column; }
+        .sidebar { width:100%; padding:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+        .brand { margin:0 8px 6px 0; width:100%; }
+        .nav-link { display:inline-block; margin:0; }
+        .main { padding:12px; }
+        .topbar { flex-direction:column; align-items:flex-start; }
+      }
+      @media (max-width: 720px) {
+        body { font-size:14px; }
+        .page-title { font-size:20px; }
+        .filter-row { flex-direction:column; align-items:stretch; }
+        .filter-row > * { width:100%; }
+        .filter-row label { width:100%; }
+        .filter-row input, .filter-row select, .filter-row textarea, .filter-row button, .filter-row .btn { width:100%; }
+        table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        th, td { white-space:nowrap; }
+        .timetable-wrap { overflow-x:auto; }
+      }
     </style>
     """
     layout = body
