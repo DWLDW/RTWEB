@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS schedules (
   day_of_week TEXT NOT NULL,
   start_time TEXT,
   end_time TEXT,
+  classroom TEXT,
+  status TEXT DEFAULT 'active',
+  note TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(class_id) REFERENCES classes(id)
 );
