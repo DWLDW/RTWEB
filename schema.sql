@@ -57,7 +57,12 @@ CREATE TABLE IF NOT EXISTS classes (
   level_id INTEGER,
   name TEXT NOT NULL,
   teacher_id INTEGER,
+  classroom TEXT,
+  capacity INTEGER,
+  status TEXT DEFAULT 'active',
+  memo TEXT,
   created_at TEXT NOT NULL,
+  updated_at TEXT,
   FOREIGN KEY(course_id) REFERENCES courses(id),
   FOREIGN KEY(level_id) REFERENCES levels(id),
   FOREIGN KEY(teacher_id) REFERENCES users(id)
