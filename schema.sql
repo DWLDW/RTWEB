@@ -219,3 +219,12 @@ CREATE TABLE IF NOT EXISTS book_loans (
   FOREIGN KEY(student_id) REFERENCES users(id),
   FOREIGN KEY(handled_by) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS app_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  level TEXT NOT NULL,
+  context TEXT,
+  message TEXT NOT NULL,
+  details TEXT,
+  created_at TEXT NOT NULL
+);
