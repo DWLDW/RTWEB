@@ -57,7 +57,12 @@ CREATE TABLE IF NOT EXISTS classes (
   level_id INTEGER,
   name TEXT NOT NULL,
   teacher_id INTEGER,
+  classroom TEXT,
+  capacity INTEGER,
+  status TEXT DEFAULT 'active',
+  memo TEXT,
   created_at TEXT NOT NULL,
+  updated_at TEXT,
   FOREIGN KEY(course_id) REFERENCES courses(id),
   FOREIGN KEY(level_id) REFERENCES levels(id),
   FOREIGN KEY(teacher_id) REFERENCES users(id)
@@ -213,4 +218,13 @@ CREATE TABLE IF NOT EXISTS book_loans (
   FOREIGN KEY(book_id) REFERENCES books(id),
   FOREIGN KEY(student_id) REFERENCES users(id),
   FOREIGN KEY(handled_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS app_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  level TEXT NOT NULL,
+  context TEXT,
+  message TEXT NOT NULL,
+  details TEXT,
+  created_at TEXT NOT NULL
 );
