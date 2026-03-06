@@ -27,6 +27,8 @@ NAV_LABELS = {
     "users": "menu.users",
     "students": "menu.students",
     "academics": "menu.academics",
+    "masterdata": "menu.masterdata",
+    "schedule": "menu.schedule",
     "attendance": "menu.attendance",
     "homework": "menu.homework",
     "exams": "menu.exams",
@@ -40,7 +42,7 @@ NAV_LABELS = {
 }
 I18N_TEXTS = {
     "ko": {
-        "menu.dashboard": "대시보드", "menu.users": "사용자", "menu.students": "학생관리", "menu.academics": "학사구조",
+        "menu.dashboard": "대시보드", "menu.users": "사용자", "menu.students": "학생관리", "menu.academics": "학사구조", "menu.masterdata": "마스터데이터", "menu.schedule": "스케줄",
         "menu.attendance": "출결", "menu.homework": "숙제", "menu.exams": "시험/성적", "menu.counseling": "상담/특이사항",
         "menu.payments": "수납", "menu.announcements": "공지/알림", "menu.library": "도서대출",
         "common.login_as": "로그인", "common.language": "언어", "common.login": "로그인", "common.logout": "로그아웃",
@@ -75,7 +77,7 @@ I18N_TEXTS = {
         "status.present": "출석", "status.late": "지각", "status.absent": "결석", "status.makeup": "보강", "status.cancelled": "휴강",
     },
     "en": {
-        "menu.dashboard": "Dashboard", "menu.users": "Users", "menu.students": "Students", "menu.academics": "Academics",
+        "menu.dashboard": "Dashboard", "menu.users": "Users", "menu.students": "Students", "menu.academics": "Academics", "menu.masterdata": "Master Data", "menu.schedule": "Schedule",
         "menu.attendance": "Attendance", "menu.homework": "Homework", "menu.exams": "Exams/Scores", "menu.counseling": "Counseling",
         "menu.payments": "Payments", "menu.announcements": "Announcements", "menu.library": "Library",
         "common.login_as": "Signed in", "common.language": "Language", "common.login": "Login", "common.logout": "Logout",
@@ -110,7 +112,7 @@ I18N_TEXTS = {
         "status.present": "Present", "status.late": "Late", "status.absent": "Absent", "status.makeup": "Makeup", "status.cancelled": "Cancelled",
     },
     "zh": {
-        "menu.dashboard": "仪表盘", "menu.users": "用户", "menu.students": "学生管理", "menu.academics": "学术结构",
+        "menu.dashboard": "仪表盘", "menu.users": "用户", "menu.students": "学生管理", "menu.academics": "学术结构", "menu.masterdata": "主数据", "menu.schedule": "排课",
         "menu.attendance": "考勤", "menu.homework": "作业", "menu.exams": "考试/成绩", "menu.counseling": "咨询/备注",
         "menu.payments": "收费", "menu.announcements": "公告/通知", "menu.library": "图书借阅",
         "common.login_as": "当前登录", "common.language": "语言", "common.login": "登录", "common.logout": "退出登录",
@@ -149,7 +151,7 @@ I18N_TEXTS = {
 I18N_TEXTS["ko"].update({
     "common.add": "추가", "role.owner": "원장", "role.manager": "매니저", "role.teacher": "강사", "role.parent": "학부모", "role.student": "학생",
     "login.default_accounts": "기본 계정: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
-    "field.name": "이름", "field.role": "역할", "field.student": "학생", "field.submitted": "제출", "field.homework_title": "숙제명", "field.due_date": "마감일",
+    "field.id": "ID", "field.name": "이름", "field.role": "역할", "field.student": "학생", "field.submitted": "제출", "field.homework_title": "숙제명", "field.due_date": "마감일",
     "field.submission_count": "제출수", "field.total_targets": "총대상(등록수)", "field.avg_score": "평균점수", "field.score_entries": "입력건수",
     "students.field.leave_start_date": "휴학시작", "students.field.leave_end_date": "휴학종료", "students.password_reset": "학생 계정 비밀번호 변경", "students.new_password": "새 비밀번호",
     "academics.title": "코스/레벨/반/시간표 관리", "academics.register": "등록", "academics.course": "코스", "academics.level": "레벨", "academics.course_name": "코스명", "academics.level_name": "레벨명",
@@ -168,7 +170,7 @@ I18N_TEXTS["ko"].update({
 I18N_TEXTS["en"].update({
     "common.add": "Add", "role.owner": "Owner", "role.manager": "Manager", "role.teacher": "Teacher", "role.parent": "Parent", "role.student": "Student",
     "login.default_accounts": "Default accounts: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
-    "field.name": "Name", "field.role": "Role", "field.student": "Student", "field.submitted": "Submitted", "field.homework_title": "Homework", "field.due_date": "Due Date",
+    "field.id": "ID", "field.name": "Name", "field.role": "Role", "field.student": "Student", "field.submitted": "Submitted", "field.homework_title": "Homework", "field.due_date": "Due Date",
     "field.submission_count": "Submissions", "field.total_targets": "Total Targets", "field.avg_score": "Average Score", "field.score_entries": "Score Entries",
     "students.field.leave_start_date": "Leave Start", "students.field.leave_end_date": "Leave End", "students.password_reset": "Reset Student Password", "students.new_password": "New Password",
     "academics.title": "Course/Level/Class/Schedule", "academics.register": "Register", "academics.course": "Course", "academics.level": "Level", "academics.course_name": "Course Name", "academics.level_name": "Level Name",
@@ -187,7 +189,7 @@ I18N_TEXTS["en"].update({
 I18N_TEXTS["zh"].update({
     "common.add": "添加", "role.owner": "院长", "role.manager": "经理", "role.teacher": "教师", "role.parent": "家长", "role.student": "学生",
     "login.default_accounts": "默认账号: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234",
-    "field.name": "姓名", "field.role": "角色", "field.student": "学生", "field.submitted": "提交", "field.homework_title": "作业名", "field.due_date": "截止日",
+    "field.id": "ID", "field.name": "姓名", "field.role": "角色", "field.student": "学生", "field.submitted": "提交", "field.homework_title": "作业名", "field.due_date": "截止日",
     "field.submission_count": "提交数", "field.total_targets": "总对象", "field.avg_score": "平均分", "field.score_entries": "录入数",
     "students.field.leave_start_date": "休学开始", "students.field.leave_end_date": "休学结束", "students.password_reset": "重置学生密码", "students.new_password": "新密码",
     "academics.title": "课程/级别/班级/课表管理", "academics.register": "登记", "academics.course": "课程", "academics.level": "级别", "academics.course_name": "课程名", "academics.level_name": "级别名",
@@ -234,6 +236,8 @@ NAV_PATHS = {
     "users": "/users",
     "students": "/students",
     "academics": "/academics",
+    "masterdata": "/masterdata",
+    "schedule": "/schedule",
     "attendance": "/attendance",
     "homework": "/homework",
     "exams": "/exams",
@@ -243,9 +247,9 @@ NAV_PATHS = {
     "library": "/library",
 }
 ROLE_MENU_KEYS = {
-    ROLE_OWNER: ["dashboard", "users", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
-    ROLE_MANAGER: ["dashboard", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
-    ROLE_TEACHER: ["dashboard", "students", "attendance", "homework", "exams", "counseling", "announcements", "library"],
+    ROLE_OWNER: ["dashboard", "users", "students", "masterdata", "schedule", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
+    ROLE_MANAGER: ["dashboard", "students", "masterdata", "schedule", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
+    ROLE_TEACHER: ["dashboard", "students", "schedule", "attendance", "homework", "exams", "counseling", "announcements", "library"],
     ROLE_PARENT: ["dashboard", "students", "attendance", "homework", "exams", "payments", "announcements"],
     ROLE_STUDENT: ["dashboard", "students", "attendance", "homework", "exams", "announcements"],
 }
@@ -300,6 +304,20 @@ def ensure_schedule_columns(conn):
         conn.execute("ALTER TABLE schedules ADD COLUMN status TEXT DEFAULT 'active'")
     if "note" not in cols:
         conn.execute("ALTER TABLE schedules ADD COLUMN note TEXT")
+def ensure_master_tables(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS classrooms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS time_slots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL UNIQUE,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )""")
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -315,6 +333,7 @@ def init_db():
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
+    ensure_master_tables(conn)
     cur = conn.execute("SELECT COUNT(*) AS c FROM users")
     if cur.fetchone()["c"] == 0:
         users = [
@@ -666,7 +685,8 @@ def app(environ, start_response):
           <h3>{t("dash.quick")}</h3>
           <div class='filter-row'>
             <a class='btn' href='/students?lang={CURRENT_LANG}'>{menu_t('students')}</a>
-            <a class='btn' href='/academics?lang={CURRENT_LANG}'>{menu_t('academics')}</a>
+            <a class='btn' href='/masterdata?lang={CURRENT_LANG}'>{menu_t('masterdata')}</a>
+            <a class='btn' href='/schedule?lang={CURRENT_LANG}'>{menu_t('schedule')}</a>
             <a class='btn' href='/attendance?lang={CURRENT_LANG}'>{menu_t('attendance')}</a>
             <a class='btn' href='/homework?lang={CURRENT_LANG}'>{menu_t('homework')}</a>
           </div>
@@ -1205,7 +1225,7 @@ def app(environ, start_response):
         next_order = "desc" if student_order == "asc" else "asc"
         html = render_html(t('academics.class_detail.title'), f"""
         <div class='card'>
-        <div><a href='/academics?lang={CURRENT_LANG}'>← {t('academics.back_to_list')}</a></div>
+        <div><a href='/masterdata?lang={CURRENT_LANG}'>← {t('academics.back_to_list')}</a></div>
         <h3>{class_row['name']}</h3>
         <table>
           <tr><th>{t('academics.basic_info')}</th><td>{t('academics.class_name')}: {class_row['name']}</td></tr>
@@ -1259,12 +1279,99 @@ def app(environ, start_response):
           {exam_html}
         </table>
         </div>
-        """, user, current_menu="academics")
+        """, user, current_menu="masterdata")
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
         return [body]
     if path == "/academics":
+        status, headers, body = redirect(f"/schedule?lang={CURRENT_LANG}")
+        start_response(status, headers)
+        return [body]
+
+    if path == "/masterdata":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
+        flash_msg = ""
+        flash_type = "success"
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            data = parse_body(environ)
+            typ = data.get("type")
+            if typ == "course":
+                conn.execute("INSERT INTO courses(name, created_at) VALUES(?,?)", (data.get("name"), now()))
+                flash_msg = t("common.save")
+            elif typ == "level":
+                conn.execute("INSERT INTO levels(course_id, name, created_at) VALUES(?,?,?)", (data.get("course_id"), data.get("name"), now()))
+                flash_msg = t("common.save")
+            elif typ == "class":
+                conn.execute("INSERT INTO classes(course_id, level_id, name, teacher_id, created_at) VALUES(?,?,?,?,?)", (data.get("course_id"), data.get("level_id"), data.get("name"), data.get("teacher_id"), now()))
+                flash_msg = t("common.save")
+            elif typ == "classroom":
+                if (data.get("name") or "").strip():
+                    conn.execute("INSERT OR IGNORE INTO classrooms(name, created_at) VALUES(?,?)", (data.get("name").strip(), now()))
+                    flash_msg = t("common.save")
+            elif typ == "time_slot":
+                st = (data.get("start_time") or "").strip()
+                et = (data.get("end_time") or "").strip()
+                if st and et and parse_hhmm(et) and parse_hhmm(st) and parse_hhmm(et) > parse_hhmm(st):
+                    label = f"{st}~{et}"
+                    conn.execute("INSERT OR IGNORE INTO time_slots(label, start_time, end_time, created_at) VALUES(?,?,?,?)", (label, st, et, now()))
+                    flash_msg = t("common.save")
+                else:
+                    flash_msg = t("academics.validation_end_before_start")
+                    flash_type = "error"
+            conn.commit()
+
+        courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
+        levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
+                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
+        classes = conn.execute("""SELECT c.id, c.name, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
+                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                ORDER BY c.id DESC""").fetchall()
+        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
+        classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
+        time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
+
+        teacher_options = "".join([f"<option value='{tr['id']}'>{tr['name']} ({tr['username']})</option>" for tr in teachers])
+
+        def rows_html(rows, cols):
+            if not rows:
+                return f"<tr><td colspan='{len(cols)}' class='empty-msg'>{t('common.no_data')}</td></tr>"
+            out = ""
+            for r in rows:
+                out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
+            return out
+
+        html = render_html(t('menu.masterdata'), f"""
+        <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
+        <div class='card'>
+          <h4>{t('academics.register')}</h4>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><label>{t('academics.level_id')} <input name='level_id'></label><label>{t('academics.teacher')} <select name='teacher_id'><option value=''>-</option>{teacher_options}</select></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
+        </div>
+        <div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>{''.join([f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td></tr>" for c in classes]) or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th></tr>{rows_html(courses,['id','name','created_at'])}</table></div>
+        <div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th></tr>{rows_html(levels,['id','name','course_name','created_at'])}</table></div>
+        <div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{rows_html(teachers,['id','name','username'])}</table></div>
+        <div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th></tr>{rows_html(classrooms,['id','name','created_at'])}</table></div>
+        <div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th></tr>{rows_html(time_slots,['id','label','start_time','end_time','created_at'])}</table></div>
+        """, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
+    if path == "/schedule":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
             status, headers, body = forbidden_html(user)
@@ -1493,7 +1600,7 @@ def app(environ, start_response):
                         <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_attendance')}</a>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
-                        <a class='mini-link' href='/academics?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}'>{t('common.edit')}</a>
+                        <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}'>{t('common.edit')}</a>
                       </div>
                     </div>
                     """
@@ -1574,7 +1681,7 @@ def app(environ, start_response):
         )
 
         detail_html = f"<div class='card'><h4>{t('academics.lesson_detail')}</h4><p class='empty-msg'>{t('common.no_data')}</p></div>"
-        register_forms = f"<div class='card'><a class='btn secondary' href='/academics?lang={CURRENT_LANG}'>{t('academics.go_structure')}</a></div>"
+        register_forms = f"<div class='card'><a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>{t('academics.go_structure')}</a></div>"
         if selected_schedule:
             stu_rows = conn.execute("SELECT name_ko FROM students WHERE current_class_id=? ORDER BY id LIMIT 20", (selected_schedule['class_id'],)).fetchall()
             stu_text = ", ".join([r['name_ko'] for r in stu_rows]) if stu_rows else "-"
@@ -1610,16 +1717,16 @@ def app(environ, start_response):
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='week' value='{week_offset}'>
             <label>{t('academics.week_current')} <strong>{week_label}</strong></label>
-            <a class='btn secondary' href='/academics?lang={CURRENT_LANG}&week={week_offset-1}'>{t('academics.week_prev')}</a>
-            <a class='btn secondary' href='/academics?lang={CURRENT_LANG}&week=0'>{t('academics.week_current')}</a>
-            <a class='btn secondary' href='/academics?lang={CURRENT_LANG}&week={week_offset+1}'>{t('academics.week_next')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week={week_offset-1}'>{t('academics.week_prev')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week=0'>{t('academics.week_current')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week={week_offset+1}'>{t('academics.week_next')}</a>
             <label>{t('academics.day_filter')} <select name='day'>{''.join(day_options)}</select></label>
             <label>{t('academics.teacher_filter')} <select name='teacher_id'>{''.join(selected_teacher_options)}</select></label>
             <label>{t('academics.classroom_filter')} <input name='classroom' value='{selected_room}'></label>
             <label>{t('academics.course_level_filter')} <select name='course_level'>{''.join(cl_options)}</select></label>
             <label>{t('academics.class_filter')} <input name='class_q' value='{selected_class_q}'></label>
             <button>{t('academics.search')}</button>
-            <a class='btn secondary' href='/academics?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('common.reset')}</a>
             <a class='btn' href='#schedule-form'>{t('academics.add_lesson')}</a>
           </form>
         </div>
@@ -1682,7 +1789,7 @@ def app(environ, start_response):
             </div>
           </div>
         </div>
-        """, user, current_menu="academics", flash_msg=flash_msg, flash_type=flash_type)
+        """, user, current_menu="schedule", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
