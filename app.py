@@ -58,6 +58,17 @@ def init_db():
                 "INSERT INTO users(name, username, password_hash, role, created_at) VALUES(?,?,?,?,?)",
                 (name, username, hash_pw(pw), role, now()),
             )
+    # 기존 student 역할 사용자에 대한 학생 프로필 보강
+    student_users = conn.execute("SELECT id, name FROM users WHERE role=?", (ROLE_STUDENT,)).fetchall()
+    for su in student_users:
+        exists = conn.execute("SELECT id FROM students WHERE user_id=?", (su["id"],)).fetchone()
+        if not exists:
+            conn.execute(
+                """INSERT INTO students(
+                user_id, student_no, name_ko, status, created_at
+                ) VALUES(?,?,?,?,?)""",
+                (su["id"], f"S{su['id']:04d}", su["name"], "active", now()),
+            )
     conn.commit()
     conn.close()
 
@@ -106,6 +117,7 @@ def render_html(title, body, user=None):
             로그인: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
             <a href='/dashboard'>대시보드</a> |
             <a href='/users'>사용자</a> |
+            <a href='/students'>학생상세</a> |
             <a href='/academics'>학사구조</a> |
             <a href='/attendance'>출결</a> |
             <a href='/homework'>숙제</a> |
@@ -259,6 +271,58 @@ def app(environ, start_response):
             </select><button>저장</button></form>
             """
         html = render_html("학생/학부모/강사 관리(사용자 기반)", form + f"<table border='1'><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>{rows}</table>", user)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
+    if path == "/students":
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            d = parse_body(environ)
+            student_user_id = d.get("user_id")
+            exists = conn.execute("SELECT id FROM students WHERE user_id=?", (student_user_id,)).fetchone()
+            if exists:
+                conn.execute(
+                    """UPDATE students SET
+                    student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
+                    current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                    WHERE user_id=?""",
+                    (
+                        d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                        d.get("current_class_id"), d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
+                    ),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO students(
+                    user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone,
+                    current_class_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        student_user_id, d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                        d.get("current_class_id"), d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
+                    ),
+                )
+            conn.commit()
+
+        students = conn.execute(
+            """SELECT s.*, u.username FROM students s
+            JOIN users u ON u.id=s.user_id
+            ORDER BY s.id DESC"""
+        ).fetchall()
+        student_users = conn.execute("SELECT id, name, username FROM users WHERE role='student' ORDER BY id DESC").fetchall()
+        html = render_html("학생 상세 정보(운영형 필드)", f"""
+        <form method='post'>
+          학생 사용자ID <input name='user_id'> 학생번호 <input name='student_no'> 한글이름 <input name='name_ko'> 영문이름 <input name='name_en'><br>
+          연락처 <input name='phone'> 보호자명 <input name='guardian_name'> 보호자 연락처 <input name='guardian_phone'><br>
+          현재반ID <input name='current_class_id'> 남은크레딧 <input name='remaining_credits'> 상태
+          <select name='status'><option value='active'>정상</option><option value='leave'>휴학</option><option value='ended'>종료</option></select><br>
+          입학일 <input name='enrolled_at' placeholder='2026-03-01'> 휴학시작 <input name='leave_start_date'> 휴학종료 <input name='leave_end_date'><br>
+          메모 <input name='memo' style='width:400px'> <button>저장/수정</button>
+        </form>
+        <h4>학생 사용자 목록</h4><pre>{[dict(r) for r in student_users]}</pre>
+        <h4>학생 상세</h4><pre>{[dict(r) for r in students]}</pre>
+        """, user)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)

@@ -45,7 +45,8 @@ python app.py
 7. 상담 (`/counseling`)
 8. 수납 (`/payments`)
 9. 공지/알림 (`/announcements`)
-10. 도서 대출 (`/library`)
+10. 학생 상세 (`/students`)
+11. 도서 대출 (`/library`)
 
 ## 4) API 예시
 - `POST /api/auth/login`
@@ -67,3 +68,15 @@ curl -i -X POST http://127.0.0.1:8000/api/auth/login \
 - Python 런타임 설치 후 `python3 app.py`로 단일 프로세스 실행 가능
 - 운영에서는 Nginx reverse proxy + systemd 서비스 구성 권장
 - DB는 MVP에서 SQLite 사용, 운영 확장 시 MySQL/PostgreSQL 전환 권장
+
+## 7) 학생 데이터 확장 필드
+- `students.user_id` (users와 1:1)
+- `student_no`
+- `name_ko`, `name_en(optional)`
+- `phone`
+- `guardian_name`, `guardian_phone`
+- `current_class_id`
+- `remaining_credits`
+- `status` (`active`/`leave`/`ended`)
+- `enrolled_at`, `leave_start_date`, `leave_end_date`
+- `memo`
