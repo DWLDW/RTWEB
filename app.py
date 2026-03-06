@@ -168,7 +168,7 @@ I18N_TEXTS["ko"].update({
     "academics.timetable_title": "시간표 관리", "academics.timetable_desc": "주간 수업 배치와 수업별 업무 이동을 관리합니다.", "academics.filter": "필터", "academics.week_prev": "이전 주", "academics.week_current": "현재 주", "academics.week_next": "다음 주",
     "academics.day_filter": "요일", "academics.teacher_filter": "강사", "academics.classroom_filter": "교실", "academics.course_level_filter": "코스/레벨", "academics.class_filter": "반 검색", "academics.search": "검색", "academics.add_lesson": "새 수업 추가",
     "academics.timetable": "주간 타임테이블", "academics.time_slot": "시간대", "academics.teacher_room": "강사/교실", "academics.students_summary": "학생", "academics.more_students": "+더보기", "academics.view_class": "반 상세", "academics.go_attendance": "출결", "academics.go_homework": "숙제", "academics.go_exams": "성적",
-    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.schedule_pick_class": "반 선택", "academics.schedule_pick_teacher": "강사 선택", "academics.schedule_teacher_auto": "반 담당 강사가 기본 선택됩니다", "academics.schedule_autofill": "선택한 반 정보를 자동으로 불러옵니다", "academics.schedule_pick_day": "요일 선택", "academics.schedule_pick_time": "시간 선택", "academics.schedule_pick_room": "교실 선택", "academics.schedule_pick_status": "상태 선택", "academics.schedule_pick_student": "학생", "academics.go_structure": "학사구조 관리로 이동", "academics.validation_class_required": "반을 먼저 선택하세요", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실", "academics.action.attendance_eval": "출결 및 평가", "lesson.record.page_title": "수업기록 입력", "lesson.record.header": "학생별 기록 입력", "lesson.record.desc": "시간표에서 선택한 수업의 학생 전체를 한 번에 기록합니다.", "lesson.record.class_info": "수업 정보", "lesson.record.back_schedule": "시간표로 돌아가기", "lesson.record.input_title": "출결 및 평가 입력", "lesson.record.empty_students": "이 반에는 등록된 학생이 없어 입력할 수 없습니다. 학생을 반에 배정한 후 다시 시도하세요.", "lesson.record.invalid_class": "class_id가 올바르지 않습니다.", "lesson.record.not_found_class": "존재하지 않는 반입니다.", "lesson.record.saved": "수업기록(출결/평가)이 저장되었습니다", "lesson.score.participation": "수업참여", "lesson.score.fluency": "유창성", "lesson.score.vocabulary": "어휘", "lesson.score.reading": "읽기", "lesson.score.homework": "숙제", "lesson.score.attitude": "수업태도", "lesson.score.teacher_memo": "교사 메모", "students.detail.section.evaluations": "최근 수업 평가기록", "students.eval.avg.title": "최근 평가 평균(최근 10회)", "students.eval.avg.participation": "평균 수업참여", "students.eval.avg.fluency": "평균 유창성", "students.eval.avg.vocabulary": "평균 어휘", "students.eval.avg.reading": "평균 읽기", "students.eval.avg.homework": "평균 숙제", "students.eval.avg.attitude": "평균 수업태도"
+    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.schedule_pick_class": "반 선택", "academics.schedule_pick_teacher": "강사 선택", "academics.schedule_teacher_auto": "반 담당 강사가 기본 선택됩니다", "academics.schedule_autofill": "선택한 반 정보를 자동으로 불러옵니다", "academics.schedule_pick_day": "요일 선택", "academics.schedule_pick_time": "시간 선택", "academics.schedule_pick_room": "교실 선택", "academics.schedule_pick_status": "상태 선택", "academics.schedule_pick_student": "학생", "academics.go_structure": "학사구조 관리로 이동", "academics.validation_class_required": "반을 먼저 선택하세요", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실", "academics.action.attendance_eval": "출결 및 평가", "lesson.record.page_title": "수업기록 입력", "lesson.record.header": "학생별 기록 입력", "lesson.record.desc": "시간표에서 선택한 수업의 학생 전체를 한 번에 기록합니다.", "lesson.record.class_info": "수업 정보", "lesson.record.back_schedule": "시간표로 돌아가기", "lesson.record.input_title": "출결 및 평가 입력", "lesson.record.empty_students": "이 반에는 등록된 학생이 없어 입력할 수 없습니다. 학생을 반에 배정한 후 다시 시도하세요.", "lesson.record.invalid_class": "class_id가 올바르지 않습니다.", "lesson.record.not_found_class": "존재하지 않는 반입니다.", "lesson.record.saved": "수업기록(출결/평가)이 저장되었습니다", "lesson.score.participation": "수업참여", "lesson.score.fluency": "유창성", "lesson.score.vocabulary": "어휘", "lesson.score.reading": "읽기", "lesson.score.homework": "숙제", "lesson.score.attitude": "수업태도", "lesson.score.teacher_memo": "교사 메모", "students.detail.section.evaluations": "최근 수업 평가기록", "students.eval.avg.title": "최근 평가 평균(최근 10회)", "students.eval.avg.participation": "평균 수업참여", "students.eval.avg.fluency": "평균 유창성", "students.eval.avg.vocabulary": "평균 어휘", "students.eval.avg.reading": "평균 읽기", "students.eval.avg.homework": "평균 숙제", "students.eval.avg.attitude": "평균 수업태도", "academics.copy_week.button": "이번 주를 다음 주로 복사", "academics.copy_week.desc": "현재 선택한 주간 시간표를 다음 주로 안전 복사합니다(중복은 건너뜀).", "academics.copy_week.source": "원본 주간", "academics.copy_week.target": "대상 주간", "academics.copy_week.result": "복사 결과", "academics.copy_week.none": "복사할 시간표가 없습니다", "academics.copy_week.done": "복사가 완료되었습니다", "academics.copy_week.copied": "복사", "academics.copy_week.skipped": "중복 건너뜀"
 })
 I18N_TEXTS["en"].update({
     "common.add": "Add", "role.owner": "Owner", "role.manager": "Manager", "role.teacher": "Teacher", "role.parent": "Parent", "role.student": "Student",
@@ -187,7 +187,7 @@ I18N_TEXTS["en"].update({
     "academics.timetable_title": "Timetable Management", "academics.timetable_desc": "Manage weekly lesson placement and quick jumps to class operations.", "academics.filter": "Filters", "academics.week_prev": "Previous Week", "academics.week_current": "Current Week", "academics.week_next": "Next Week",
     "academics.day_filter": "Day", "academics.teacher_filter": "Teacher", "academics.classroom_filter": "Classroom", "academics.course_level_filter": "Course/Level", "academics.class_filter": "Class Search", "academics.search": "Search", "academics.add_lesson": "Add Lesson",
     "academics.timetable": "Weekly Timetable", "academics.time_slot": "Time Slots", "academics.teacher_room": "Teacher/Room", "academics.students_summary": "Students", "academics.more_students": "+more", "academics.view_class": "Class Detail", "academics.go_attendance": "Attendance", "academics.go_homework": "Homework", "academics.go_exams": "Scores",
-    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.schedule_pick_class": "Select Class", "academics.schedule_pick_teacher": "Select Teacher", "academics.schedule_teacher_auto": "Class teacher is selected by default", "academics.schedule_autofill": "Class info is auto-filled from selected class", "academics.schedule_pick_day": "Select Day", "academics.schedule_pick_time": "Select Time", "academics.schedule_pick_room": "Select Classroom", "academics.schedule_pick_status": "Select Status", "academics.schedule_pick_student": "Students", "academics.go_structure": "Go to academic structure management", "academics.validation_class_required": "Please select a class first", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom", "academics.action.attendance_eval": "Attendance & Evaluation", "lesson.record.page_title": "Lesson Record Entry", "lesson.record.header": "Student Record Entry", "lesson.record.desc": "Record the full class attendance and evaluation in one pass.", "lesson.record.class_info": "Lesson Info", "lesson.record.back_schedule": "Back to Schedule", "lesson.record.input_title": "Attendance & Evaluation Input", "lesson.record.empty_students": "No students are assigned to this class yet. Assign students to the class and try again.", "lesson.record.invalid_class": "Invalid class_id.", "lesson.record.not_found_class": "Class not found.", "lesson.record.saved": "Lesson record (attendance/evaluation) saved.", "lesson.score.participation": "Participation", "lesson.score.fluency": "Fluency", "lesson.score.vocabulary": "Vocabulary", "lesson.score.reading": "Reading", "lesson.score.homework": "Homework", "lesson.score.attitude": "Attitude", "lesson.score.teacher_memo": "Teacher Memo", "students.detail.section.evaluations": "Recent Lesson Evaluations", "students.eval.avg.title": "Evaluation Averages (Recent 10)", "students.eval.avg.participation": "Avg Participation", "students.eval.avg.fluency": "Avg Fluency", "students.eval.avg.vocabulary": "Avg Vocabulary", "students.eval.avg.reading": "Avg Reading", "students.eval.avg.homework": "Avg Homework", "students.eval.avg.attitude": "Avg Attitude"
+    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.schedule_pick_class": "Select Class", "academics.schedule_pick_teacher": "Select Teacher", "academics.schedule_teacher_auto": "Class teacher is selected by default", "academics.schedule_autofill": "Class info is auto-filled from selected class", "academics.schedule_pick_day": "Select Day", "academics.schedule_pick_time": "Select Time", "academics.schedule_pick_room": "Select Classroom", "academics.schedule_pick_status": "Select Status", "academics.schedule_pick_student": "Students", "academics.go_structure": "Go to academic structure management", "academics.validation_class_required": "Please select a class first", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom", "academics.action.attendance_eval": "Attendance & Evaluation", "lesson.record.page_title": "Lesson Record Entry", "lesson.record.header": "Student Record Entry", "lesson.record.desc": "Record the full class attendance and evaluation in one pass.", "lesson.record.class_info": "Lesson Info", "lesson.record.back_schedule": "Back to Schedule", "lesson.record.input_title": "Attendance & Evaluation Input", "lesson.record.empty_students": "No students are assigned to this class yet. Assign students to the class and try again.", "lesson.record.invalid_class": "Invalid class_id.", "lesson.record.not_found_class": "Class not found.", "lesson.record.saved": "Lesson record (attendance/evaluation) saved.", "lesson.score.participation": "Participation", "lesson.score.fluency": "Fluency", "lesson.score.vocabulary": "Vocabulary", "lesson.score.reading": "Reading", "lesson.score.homework": "Homework", "lesson.score.attitude": "Attitude", "lesson.score.teacher_memo": "Teacher Memo", "students.detail.section.evaluations": "Recent Lesson Evaluations", "students.eval.avg.title": "Evaluation Averages (Recent 10)", "students.eval.avg.participation": "Avg Participation", "students.eval.avg.fluency": "Avg Fluency", "students.eval.avg.vocabulary": "Avg Vocabulary", "students.eval.avg.reading": "Avg Reading", "students.eval.avg.homework": "Avg Homework", "students.eval.avg.attitude": "Avg Attitude", "academics.copy_week.button": "Copy This Week to Next Week", "academics.copy_week.desc": "Safely copy the currently selected week timetable to next week (duplicates are skipped).", "academics.copy_week.source": "Source Week", "academics.copy_week.target": "Target Week", "academics.copy_week.result": "Copy Result", "academics.copy_week.none": "No schedules found to copy", "academics.copy_week.done": "Weekly copy completed", "academics.copy_week.copied": "Copied", "academics.copy_week.skipped": "Skipped (duplicate)"
 })
 I18N_TEXTS["zh"].update({
     "common.add": "添加", "role.owner": "院长", "role.manager": "经理", "role.teacher": "教师", "role.parent": "家长", "role.student": "学生",
@@ -206,7 +206,7 @@ I18N_TEXTS["zh"].update({
     "academics.timetable_title": "课表管理", "academics.timetable_desc": "管理每周课程排布并快速跳转到班级业务。", "academics.filter": "筛选", "academics.week_prev": "上一周", "academics.week_current": "本周", "academics.week_next": "下一周",
     "academics.day_filter": "星期", "academics.teacher_filter": "教师", "academics.classroom_filter": "教室", "academics.course_level_filter": "课程/级别", "academics.class_filter": "班级搜索", "academics.search": "搜索", "academics.add_lesson": "新增课程",
     "academics.timetable": "周课表", "academics.time_slot": "时间段", "academics.teacher_room": "教师/教室", "academics.students_summary": "学生", "academics.more_students": "+更多", "academics.view_class": "班级详情", "academics.go_attendance": "考勤", "academics.go_homework": "作业", "academics.go_exams": "成绩",
-    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "选择教师", "academics.schedule_teacher_auto": "默认选择班级负责教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室", "academics.action.attendance_eval": "考勤与课堂评价", "lesson.record.page_title": "课程记录录入", "lesson.record.header": "学生记录录入", "lesson.record.desc": "一次性录入本节课所有学生的考勤与课堂评价。", "lesson.record.class_info": "课程信息", "lesson.record.back_schedule": "返回课表", "lesson.record.input_title": "考勤与课堂评价录入", "lesson.record.empty_students": "该班级暂无学生，无法录入。请先分配学生后重试。", "lesson.record.invalid_class": "class_id 参数无效。", "lesson.record.not_found_class": "未找到该班级。", "lesson.record.saved": "课程记录（考勤/评价）已保存", "lesson.score.participation": "课堂参与", "lesson.score.fluency": "流利度", "lesson.score.vocabulary": "词汇", "lesson.score.reading": "阅读", "lesson.score.homework": "作业", "lesson.score.attitude": "课堂态度", "lesson.score.teacher_memo": "教师备注", "students.detail.section.evaluations": "最近课堂评价记录", "students.eval.avg.title": "最近10次评价平均分", "students.eval.avg.participation": "平均课堂参与", "students.eval.avg.fluency": "平均流利度", "students.eval.avg.vocabulary": "平均词汇", "students.eval.avg.reading": "平均阅读", "students.eval.avg.homework": "平均作业", "students.eval.avg.attitude": "平均课堂态度"
+    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "选择教师", "academics.schedule_teacher_auto": "默认选择班级负责教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室", "academics.action.attendance_eval": "考勤与课堂评价", "lesson.record.page_title": "课程记录录入", "lesson.record.header": "学生记录录入", "lesson.record.desc": "一次性录入本节课所有学生的考勤与课堂评价。", "lesson.record.class_info": "课程信息", "lesson.record.back_schedule": "返回课表", "lesson.record.input_title": "考勤与课堂评价录入", "lesson.record.empty_students": "该班级暂无学生，无法录入。请先分配学生后重试。", "lesson.record.invalid_class": "class_id 参数无效。", "lesson.record.not_found_class": "未找到该班级。", "lesson.record.saved": "课程记录（考勤/评价）已保存", "lesson.score.participation": "课堂参与", "lesson.score.fluency": "流利度", "lesson.score.vocabulary": "词汇", "lesson.score.reading": "阅读", "lesson.score.homework": "作业", "lesson.score.attitude": "课堂态度", "lesson.score.teacher_memo": "教师备注", "students.detail.section.evaluations": "最近课堂评价记录", "students.eval.avg.title": "最近10次评价平均分", "students.eval.avg.participation": "平均课堂参与", "students.eval.avg.fluency": "平均流利度", "students.eval.avg.vocabulary": "平均词汇", "students.eval.avg.reading": "平均阅读", "students.eval.avg.homework": "平均作业", "students.eval.avg.attitude": "平均课堂态度", "academics.copy_week.button": "本周复制到下周", "academics.copy_week.desc": "将当前选择周的课表安全复制到下一周（重复项自动跳过）。", "academics.copy_week.source": "源周", "academics.copy_week.target": "目标周", "academics.copy_week.result": "复制结果", "academics.copy_week.none": "没有可复制的课表", "academics.copy_week.done": "周复制完成", "academics.copy_week.copied": "已复制", "academics.copy_week.skipped": "已跳过（重复）"
 })
 
 def load_locale_files():
@@ -397,6 +397,8 @@ def ensure_schedule_columns(conn):
         conn.execute("ALTER TABLE schedules ADD COLUMN note TEXT")
     if "teacher_id" not in cols:
         conn.execute("ALTER TABLE schedules ADD COLUMN teacher_id INTEGER")
+    if "week_start_date" not in cols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN week_start_date TEXT")
 
 
 def ensure_attendance_columns(conn):
@@ -550,6 +552,52 @@ def week_bounds_from_ref(ref_date_str=None, week_offset=0):
     sunday = monday + timedelta(days=6)
     iso_year, iso_week, _ = monday.isocalendar()
     return monday, sunday, iso_year, iso_week
+
+def iso_monday_str(ref_date_str=None, week_offset=0):
+    monday, _, _, _ = week_bounds_from_ref(ref_date_str, week_offset)
+    return monday.isoformat()
+
+
+def copy_week_schedules(conn, source_week_start, target_week_start, class_ids=None):
+    class_ids = class_ids or []
+    if not class_ids:
+        return {"copied": 0, "skipped": 0, "source_count": 0}
+    placeholders = ",".join(["?"] * len(class_ids))
+    src_rows = conn.execute(
+        f"""SELECT * FROM schedules
+        WHERE class_id IN ({placeholders})
+          AND COALESCE(week_start_date, '') IN ('', ?)
+        ORDER BY id""",
+        (*class_ids, source_week_start),
+    ).fetchall()
+    copied = 0
+    skipped = 0
+    for row in src_rows:
+        dup = conn.execute(
+            """SELECT 1 FROM schedules
+            WHERE class_id=? AND day_of_week=? AND start_time=? AND end_time=?
+              AND COALESCE(classroom,'')=COALESCE(?, '')
+              AND COALESCE(teacher_id,0)=COALESCE(?,0)
+              AND COALESCE(week_start_date,'') IN ('', ?)
+            LIMIT 1""",
+            (row["class_id"], row["day_of_week"], row["start_time"], row["end_time"], row["classroom"], row["teacher_id"], target_week_start),
+        ).fetchone()
+        if dup:
+            skipped += 1
+            continue
+        getv = lambda k: row[k] if k in row.keys() else None
+        conn.execute(
+            """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at, room_id, foreign_teacher_id, chinese_teacher_id, substitute_foreign_teacher_id, substitute_chinese_teacher_id, substitute_reason, week_start_date)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                row["class_id"], row["day_of_week"], row["start_time"], row["end_time"], row["classroom"],
+                row["status"], row["note"], row["teacher_id"], now(),
+                getv("room_id"), getv("foreign_teacher_id"), getv("chinese_teacher_id"), getv("substitute_foreign_teacher_id"),
+                getv("substitute_chinese_teacher_id"), getv("substitute_reason"), target_week_start,
+            ),
+        )
+        copied += 1
+    return {"copied": copied, "skipped": skipped, "source_count": len(src_rows)}
 
 
 def init_db():
@@ -1924,7 +1972,19 @@ def app(environ, start_response):
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             typ = data.get("type")
-            if typ == "course":
+            if typ == "copy_week":
+                source_week_start = iso_monday_str(ref_date_str, week_offset)
+                target_week_start = (datetime.strptime(source_week_start, "%Y-%m-%d").date() + timedelta(days=7)).isoformat()
+                copy_class_rows = conn.execute("SELECT id FROM classes").fetchall()
+                copy_class_ids = [str(r["id"]) for r in copy_class_rows]
+                result = copy_week_schedules(conn, source_week_start, target_week_start, class_ids=copy_class_ids)
+                conn.commit()
+                if result["source_count"] == 0:
+                    flash_msg = t("academics.copy_week.none")
+                    flash_type = "error"
+                else:
+                    flash_msg = f"{t('academics.copy_week.done')}: {t('academics.copy_week.copied')} {result['copied']}, {t('academics.copy_week.skipped')} {result['skipped']}"
+            elif typ == "course":
                 conn.execute("INSERT INTO courses(name, created_at) VALUES(?,?)", (data.get("name"), now()))
                 conn.commit()
             elif typ == "level":
@@ -1975,11 +2035,13 @@ def app(environ, start_response):
                     class_teacher_id = class_row["teacher_id"] if class_row else None
                     form_teacher_id = selected_teacher if selected_teacher else class_teacher_id
                     ignore_id = schedule_id if str(schedule_id).isdigit() else "0"
+                    target_week_start = iso_monday_str(ref_date_str, week_offset)
                     existing = conn.execute(
                         """SELECT sc.*, c.teacher_id AS cls_teacher_id
                         FROM schedules sc LEFT JOIN classes c ON c.id=sc.class_id
-                        WHERE sc.day_of_week=? AND sc.id<>?""",
-                        (day_of_week, ignore_id),
+                        WHERE sc.day_of_week=? AND sc.id<>?
+                          AND COALESCE(sc.week_start_date,'') IN ('', ?)""",
+                        (day_of_week, ignore_id, target_week_start),
                     ).fetchall()
                     conflict = None
                     for ex in existing:
@@ -2009,9 +2071,9 @@ def app(environ, start_response):
                             flash_msg = t("academics.updated")
                         else:
                             conn.execute(
-                                """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at)
-                                VALUES(?,?,?,?,?,?,?,?,?)""",
-                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, form_teacher_id, now()),
+                                """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at, week_start_date)
+                                VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, form_teacher_id, now(), iso_monday_str(ref_date_str, week_offset)),
                             )
                             flash_msg = t("academics.saved")
                         conn.commit()
@@ -2059,8 +2121,9 @@ def app(environ, start_response):
             LEFT JOIN users u2 ON u2.id=sc.teacher_id
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
-            WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})"""
-            schedules = conn.execute(schedule_sql, class_ids).fetchall()
+            WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})
+              AND COALESCE(sc.week_start_date,'') IN ('', ?)"""
+            schedules = conn.execute(schedule_sql, [*class_ids, week_start.isoformat()]).fetchall()
         else:
             schedules = []
 
@@ -2301,6 +2364,13 @@ def app(environ, start_response):
             <button>{t('academics.search')}</button>
             <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('common.reset')}</a>
             <a class='btn' href='#schedule-form'>{t('academics.add_lesson')}</a>
+          </form>
+          <form method='post' class='filter-row' style='margin-top:10px'>
+            <input type='hidden' name='type' value='copy_week'>
+            <div class='muted'>{t('academics.copy_week.desc')}</div>
+            <div>{t('academics.copy_week.source')}: <strong>{week_range_label}</strong></div>
+            <div>{t('academics.copy_week.target')}: <strong>{(week_start + timedelta(days=7)).isoformat()} ~ {(week_end + timedelta(days=7)).isoformat()}</strong></div>
+            <button type='submit'>{t('academics.copy_week.button')}</button>
           </form>
         </div>
 

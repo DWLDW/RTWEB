@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   status TEXT DEFAULT 'active',
   note TEXT,
   teacher_id INTEGER,
+  week_start_date TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(class_id) REFERENCES classes(id),
   FOREIGN KEY(teacher_id) REFERENCES users(id)
