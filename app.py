@@ -108,7 +108,7 @@ def parse_query(environ):
 def get_lang(environ):
     q = parse_query(environ)
     lang = q.get("lang", "").strip().lower()
-    if lang in ("ko", "en", "zh"): 
+    if lang in ("ko", "en", "zh"):
         return lang
     return "ko"
 
@@ -209,6 +209,79 @@ def json_resp(data, status="200 OK"):
 
 def text_resp(text, status="200 OK"):
     return status, [("Content-Type", "text/html; charset=utf-8")], text
+
+
+def fetch_student_candidates(conn, keyword, limit=10):
+    kw = (keyword or "").strip()
+    if not kw:
+        return []
+    like = f"%{kw}%"
+    return conn.execute(
+        """SELECT id, student_no, name_ko, phone FROM students
+        WHERE name_ko LIKE ? OR student_no LIKE ? OR phone LIKE ?
+        ORDER BY id DESC LIMIT ?""",
+        (like, like, like, limit),
+    ).fetchall()
+
+
+def fetch_class_candidates(conn, keyword, limit=10):
+    kw = (keyword or "").strip()
+    if not kw:
+        return []
+    like = f"%{kw}%"
+    return conn.execute(
+        """SELECT c.id, c.name, COALESCE(co.name, '') AS course_name
+        FROM classes c
+        LEFT JOIN courses co ON co.id=c.course_id
+        WHERE c.name LIKE ? OR co.name LIKE ?
+        ORDER BY c.id DESC LIMIT ?""",
+        (like, like, limit),
+    ).fetchall()
+
+
+def fetch_teacher_candidates(conn, keyword, limit=10):
+    kw = (keyword or "").strip()
+    if not kw:
+        return []
+    like = f"%{kw}%"
+    return conn.execute(
+        """SELECT id, name, username FROM users
+        WHERE role='teacher' AND (name LIKE ? OR username LIKE ?)
+        ORDER BY id DESC LIMIT ?""",
+        (like, like, limit),
+    ).fetchall()
+
+
+def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None):
+    query_keep = query_keep or {}
+    hidden = "".join([f"<input type='hidden' name='{k}' value='{v}'>" for k, v in query_keep.items() if v not in (None, "")])
+    cand_rows = ""
+    for c in candidates:
+        cid = c['id']
+        label = c.get('label', '') if isinstance(c, dict) else ''
+        if not label:
+            if 'student_no' in c.keys():
+                label = f"{c['name_ko']} ({c['student_no'] or '-'}, {c['phone'] or '-'})"
+            elif 'course_name' in c.keys():
+                label = f"{c['name']} / {c['course_name'] or '-'}"
+            else:
+                label = f"{c['name']} ({c['username']})"
+        qp = "&".join([f"{k}={v}" for k, v in query_keep.items() if v not in (None, "")])
+        sep = "&" if qp else ""
+        cand_rows += f"<li><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{label}</a></li>"
+    return f"""
+    <div style='border:1px solid #ddd; padding:8px; margin:8px 0'>
+      <strong>{title}</strong><br>
+      <form method='get' style='margin:6px 0'>
+        <input type='hidden' name='lang' value='{lang}'>
+        {hidden}
+        <input name='{search_name}' value='{search_value or ''}' placeholder='search'>
+        <button>검색</button>
+      </form>
+      <div>선택됨: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
+      <ul>{cand_rows or '<li>검색 결과 없음</li>'}</ul>
+    </div>
+    """
 
 
 def app(environ, start_response):
@@ -585,17 +658,60 @@ def app(environ, start_response):
 
     # 출결
     if path == "/attendance":
+        selected_student_id = query.get("selected_student_id", "")
+        selected_class_id = query.get("selected_class_id", "")
+        selected_teacher_id = query.get("selected_teacher_id", "")
+        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
+        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
+        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
+
+        selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
+        selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
+        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
+            class_id = d.get("class_id") or selected_class_id
+            student_id = d.get("student_id") or selected_student_id
+            created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
             conn.execute("INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at) VALUES(?,?,?,?,?,?,?)",
-                         (d.get("class_id"), d.get("student_id"), d.get("lesson_date"), d.get("status"), d.get("note"), user["id"], now()))
+                         (class_id, student_id, d.get("lesson_date"), d.get("status"), d.get("note"), created_by, now()))
             if d.get("status") == "absent":
                 conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
-                             ("absence", d.get("student_id"), json.dumps({"student_id": d.get("student_id"), "date": d.get("lesson_date")}, ensure_ascii=False), now()))
+                             ("absence", student_id, json.dumps({"student_id": student_id, "date": d.get("lesson_date")}, ensure_ascii=False), now()))
             conn.commit()
+
         rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
+        picker_keep = {
+            "selected_student_id": selected_student_id,
+            "selected_class_id": selected_class_id,
+            "selected_teacher_id": selected_teacher_id,
+            "student_q": query.get("student_q", ""),
+            "class_q": query.get("class_q", ""),
+            "teacher_q": query.get("teacher_q", ""),
+        }
+        student_picker = render_picker_block("학생 검색 선택", "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
+                                            (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
+                                            student_candidates, "/attendance", CURRENT_LANG,
+                                            {"selected_class_id": selected_class_id, "selected_teacher_id": selected_teacher_id, "class_q": query.get("class_q", ""), "teacher_q": query.get("teacher_q", "")})
+        class_picker = render_picker_block("반 검색 선택", "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
+                                          (selected_class["name"] if selected_class else ""),
+                                          class_candidates, "/attendance", CURRENT_LANG,
+                                          {"selected_student_id": selected_student_id, "selected_teacher_id": selected_teacher_id, "student_q": query.get("student_q", ""), "teacher_q": query.get("teacher_q", "")})
+        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+                                            (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
+                                            teacher_candidates, "/attendance", CURRENT_LANG,
+                                            {"selected_student_id": selected_student_id, "selected_class_id": selected_class_id, "student_q": query.get("student_q", ""), "class_q": query.get("class_q", "")})
         html = render_html("출결 관리", f"""
-        <form method='post'>반ID<input name='class_id'> 학생ID<input name='student_id'> 날짜<input name='lesson_date' placeholder='2026-03-06'>
+        {student_picker}
+        {class_picker}
+        {teacher_picker}
+        <form method='post'>
+        <input type='hidden' name='student_id' value='{selected_student_id}'>
+        <input type='hidden' name='class_id' value='{selected_class_id}'>
+        <input type='hidden' name='teacher_id' value='{selected_teacher_id}'>
+        학생ID <input name='student_id_manual' value='{selected_student_id}' readonly> 반ID <input name='class_id_manual' value='{selected_class_id}' readonly> 강사ID <input name='teacher_id_manual' value='{selected_teacher_id}' readonly>
+        날짜<input name='lesson_date' placeholder='2026-03-06'>
         상태<select name='status'><option value='present'>출석</option><option value='late'>지각</option><option value='absent'>결석</option><option value='makeup'>보강</option></select>
         메모<input name='note'><button>저장</button></form>
         <pre>{[dict(r) for r in rows]}</pre>
@@ -606,11 +722,20 @@ def app(environ, start_response):
         return [body]
 
     if path == "/homework":
+        selected_class_id = query.get("selected_class_id", "")
+        selected_teacher_id = query.get("selected_teacher_id", "")
+        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
+        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
+        selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
+        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+
         if method == "POST":
             d = parse_body(environ)
             typ = d.get("type")
             if typ == "homework" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
-                conn.execute("INSERT INTO homework(class_id, title, due_date, created_by, created_at) VALUES(?,?,?,?,?)", (d.get("class_id"), d.get("title"), d.get("due_date"), user["id"], now()))
+                class_id = d.get("class_id") or selected_class_id
+                created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
+                conn.execute("INSERT INTO homework(class_id, title, due_date, created_by, created_at) VALUES(?,?,?,?,?)", (class_id, d.get("title"), d.get("due_date"), created_by, now()))
                 conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)", ("homework", None, json.dumps({"title": d.get("title")}, ensure_ascii=False), now()))
             elif typ == "submission" and has_role(user, [ROLE_STUDENT]):
                 conn.execute("INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at) VALUES(?,?,?,?)", (d.get("homework_id"), user["id"], 1, now()))
@@ -619,8 +744,16 @@ def app(environ, start_response):
             conn.commit()
         hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
         sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
+        class_picker = render_picker_block("반 검색 선택", "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
+                                          (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
+                                          {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
+        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+                                            (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""), teacher_candidates, "/homework", CURRENT_LANG,
+                                            {"selected_class_id": selected_class_id, "class_q": query.get("class_q", "")})
         html = render_html("숙제 관리", f"""
-        <form method='post'><input type='hidden' name='type' value='homework'>반ID<input name='class_id'> 제목<input name='title'> 마감일<input name='due_date'><button>등록</button></form>
+        {class_picker}
+        {teacher_picker}
+        <form method='post'><input type='hidden' name='type' value='homework'><input type='hidden' name='class_id' value='{selected_class_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>반ID<input value='{selected_class_id}' readonly> 강사ID<input value='{selected_teacher_id}' readonly> 제목<input name='title'> 마감일<input name='due_date'><button>등록</button></form>
         <form method='post'><input type='hidden' name='type' value='submission'>숙제ID<input name='homework_id'><button>학생 제출</button></form>
         <form method='post'><input type='hidden' name='type' value='feedback'>제출ID<input name='submission_id'> 피드백<input name='feedback'><button>피드백 저장</button></form>
         <h4>숙제</h4><pre>{[dict(r) for r in hw]}</pre>
@@ -701,6 +834,13 @@ def app(environ, start_response):
         return [body]
 
     if path == "/library":
+        selected_student_id = query.get("selected_student_id", "")
+        selected_teacher_id = query.get("selected_teacher_id", "")
+        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
+        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
+        selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
+        selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
+
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
@@ -710,7 +850,7 @@ def app(environ, start_response):
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
                     conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
-                    conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], d.get("student_id"), now(), user["id"], now()))
+                    conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], d.get("student_id") or selected_student_id, now(), d.get("teacher_id") or selected_teacher_id or user["id"], now()))
             elif typ == "return":
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
@@ -719,9 +859,19 @@ def app(environ, start_response):
             conn.commit()
         books = conn.execute("SELECT * FROM books ORDER BY id DESC").fetchall()
         loans = conn.execute("SELECT * FROM book_loans ORDER BY id DESC").fetchall()
+        student_picker = render_picker_block("학생 검색 선택", "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
+                                            (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
+                                            student_candidates, "/library", CURRENT_LANG,
+                                            {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
+        teacher_picker = render_picker_block("강사 검색 선택", "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
+                                            (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
+                                            teacher_candidates, "/library", CURRENT_LANG,
+                                            {"selected_student_id": selected_student_id, "student_q": query.get("student_q", "")})
         html = render_html("도서 대출 관리", f"""
+        {student_picker}
+        {teacher_picker}
         <form method='post'><input type='hidden' name='type' value='book'>코드<input name='code'> 제목<input name='title'><button>도서 등록</button></form>
-        <form method='post'><input type='hidden' name='type' value='loan'>코드입력<input name='code'> 학생ID<input name='student_id'><button>대여 처리</button></form>
+        <form method='post'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>코드입력<input name='code'> 학생ID<input value='{selected_student_id}' readonly> 강사ID<input value='{selected_teacher_id}' readonly><button>대여 처리</button></form>
         <form method='post'><input type='hidden' name='type' value='return'>코드입력<input name='code'><button>반납 처리</button></form>
         <h4>도서</h4><pre>{[dict(r) for r in books]}</pre>
         <h4>대출/반납 이력</h4><pre>{[dict(r) for r in loans]}</pre>
