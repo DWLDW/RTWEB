@@ -4,7 +4,7 @@ import os
 import sqlite3
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
@@ -399,6 +399,23 @@ def ensure_schedule_columns(conn):
         conn.execute("ALTER TABLE schedules ADD COLUMN teacher_id INTEGER")
 
 
+def ensure_attendance_columns(conn):
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(attendance)").fetchall()}
+    extra_cols = [
+        ("participation_score", "INTEGER"),
+        ("fluency_score", "INTEGER"),
+        ("vocabulary_score", "INTEGER"),
+        ("reading_score", "INTEGER"),
+        ("homework_score", "INTEGER"),
+        ("attitude_score", "INTEGER"),
+        ("teacher_memo", "TEXT"),
+        ("schedule_id", "INTEGER"),
+    ]
+    for col, typ in extra_cols:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE attendance ADD COLUMN {col} {typ}")
+
+
 def ensure_user_columns(conn):
     ucols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "name" not in ucols:
@@ -523,11 +540,24 @@ def hash_pw(pw: str) -> str:
 def now():
     return datetime.utcnow().isoformat()
 
+
+def week_bounds_from_ref(ref_date_str=None, week_offset=0):
+    try:
+        base = datetime.strptime(ref_date_str, "%Y-%m-%d").date() if ref_date_str else datetime.utcnow().date()
+    except Exception:
+        base = datetime.utcnow().date()
+    monday = base - timedelta(days=base.weekday()) + timedelta(days=week_offset * 7)
+    sunday = monday + timedelta(days=6)
+    iso_year, iso_week, _ = monday.isocalendar()
+    return monday, sunday, iso_year, iso_week
+
+
 def init_db():
     conn = get_db()
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
+    ensure_attendance_columns(conn)
     ensure_master_tables(conn)
     ensure_extended_columns(conn)
     ensure_teacher_table(conn)
@@ -1828,6 +1858,7 @@ def app(environ, start_response):
             return [body]
 
         week_offset = safe_int(query.get("week", "0"), 0)
+        ref_date_str = (query.get("ref_date", "") or "").strip()
         selected_day = query.get("day", "")
         selected_teacher_id = query.get("teacher_id", "")
         selected_room = query.get("classroom", "").strip()
@@ -1839,6 +1870,9 @@ def app(environ, start_response):
 
         flash_msg = ""
         flash_type = "success"
+        week_start, week_end, week_year, week_no = week_bounds_from_ref(ref_date_str, week_offset)
+        if not ref_date_str:
+            ref_date_str = datetime.utcnow().date().isoformat()
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
@@ -2001,7 +2035,8 @@ def app(environ, start_response):
             teacher_rows = list_teacher_profiles(conn)
 
         day_values = sorted({(r["day_of_week"] or "").strip() for r in schedules if (r["day_of_week"] or "").strip()}, key=day_sort_value)
-        time_slots = sorted({f"{r['start_time']}~{r['end_time']}" for r in schedules if r['start_time'] and r['end_time']})
+        slot_rows_grid = conn.execute("SELECT start_time, end_time FROM time_slots ORDER BY start_time, end_time").fetchall()
+        time_slots = [f"{r['start_time']}~{r['end_time']}" for r in slot_rows_grid if r['start_time'] and r['end_time']]
         if not time_slots:
             time_slots = ["16:25~17:20", "17:25~18:20", "18:30~19:25", "19:35~20:30"]
 
@@ -2075,10 +2110,10 @@ def app(environ, start_response):
                       <div><span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span></div>
                       <div class='lesson-actions'>
                         <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_attendance')}</a>
+                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={ref_date_str}&teacher_id={les['effective_teacher_id'] or ''}'>출결 및 평가</a>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
-                        <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}'>{t('common.edit')}</a>
+                        <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
                       </div>
                     </div>
                     """
@@ -2086,7 +2121,8 @@ def app(environ, start_response):
                     blocks = f"<div class='empty-msg'>{t('common.no_data')}</div>"
                 timetable_cells += f"<div class='tt-cell'>{blocks}</div>"
 
-        week_label = f"W{week_offset:+d}" if week_offset else "W0"
+        week_label = f"{week_year}년 {week_start.month}월 {week_no}주차"
+        week_range_label = f"{week_start.isoformat()} ~ {week_end.isoformat()}"
         selected_teacher_options = [f"<option value=''>{t('academics.day_all')}</option>"]
         for tr in teacher_rows:
             selected = "selected" if str(tr["id"]) == selected_teacher_id else ""
@@ -2160,7 +2196,7 @@ def app(environ, start_response):
             "/schedule",
             CURRENT_LANG,
             {
-                "week": str(week_offset), "day": selected_day, "teacher_id": selected_teacher_id,
+                "week": str(week_offset), "ref_date": ref_date_str, "day": selected_day, "teacher_id": selected_teacher_id,
                 "classroom": selected_room, "course_level": selected_course_level, "class_q": selected_class_q,
                 "schedule_id": selected_schedule_id, "recent_class_ids": recent_class_ids,
             }
@@ -2186,7 +2222,7 @@ def app(environ, start_response):
               </table>
               <div class='lesson-actions' style='margin-top:10px'>
                 <a class='btn' href='/classes/{selected_schedule['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                <a class='btn' href='/attendance?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_attendance')}</a>
+                <a class='btn' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={selected_schedule['id']}&class_id={selected_schedule['class_id']}&lesson_date={ref_date_str}&teacher_id={selected_schedule['effective_teacher_id'] or ''}'>출결 및 평가</a>
                 <a class='btn' href='/homework?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_homework')}</a>
                 <a class='btn' href='/exams?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_exams')}</a>
               </div>
@@ -2202,11 +2238,14 @@ def app(environ, start_response):
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='week' value='{week_offset}'>
+            <input type='hidden' name='ref_date' value='{ref_date_str}'>
             <input type='hidden' name='recent_class_ids' value='{recent_class_ids}'>
-            <label>{t('academics.week_current')} <strong>{week_label}</strong></label>
-            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week={week_offset-1}'>{t('academics.week_prev')}</a>
-            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week=0'>{t('academics.week_current')}</a>
-            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week={week_offset+1}'>{t('academics.week_next')}</a>
+            <label>주간 <strong>{week_label}</strong></label>
+            <label>주간 범위 <strong>{week_range_label}</strong></label>
+            <label>기준 날짜 <input type='date' name='ref_date' value='{ref_date_str}'></label>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset-1}'>{t('academics.week_prev')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={datetime.utcnow().date().isoformat()}&week=0'>{t('academics.week_current')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset+1}'>{t('academics.week_next')}</a>
             <label>{t('academics.day_filter')} <select name='day'>{''.join(day_options)}</select></label>
             <label>{t('academics.teacher_filter')} <select name='teacher_id'>{''.join(selected_teacher_options)}</select></label>
             <label>{t('academics.classroom_filter')} <input name='classroom' value='{selected_room}'></label>
@@ -2282,11 +2321,210 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
+
+        lesson_mode = query.get("lesson_mode", "") == "1"
         selected_student_id = query.get("selected_student_id", "")
         selected_class_id = query.get("selected_class_id", "")
         selected_teacher_id = query.get("selected_teacher_id", "")
+        schedule_id = query.get("schedule_id", "")
+        class_id_for_lesson = query.get("class_id", "") or selected_class_id
+        lesson_date = (query.get("lesson_date", "") or datetime.utcnow().date().isoformat()).strip()
         flash_msg = ""
         flash_type = "success"
+
+        # 운영 동선: 시간표 -> 출결 및 평가(일괄 입력)
+        if lesson_mode:
+            if not class_id_for_lesson or not str(class_id_for_lesson).isdigit():
+                conn.close()
+                html = render_html(t("attendance.title"), "<div class='card'><div class='flash error'>class_id가 올바르지 않습니다.</div></div>", user, current_menu="attendance")
+                status, headers, body = text_resp(html)
+                start_response(status, headers)
+                return [body]
+            if not is_valid_date(lesson_date):
+                lesson_date = datetime.utcnow().date().isoformat()
+
+            class_info = conn.execute(
+                """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                WHERE c.id=?""",
+                (class_id_for_lesson,),
+            ).fetchone()
+            if not class_info:
+                conn.close()
+                html = render_html(t("attendance.title"), "<div class='card'><div class='flash error'>존재하지 않는 반입니다.</div></div>", user, current_menu="attendance")
+                status, headers, body = text_resp(html)
+                start_response(status, headers)
+                return [body]
+
+            if has_role(user, [ROLE_TEACHER]) and str(class_info["teacher_id"] or "") != str(user["id"]):
+                conn.close()
+                status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+                start_response(status, headers)
+                return [body]
+
+            schedule_info = None
+            if str(schedule_id).isdigit():
+                schedule_info = conn.execute(
+                    "SELECT id, day_of_week, start_time, end_time, classroom, teacher_id FROM schedules WHERE id=? AND class_id=?",
+                    (schedule_id, class_id_for_lesson),
+                ).fetchone()
+
+            students_in_class = conn.execute(
+                "SELECT id, user_id, student_no, name_ko FROM students WHERE current_class_id=? ORDER BY name_ko, id",
+                (class_id_for_lesson,),
+            ).fetchall()
+
+            score_fields = ["participation_score", "fluency_score", "vocabulary_score", "reading_score", "homework_score", "attitude_score"]
+
+            if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+                d = parse_body(environ)
+                post_lesson_date = (d.get("lesson_date") or lesson_date).strip()
+                errs = []
+                if not is_valid_date(post_lesson_date):
+                    add_error(errs, "lesson_date", "YYYY-MM-DD 형식이어야 합니다")
+                if not students_in_class:
+                    add_error(errs, "students", "반에 소속된 학생이 없습니다")
+
+                row_errors = []
+                parsed = []
+                for st in students_in_class:
+                    sid = str(st["user_id"])
+                    status_v = (d.get(f"status_{sid}") or "present").strip()
+                    if status_v not in ("present", "late", "absent", "makeup"):
+                        row_errors.append(f"{st['name_ko']}: status 값이 올바르지 않습니다")
+                    row = {"student_user_id": st["user_id"], "status": status_v, "teacher_memo": (d.get(f"teacher_memo_{sid}") or "").strip()}
+                    for sf in score_fields:
+                        raw = (d.get(f"{sf}_{sid}") or "").strip()
+                        if raw == "":
+                            row[sf] = None
+                        else:
+                            v = as_int(raw)
+                            if v is None or v < 1 or v > 5:
+                                row_errors.append(f"{st['name_ko']}: {sf}는 1~5 사이 정수여야 합니다")
+                            row[sf] = v
+                    parsed.append(row)
+
+                if errs or row_errors:
+                    flash_msg = format_errors(errs + [f"- row: {x}" for x in row_errors])
+                    flash_type = "error"
+                    log_event(conn, "ERROR", path, "수업기록 저장 검증 실패", "\n".join(errs + row_errors), user["id"])
+                else:
+                    for row in parsed:
+                        existing = conn.execute(
+                            "SELECT id FROM attendance WHERE class_id=? AND student_id=? AND lesson_date=?",
+                            (class_id_for_lesson, row["student_user_id"], post_lesson_date),
+                        ).fetchone()
+                        params = (
+                            row["status"],
+                            row["teacher_memo"] or None,
+                            user["id"],
+                            schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
+                            row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"],
+                        )
+                        if existing:
+                            conn.execute(
+                                """UPDATE attendance SET status=?, note=?, created_by=?, schedule_id=?,
+                                participation_score=?, fluency_score=?, vocabulary_score=?, reading_score=?, homework_score=?, attitude_score=?, teacher_memo=?
+                                WHERE id=?""",
+                                (
+                                    row["status"], row["teacher_memo"] or None, user["id"],
+                                    schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
+                                    row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
+                                    existing["id"],
+                                ),
+                            )
+                        else:
+                            conn.execute(
+                                """INSERT INTO attendance(
+                                class_id, student_id, lesson_date, status, note, created_by, created_at, schedule_id,
+                                participation_score, fluency_score, vocabulary_score, reading_score, homework_score, attitude_score, teacher_memo
+                                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                (
+                                    class_id_for_lesson, row["student_user_id"], post_lesson_date, row["status"], row["teacher_memo"] or None, user["id"], now(),
+                                    schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
+                                    row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
+                                ),
+                            )
+                        if row["status"] == "absent":
+                            conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
+                                         ("absence", row["student_user_id"], json.dumps({"student_id": row["student_user_id"], "date": post_lesson_date}, ensure_ascii=False), now()))
+                    conn.commit()
+                    flash_msg = "수업기록(출결/평가)이 저장되었습니다"
+                    lesson_date = post_lesson_date
+
+            existing_map = {}
+            ex_rows = conn.execute(
+                "SELECT * FROM attendance WHERE class_id=? AND lesson_date=?",
+                (class_id_for_lesson, lesson_date),
+            ).fetchall()
+            for r in ex_rows:
+                existing_map[str(r["student_id"])] = r
+
+            student_rows_html = ""
+            for st in students_in_class:
+                sid = str(st["user_id"])
+                ex = existing_map.get(sid)
+                def score_cell(field):
+                    val = ex[field] if ex and field in ex.keys() else None
+                    return f"<input name='{field}_{sid}' value='{h(val if val is not None else '')}' style='width:70px'>"
+                status_val = (ex["status"] if ex else "present")
+                student_rows_html += f"""
+                <tr>
+                  <td>{h(st['student_no'] or '-')}</td>
+                  <td>{h(st['name_ko'] or '-')}</td>
+                  <td><select name='status_{sid}'>
+                    <option value='present' {'selected' if status_val=='present' else ''}>{attendance_status_t('present')}</option>
+                    <option value='late' {'selected' if status_val=='late' else ''}>{attendance_status_t('late')}</option>
+                    <option value='absent' {'selected' if status_val=='absent' else ''}>{attendance_status_t('absent')}</option>
+                    <option value='makeup' {'selected' if status_val=='makeup' else ''}>{attendance_status_t('makeup')}</option>
+                  </select></td>
+                  <td>{score_cell('participation_score')}</td>
+                  <td>{score_cell('fluency_score')}</td>
+                  <td>{score_cell('vocabulary_score')}</td>
+                  <td>{score_cell('reading_score')}</td>
+                  <td>{score_cell('homework_score')}</td>
+                  <td>{score_cell('attitude_score')}</td>
+                  <td><input name='teacher_memo_{sid}' value='{h((ex['teacher_memo'] if ex and 'teacher_memo' in ex.keys() else (ex['note'] if ex else '')) or '')}' style='min-width:180px'></td>
+                </tr>
+                """
+
+            lesson_info = f"{h(class_info['name'])} / {h(class_info['course_name'] or '-')} / {h(class_info['level_name'] or '-')} · {h(class_info['teacher_name'] or '-') }"
+            time_info = f"{h(schedule_info['day_of_week'])} {h(schedule_info['start_time'])}~{h(schedule_info['end_time'])}" if schedule_info else "-"
+            room_info = h(schedule_info['classroom']) if schedule_info and schedule_info['classroom'] else "-"
+
+            html = render_html("수업기록 입력", f"""
+            <div class='card'>
+              <h4>수업 정보</h4>
+              <div><strong>반/코스/레벨/교사:</strong> {lesson_info}</div>
+              <div><strong>날짜:</strong> {h(lesson_date)}</div>
+              <div><strong>시간:</strong> {time_info}</div>
+              <div><strong>교실:</strong> {room_info}</div>
+              <div style='margin-top:8px'><a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>시간표로 돌아가기</a></div>
+            </div>
+            <div class='card'>
+              <h4>출결 및 평가 입력</h4>
+              <form method='post'>
+                <input type='hidden' name='lesson_date' value='{h(lesson_date)}'>
+                <table>
+                  <tr>
+                    <th>학생번호</th><th>학생명</th><th>출결</th>
+                    <th>participation</th><th>fluency</th><th>vocabulary</th><th>reading</th><th>homework</th><th>attitude</th><th>teacher_memo</th>
+                  </tr>
+                  {student_rows_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+                </table>
+                <div style='margin-top:10px'><button>{t('common.save')}</button></div>
+              </form>
+            </div>
+            """, user, current_menu="attendance", flash_msg=flash_msg, flash_type=flash_type)
+            status, headers, body = text_resp(html)
+            conn.close()
+            start_response(status, headers)
+            return [body]
+
+        # 기존 수동 입력형 출결(관리/비상용)
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
@@ -2358,7 +2596,7 @@ def app(environ, start_response):
         {class_picker}
         {teacher_picker}
         <div class='card'>
-          <h4>{t("attendance.input")}</h4>
+          <h4>수동 출결 입력(비상/관리자용)</h4>
           <form method='post' class='filter-row'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>

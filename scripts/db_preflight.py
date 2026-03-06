@@ -13,7 +13,7 @@ REQUIRED = {
     "classrooms": ["id", "name", "room_code", "room_name", "status"],
     "time_slots": ["id", "label", "start_time", "end_time"],
     "schedules": ["id", "class_id", "day_of_week", "start_time", "end_time", "teacher_id", "room_id", "classroom"],
-    "attendance": ["id", "class_id", "student_id", "lesson_date", "status", "created_by"],
+    "attendance": ["id", "class_id", "student_id", "lesson_date", "status", "created_by", "schedule_id", "participation_score", "fluency_score", "vocabulary_score", "reading_score", "homework_score", "attitude_score", "teacher_memo"],
     "homework": ["id", "class_id", "title", "created_by"],
     "homework_submissions": ["id", "homework_id", "student_id"],
     "exams": ["id", "class_id", "name", "linked_book_id"],

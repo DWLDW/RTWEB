@@ -111,9 +111,18 @@ CREATE TABLE IF NOT EXISTS attendance (
   note TEXT,
   created_by INTEGER NOT NULL,
   created_at TEXT NOT NULL,
+  schedule_id INTEGER,
+  participation_score INTEGER,
+  fluency_score INTEGER,
+  vocabulary_score INTEGER,
+  reading_score INTEGER,
+  homework_score INTEGER,
+  attitude_score INTEGER,
+  teacher_memo TEXT,
   FOREIGN KEY(class_id) REFERENCES classes(id),
   FOREIGN KEY(student_id) REFERENCES users(id),
-  FOREIGN KEY(created_by) REFERENCES users(id)
+  FOREIGN KEY(created_by) REFERENCES users(id),
+  FOREIGN KEY(schedule_id) REFERENCES schedules(id)
 );
 
 CREATE TABLE IF NOT EXISTS homework (
