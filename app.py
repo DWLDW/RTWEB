@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -292,6 +293,7 @@ def parse_hhmm(v):
     except Exception:
         return None
 
+
 def is_valid_date(v):
     if not v:
         return False
@@ -301,52 +303,64 @@ def is_valid_date(v):
     except Exception:
         return False
 
-def validate_required(data, fields):
-    errors = []
-    for field, label in fields:
-        if not (data.get(field) or "").strip():
-            errors.append(f"{label}: 필수 입력입니다.")
-    return errors
 
-def validate_int(value, label, min_value=None, max_value=None, allow_empty=True):
-    v = (value or "").strip()
-    if not v:
-        return None if allow_empty else f"{label}: 필수 입력입니다.", None
-    if not v.isdigit():
-        return f"{label}: 숫자만 입력하세요.", None
-    n = int(v)
-    if min_value is not None and n < min_value:
-        return f"{label}: {min_value} 이상이어야 합니다.", None
-    if max_value is not None and n > max_value:
-        return f"{label}: {max_value} 이하여야 합니다.", None
-    return None, n
-
-def validate_float(value, label, min_value=None, max_value=None, allow_empty=True):
-    v = (value or "").strip()
-    if not v:
-        return None if allow_empty else f"{label}: 필수 입력입니다.", None
+def as_int(v):
     try:
-        n = float(v)
+        return int(str(v).strip())
     except Exception:
-        return f"{label}: 숫자 형식이 올바르지 않습니다.", None
-    if min_value is not None and n < min_value:
-        return f"{label}: {min_value} 이상이어야 합니다.", None
-    if max_value is not None and n > max_value:
-        return f"{label}: {max_value} 이하여야 합니다.", None
-    return None, n
+        return None
 
-def validate_enum(value, label, allowed):
-    if value not in allowed:
-        return f"{label}: 허용되지 않은 값입니다."
-    return None
 
-def exists_by_id(conn, table, row_id, where_sql="", where_params=()):
-    if not str(row_id).isdigit():
+def as_float(v):
+    try:
+        return float(str(v).strip())
+    except Exception:
+        return None
+
+
+def add_error(errors, field, msg):
+    errors.append(f"- {field}: {msg}")
+
+
+def format_errors(errors):
+    if not errors:
+        return ""
+    return "<br>".join(errors)
+
+
+def ensure_exists(conn, table, value, field="id", extra_where="", extra_params=()):
+    if value is None or str(value).strip() == "":
         return False
-    sql = f"SELECT id FROM {table} WHERE id=?"
-    if where_sql:
-        sql += f" AND {where_sql}"
-    return conn.execute(sql, (row_id, *where_params)).fetchone() is not None
+    sql = f"SELECT 1 FROM {table} WHERE {field}=?"
+    params = [value]
+    if extra_where:
+        sql += f" AND {extra_where}"
+        params.extend(extra_params)
+    return conn.execute(sql, tuple(params)).fetchone() is not None
+
+
+def ensure_logs_table(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      level TEXT NOT NULL,
+      route TEXT,
+      user_id INTEGER,
+      message TEXT NOT NULL,
+      detail TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )""")
+
+
+def log_event(conn, level, route, message, detail="", user_id=None):
+    try:
+        conn.execute(
+            "INSERT INTO app_logs(level, route, user_id, message, detail, created_at) VALUES(?,?,?,?,?,?)",
+            (level, route, user_id, message, detail[:4000] if detail else None, now()),
+        )
+        conn.commit()
+    except Exception:
+        pass
 
 def is_time_overlap(a_start, a_end, b_start, b_end):
     a1, a2, b1, b2 = parse_hhmm(a_start), parse_hhmm(a_end), parse_hhmm(b_start), parse_hhmm(b_end)
@@ -365,19 +379,41 @@ def ensure_schedule_columns(conn):
     if "teacher_id" not in cols:
         conn.execute("ALTER TABLE schedules ADD COLUMN teacher_id INTEGER")
 
-def ensure_class_columns(conn):
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(classes)").fetchall()}
-    if "classroom" not in cols:
-        conn.execute("ALTER TABLE classes ADD COLUMN classroom TEXT")
-    if "capacity" not in cols:
-        conn.execute("ALTER TABLE classes ADD COLUMN capacity INTEGER")
-    if "status" not in cols:
-        conn.execute("ALTER TABLE classes ADD COLUMN status TEXT DEFAULT 'active'")
-    if "memo" not in cols:
-        conn.execute("ALTER TABLE classes ADD COLUMN memo TEXT")
-    if "updated_at" not in cols:
-        conn.execute("ALTER TABLE classes ADD COLUMN updated_at TEXT")
 
+def ensure_extended_columns(conn):
+    ucols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "teacher_type" not in ucols:
+        conn.execute("ALTER TABLE users ADD COLUMN teacher_type TEXT")
+
+    ccols = {r["name"] for r in conn.execute("PRAGMA table_info(classes)").fetchall()}
+    if "foreign_teacher_id" not in ccols:
+        conn.execute("ALTER TABLE classes ADD COLUMN foreign_teacher_id INTEGER")
+    if "chinese_teacher_id" not in ccols:
+        conn.execute("ALTER TABLE classes ADD COLUMN chinese_teacher_id INTEGER")
+
+    scols = {r["name"] for r in conn.execute("PRAGMA table_info(schedules)").fetchall()}
+    if "room_id" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN room_id INTEGER")
+    if "foreign_teacher_id" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN foreign_teacher_id INTEGER")
+    if "chinese_teacher_id" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN chinese_teacher_id INTEGER")
+    if "substitute_foreign_teacher_id" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN substitute_foreign_teacher_id INTEGER")
+    if "substitute_chinese_teacher_id" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN substitute_chinese_teacher_id INTEGER")
+    if "substitute_reason" not in scols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN substitute_reason TEXT")
+
+    rcols = {r["name"] for r in conn.execute("PRAGMA table_info(classrooms)").fetchall()}
+    if "room_code" not in rcols:
+        conn.execute("ALTER TABLE classrooms ADD COLUMN room_code TEXT")
+    if "room_name" not in rcols:
+        conn.execute("ALTER TABLE classrooms ADD COLUMN room_name TEXT")
+    if "status" not in rcols:
+        conn.execute("ALTER TABLE classrooms ADD COLUMN status TEXT DEFAULT 'active'")
+    if "memo" not in rcols:
+        conn.execute("ALTER TABLE classrooms ADD COLUMN memo TEXT")
 def ensure_master_tables(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS classrooms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -391,27 +427,6 @@ def ensure_master_tables(conn):
       end_time TEXT NOT NULL,
       created_at TEXT NOT NULL
     )""")
-
-def ensure_system_tables(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS app_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      level TEXT NOT NULL,
-      context TEXT,
-      message TEXT NOT NULL,
-      details TEXT,
-      created_at TEXT NOT NULL
-    )""")
-
-def log_event(conn, level, message, context="", details=""):
-    try:
-        conn.execute(
-            "INSERT INTO app_logs(level, context, message, details, created_at) VALUES(?,?,?,?,?)",
-            (level, context, message, details[:2000] if details else None, now()),
-        )
-        conn.commit()
-    except Exception as e:
-        print(f"[LOG-FAIL] {e}")
-    print(f"[{level}] {context} {message} {details}")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -428,9 +443,9 @@ def init_db():
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
-    ensure_class_columns(conn)
+    ensure_extended_columns(conn)
     ensure_master_tables(conn)
-    ensure_system_tables(conn)
+    ensure_logs_table(conn)
     cur = conn.execute("SELECT COUNT(*) AS c FROM users")
     if cur.fetchone()["c"] == 0:
         users = [
@@ -588,63 +603,6 @@ def require_login(environ):
     return user, None
 def redirect(path):
     return "302 Found", [("Location", path)], b""
-
-def class_status_text(status):
-    labels = {
-        "active": "운영중",
-        "pending": "대기",
-        "ended": "종료",
-        "inactive": "비활성",
-    }
-    return labels.get((status or "").strip(), status or "-")
-
-def render_class_form(class_data, courses, levels, teachers, student_count=0, errors=None):
-    errors = errors or []
-    class_id = class_data.get("id")
-    action = f"/classes/{class_id}/edit?lang={CURRENT_LANG}" if class_id else f"/classes/new?lang={CURRENT_LANG}"
-    title = "반 수정" if class_id else "반 추가"
-    selected_course = str(class_data.get("course_id") or "")
-    selected_level = str(class_data.get("level_id") or "")
-    selected_teacher = str(class_data.get("teacher_id") or "")
-    selected_status = (class_data.get("status") or "active").strip() or "active"
-
-    course_options = "<option value=''>-</option>" + "".join([
-        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_course else ''}>{r['name']}</option>" for r in courses
-    ])
-    level_options = "<option value=''>-</option>" + "".join([
-        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_level else ''}>{r['name']} ({r['course_name'] or '-'})</option>" for r in levels
-    ])
-    teacher_options = "<option value=''>-</option>" + "".join([
-        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_teacher else ''}>{r['name']} ({r['username']})</option>" for r in teachers
-    ])
-    status_options = "".join([
-        f"<option value='{k}' {'selected' if selected_status == k else ''}>{v}</option>"
-        for k, v in (("active", "운영중"), ("pending", "대기"), ("ended", "종료"), ("inactive", "비활성"))
-    ])
-    error_html = "" if not errors else "<div class='muted' style='color:#fda4af'>" + "<br>".join(errors) + "</div>"
-
-    return f"""
-    <div class='card'>
-      <h3>{title}</h3>
-      {error_html}
-      <form method='post' action='{action}'>
-        <label>{t('academics.class_name')} <input name='name' value='{class_data.get('name') or ''}' required></label>
-        <label>{t('academics.course')} <select name='course_id'>{course_options}</select></label>
-        <label>{t('academics.level')} <select name='level_id'>{level_options}</select></label>
-        <label>{t('academics.teacher')} <select name='teacher_id'>{teacher_options}</select></label>
-        <label>{t('academics.classroom')} <input name='classroom' value='{class_data.get('classroom') or ''}'></label>
-        <label>정원 <input name='capacity' type='number' min='0' value='{class_data.get('capacity') or ''}'></label>
-        <label>{t('field.status')} <select name='status'>{status_options}</select></label>
-        <label>{t('field.note')} <textarea name='memo' rows='3'>{class_data.get('memo') or ''}</textarea></label>
-        <label>{t('academics.student_count')} <input value='{student_count}' readonly></label>
-        <div style='display:flex;gap:8px;flex-wrap:wrap'>
-          <button>{t('common.save')}</button>
-          <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>목록으로</a>
-          {f"<a class='btn secondary' href='/classes/{class_id}?lang={CURRENT_LANG}'>상세로</a>" if class_id else ''}
-        </div>
-      </form>
-    </div>
-    """
 def has_role(user, roles):
     return user and user["role"] in roles
 def route_allowed(user, route_key):
@@ -914,38 +872,37 @@ def app(environ, start_response):
             d = parse_body(environ)
             action = d.get("action")
             if action == "save":
-                errors = validate_required(d, [("name_ko", "학생명")])
-                err, credits = validate_float(d.get("remaining_credits"), "남은 크레딧", min_value=0, allow_empty=False)
-                if err:
-                    errors.append(err)
-                if (d.get("current_class_id") or "").strip() and not exists_by_id(conn, "classes", d.get("current_class_id")):
-                    errors.append("현재 반: 존재하지 않는 ID입니다.")
-                st = (d.get("status") or "active").strip()
-                enum_err = validate_enum(st, "학생 상태", {"active", "leave", "ended"})
-                if enum_err:
-                    errors.append(enum_err)
-                for date_field, label in (("enrolled_at", "입학일"), ("leave_start_date", "휴학 시작일"), ("leave_end_date", "휴학 종료일")):
-                    if (d.get(date_field) or "").strip() and not is_valid_date(d.get(date_field).strip()):
-                        errors.append(f"{label}: YYYY-MM-DD 형식이어야 합니다.")
-                if errors:
-                    status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=invalid")
-                    log_event(conn, "WARN", "student update validation failed", "students", " | ".join(errors))
-                    conn.close()
-                    start_response(status, headers)
-                    return [body]
-                conn.execute(
-                    """UPDATE students SET
-                    student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
-                    current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
-                    WHERE id=?""",
-                    (
-                        d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                        d.get("current_class_id") or None, credits, st, d.get("enrolled_at"),
-                        d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_id,
-                    ),
-                )
-                conn.commit()
-                status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=saved")
+                errs = []
+                credits = as_float(d.get("remaining_credits") or 0)
+                if not (d.get("name_ko") or "").strip():
+                    add_error(errs, "name_ko", "필수값입니다")
+                if credits is None:
+                    add_error(errs, "remaining_credits", "숫자 형식이어야 합니다")
+                if (d.get("status") or "active") not in ("active", "leave", "ended"):
+                    add_error(errs, "status", "허용되지 않는 상태값입니다")
+                class_id_val = d.get("current_class_id") or None
+                if class_id_val and not ensure_exists(conn, "classes", class_id_val):
+                    add_error(errs, "current_class_id", "존재하지 않는 반입니다")
+                for date_field in ["enrolled_at", "leave_start_date", "leave_end_date"]:
+                    dv = (d.get(date_field) or "").strip()
+                    if dv and not is_valid_date(dv):
+                        add_error(errs, date_field, "날짜 형식은 YYYY-MM-DD 여야 합니다")
+                if errs:
+                    status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=validation_error")
+                else:
+                    conn.execute(
+                        """UPDATE students SET
+                        student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
+                        current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                        WHERE id=?""",
+                        (
+                            d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                            class_id_val, credits, d.get("status") or "active", d.get("enrolled_at"),
+                            d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_id,
+                        ),
+                    )
+                    conn.commit()
+                    status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=saved")
                 conn.close()
                 start_response(status, headers)
                 return [body]
@@ -988,10 +945,10 @@ def app(environ, start_response):
         msg_key = query.get("msg", "")
         msg_map = {
             "saved": t("students.msg.saved"),
+            "validation_error": "입력값 검증에 실패했습니다. 필수값/날짜/참조값을 확인하세요.",
             "pw_saved": t("students.msg.pw_saved"),
             "no_user": t("students.msg.no_user"),
             "empty_pw": t("students.msg.empty_pw"),
-            "invalid": "입력값이 올바르지 않아 저장되지 않았습니다."
         }
         message = msg_map.get(msg_key, "")
         detail_page_size = 10
@@ -1193,51 +1150,62 @@ def app(environ, start_response):
         flash_type = "success"
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
-            errors = validate_required(d, [("user_id", "학생 사용자"), ("name_ko", "학생명")])
-            if (d.get("user_id") or "").strip() and not exists_by_id(conn, "users", d.get("user_id")):
-                errors.append("학생 사용자: 존재하지 않는 ID입니다.")
-            if (d.get("current_class_id") or "").strip() and not exists_by_id(conn, "classes", d.get("current_class_id")):
-                errors.append("현재 반: 존재하지 않는 ID입니다.")
-            err, credits = validate_float(d.get("remaining_credits"), "남은 크레딧", min_value=0, allow_empty=False)
-            if err:
-                errors.append(err)
-            enum_err = validate_enum((d.get("status") or "active").strip(), "학생 상태", {"active", "leave", "ended"})
-            if enum_err:
-                errors.append(enum_err)
-            for date_field, label in (("enrolled_at", "입학일"), ("leave_start_date", "휴학 시작일"), ("leave_end_date", "휴학 종료일")):
-                if (d.get(date_field) or "").strip() and not is_valid_date(d.get(date_field).strip()):
-                    errors.append(f"{label}: YYYY-MM-DD 형식이어야 합니다.")
-            if errors:
-                flash_msg = "<br>".join(errors)
+            errs = []
+            student_user_id = d.get("user_id")
+            if not ensure_exists(conn, "users", student_user_id, extra_where="role='student'"):
+                add_error(errs, "user_id", "학생 role 사용자만 가능합니다")
+            if not (d.get("name_ko") or "").strip():
+                add_error(errs, "name_ko", "필수값입니다")
+            credits = as_float(d.get("remaining_credits") or 0)
+            if credits is None:
+                add_error(errs, "remaining_credits", "숫자 형식이어야 합니다")
+            status_v = d.get("status") or "active"
+            if status_v not in ("active", "leave", "ended"):
+                add_error(errs, "status", "허용되지 않는 상태값입니다")
+            class_id_val = d.get("current_class_id") or None
+            if class_id_val and not ensure_exists(conn, "classes", class_id_val):
+                add_error(errs, "current_class_id", "존재하지 않는 반입니다")
+            for date_field in ["enrolled_at", "leave_start_date", "leave_end_date"]:
+                dv = (d.get(date_field) or "").strip()
+                if dv and not is_valid_date(dv):
+                    add_error(errs, date_field, "YYYY-MM-DD 형식이어야 합니다")
+            if errs:
+                flash_msg = format_errors(errs)
                 flash_type = "error"
-                log_event(conn, "WARN", "student save validation failed", "students", flash_msg)
+                log_event(conn, "ERROR", path, "학생 저장 검증 실패", "\n".join(errs), user["id"])
             else:
-                student_user_id = d.get("user_id")
-                exists = conn.execute("SELECT id FROM students WHERE user_id=?", (student_user_id,)).fetchone()
-                if exists:
-                    conn.execute(
-                        """UPDATE students SET
-                        student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
-                        current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
-                        WHERE user_id=?""",
-                        (
-                            d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                            d.get("current_class_id") or None, credits, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
-                        ),
-                    )
-                else:
-                    conn.execute(
-                        """INSERT INTO students(
-                        user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone,
-                        current_class_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at
-                        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                        (
-                            student_user_id, d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                            d.get("current_class_id") or None, credits, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
-                        ),
-                    )
-                conn.commit()
-                flash_msg = "학생 정보가 저장되었습니다."
+                try:
+                    exists = conn.execute("SELECT id FROM students WHERE user_id=?", (student_user_id,)).fetchone()
+                    if exists:
+                        conn.execute(
+                            """UPDATE students SET
+                            student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
+                            current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                            WHERE user_id=?""",
+                            (
+                                d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                                class_id_val, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
+                            ),
+                        )
+                    else:
+                        conn.execute(
+                            """INSERT INTO students(
+                            user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone,
+                            current_class_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at
+                            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            (
+                                student_user_id, d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                                class_id_val, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
+                            ),
+                        )
+                    conn.commit()
+                    flash_msg = "저장되었습니다"
+                except Exception:
+                    conn.rollback()
+                    flash_msg = "학생 저장 실패: 입력값 또는 중복값을 확인하세요"
+                    flash_type = "error"
+                    log_event(conn, "ERROR", path, "학생 저장 예외", traceback.format_exc(), user["id"])
+                    conn.commit()
         where = []
         params = []
         q_name = query.get("name", "").strip()
@@ -1304,160 +1272,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-    if path == "/classes/new":
-        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            conn.close()
-            status, headers, body = forbidden_html(user)
-            start_response(status, headers)
-            return [body]
-        courses = conn.execute("SELECT id, name FROM courses ORDER BY id DESC").fetchall()
-        levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name
-                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
-        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
-        form_data = {"name": "", "course_id": "", "level_id": "", "teacher_id": "", "classroom": "", "capacity": "", "status": "active", "memo": ""}
-        flash_msg = query.get("saved", "")
-        flash_type = "success"
-        errors = []
-
-        if method == "POST":
-            data = parse_body(environ)
-            form_data = {
-                "name": (data.get("name") or "").strip(),
-                "course_id": (data.get("course_id") or "").strip(),
-                "level_id": (data.get("level_id") or "").strip(),
-                "teacher_id": (data.get("teacher_id") or "").strip(),
-                "classroom": (data.get("classroom") or "").strip(),
-                "capacity": (data.get("capacity") or "").strip(),
-                "status": (data.get("status") or "active").strip() or "active",
-                "memo": (data.get("memo") or "").strip(),
-            }
-            if not form_data["name"]:
-                errors.append("반명을 입력하세요.")
-            if form_data["capacity"] and (not form_data["capacity"].isdigit() or int(form_data["capacity"]) < 0):
-                errors.append("정원은 0 이상의 숫자여야 합니다.")
-            if form_data["status"] not in ("active", "pending", "ended", "inactive"):
-                errors.append("상태 값이 올바르지 않습니다.")
-            for fk in ("course_id", "level_id", "teacher_id"):
-                if form_data[fk] and not form_data[fk].isdigit():
-                    errors.append("선택 값이 올바르지 않습니다.")
-                    break
-            if not errors:
-                conn.execute(
-                    """INSERT INTO classes(course_id, level_id, name, teacher_id, classroom, capacity, status, memo, created_at, updated_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        form_data["course_id"] or None,
-                        form_data["level_id"] or None,
-                        form_data["name"],
-                        form_data["teacher_id"] or None,
-                        form_data["classroom"] or None,
-                        int(form_data["capacity"]) if form_data["capacity"] else None,
-                        form_data["status"],
-                        form_data["memo"] or None,
-                        now(),
-                        now(),
-                    ),
-                )
-                class_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-                conn.commit()
-                conn.close()
-                status, headers, body = redirect(f"/classes/{class_id}?lang={CURRENT_LANG}&saved=1")
-                start_response(status, headers)
-                return [body]
-            flash_msg = "입력값을 확인해주세요."
-            flash_type = "error"
-
-        body_html = render_class_form(form_data, courses, levels, teachers, student_count=0, errors=errors)
-        html = render_html("반 추가", body_html, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
-        status, headers, body = text_resp(html)
-        conn.close()
-        start_response(status, headers)
-        return [body]
-
-    if path.startswith("/classes/") and path.endswith("/edit"):
-        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            conn.close()
-            status, headers, body = forbidden_html(user)
-            start_response(status, headers)
-            return [body]
-        class_id = path.split("/")[-2]
-        if not class_id.isdigit():
-            conn.close()
-            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
-            return ["Not Found".encode("utf-8")]
-
-        class_row = conn.execute("SELECT * FROM classes WHERE id=?", (class_id,)).fetchone()
-        if not class_row:
-            conn.close()
-            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
-            return ["Class Not Found".encode("utf-8")]
-
-        courses = conn.execute("SELECT id, name FROM courses ORDER BY id DESC").fetchall()
-        levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name
-                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
-        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
-        student_count = conn.execute("SELECT COUNT(*) AS c FROM students WHERE current_class_id=?", (class_id,)).fetchone()["c"]
-        form_data = dict(class_row)
-        flash_msg = query.get("saved", "")
-        flash_type = "success"
-        errors = []
-
-        if method == "POST":
-            data = parse_body(environ)
-            form_data = {
-                "id": class_row["id"],
-                "name": (data.get("name") or "").strip(),
-                "course_id": (data.get("course_id") or "").strip(),
-                "level_id": (data.get("level_id") or "").strip(),
-                "teacher_id": (data.get("teacher_id") or "").strip(),
-                "classroom": (data.get("classroom") or "").strip(),
-                "capacity": (data.get("capacity") or "").strip(),
-                "status": (data.get("status") or "active").strip() or "active",
-                "memo": (data.get("memo") or "").strip(),
-            }
-            if not form_data["name"]:
-                errors.append("반명을 입력하세요.")
-            if form_data["capacity"] and (not form_data["capacity"].isdigit() or int(form_data["capacity"]) < 0):
-                errors.append("정원은 0 이상의 숫자여야 합니다.")
-            if form_data["status"] not in ("active", "pending", "ended", "inactive"):
-                errors.append("상태 값이 올바르지 않습니다.")
-            for fk in ("course_id", "level_id", "teacher_id"):
-                if form_data[fk] and not form_data[fk].isdigit():
-                    errors.append("선택 값이 올바르지 않습니다.")
-                    break
-            if not errors:
-                conn.execute(
-                    """UPDATE classes
-                    SET course_id=?, level_id=?, name=?, teacher_id=?, classroom=?, capacity=?, status=?, memo=?, updated_at=?
-                    WHERE id=?""",
-                    (
-                        form_data["course_id"] or None,
-                        form_data["level_id"] or None,
-                        form_data["name"],
-                        form_data["teacher_id"] or None,
-                        form_data["classroom"] or None,
-                        int(form_data["capacity"]) if form_data["capacity"] else None,
-                        form_data["status"],
-                        form_data["memo"] or None,
-                        now(),
-                        class_id,
-                    ),
-                )
-                conn.commit()
-                conn.close()
-                status, headers, body = redirect(f"/classes/{class_id}?lang={CURRENT_LANG}&saved=1")
-                start_response(status, headers)
-                return [body]
-            flash_msg = "입력값을 확인해주세요."
-            flash_type = "error"
-
-        body_html = render_class_form(form_data, courses, levels, teachers, student_count=student_count, errors=errors)
-        html = render_html("반 수정", body_html, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
-        status, headers, body = text_resp(html)
-        conn.close()
-        start_response(status, headers)
-        return [body]
-
     # 학사 구조
     if path.startswith("/classes/"):
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
@@ -1477,6 +1291,7 @@ def app(environ, start_response):
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
                 LEFT JOIN users u ON u.id=c.teacher_id
+            LEFT JOIN users u2 ON u2.id=sc.teacher_id
                 WHERE c.id=? AND c.teacher_id=?""",
                 (class_id, user["id"]),
             ).fetchone()
@@ -1573,23 +1388,14 @@ def app(environ, start_response):
         homework_html = rows_html(homework_rows, ["title", "due_date", "submitted_count", "total_submissions"])
         exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
         next_order = "desc" if student_order == "asc" else "asc"
-        flash_msg = t("common.save") if query.get("saved") == "1" else ""
         html = render_html(t('academics.class_detail.title'), f"""
         <div class='card'>
-        <div style='display:flex;gap:8px;flex-wrap:wrap'>
-          <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>← 목록으로</a>
-          {"<a class='btn' href='/classes/" + str(class_row['id']) + "/edit?lang=" + CURRENT_LANG + "'>" + t('common.edit') + "</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
-          <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&selected_form_class_id={class_row['id']}'>시간표 추가</a>
-        </div>
+        <div><a href='/masterdata?lang={CURRENT_LANG}'>← {t('academics.back_to_list')}</a></div>
         <h3>{class_row['name']}</h3>
         <table>
           <tr><th>{t('academics.basic_info')}</th><td>{t('academics.class_name')}: {class_row['name']}</td></tr>
           <tr><th>{t('academics.course_level')}</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
           <tr><th>{t('academics.teacher')}</th><td>{class_row['teacher_name'] or '-'}</td></tr>
-          <tr><th>{t('academics.classroom')}</th><td>{class_row['classroom'] or '-'}</td></tr>
-          <tr><th>정원</th><td>{class_row['capacity'] if class_row['capacity'] is not None else '-'}</td></tr>
-          <tr><th>{t('field.status')}</th><td>{class_status_text(class_row['status'])}</td></tr>
-          <tr><th>{t('field.note')}</th><td>{class_row['memo'] or '-'}</td></tr>
           <tr><th>{t('academics.student_count')}</th><td>{len(students)}</td></tr>
         </table>
         </div>
@@ -1638,7 +1444,7 @@ def app(environ, start_response):
           {exam_html}
         </table>
         </div>
-        """, user, current_menu="masterdata", flash_msg=flash_msg)
+        """, user, current_menu="masterdata")
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -1659,96 +1465,74 @@ def app(environ, start_response):
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             typ = data.get("type")
+            errs = []
             try:
                 if typ == "course":
-                    name = (data.get("name") or "").strip()
-                    if not name:
-                        flash_msg = "코스명: 필수 입력입니다."
-                        flash_type = "error"
+                    if not (data.get("name") or "").strip():
+                        add_error(errs, "course.name", "필수값입니다")
                     else:
-                        conn.execute("INSERT INTO courses(name, created_at) VALUES(?,?)", (name, now()))
-                        flash_msg = "코스가 저장되었습니다."
+                        conn.execute("INSERT INTO courses(name, created_at) VALUES(?,?)", (data.get("name").strip(), now()))
                 elif typ == "level":
-                    errors = validate_required(data, [("name", "레벨명"), ("course_id", "코스")])
-                    if not errors and not exists_by_id(conn, "courses", data.get("course_id")):
-                        errors.append("코스: 존재하지 않는 ID입니다.")
-                    if errors:
-                        flash_msg = "<br>".join(errors)
-                        flash_type = "error"
-                    else:
-                        conn.execute("INSERT INTO levels(course_id, name, created_at) VALUES(?,?,?)", (data.get("course_id"), (data.get("name") or "").strip(), now()))
-                        flash_msg = "레벨이 저장되었습니다."
+                    if not ensure_exists(conn, "courses", data.get("course_id")):
+                        add_error(errs, "level.course_id", "존재하지 않는 코스입니다")
+                    if not (data.get("name") or "").strip():
+                        add_error(errs, "level.name", "필수값입니다")
+                    if not errs:
+                        conn.execute("INSERT INTO levels(course_id, name, created_at) VALUES(?,?,?)", (data.get("course_id"), data.get("name").strip(), now()))
                 elif typ == "class":
-                    errors = validate_required(data, [("name", "반명")])
-                    if (data.get("course_id") or "").strip() and not exists_by_id(conn, "courses", data.get("course_id")):
-                        errors.append("코스: 존재하지 않는 ID입니다.")
-                    if (data.get("level_id") or "").strip() and not exists_by_id(conn, "levels", data.get("level_id")):
-                        errors.append("레벨: 존재하지 않는 ID입니다.")
-                    if (data.get("teacher_id") or "").strip() and not exists_by_id(conn, "users", data.get("teacher_id"), "role='teacher'"):
-                        errors.append("담당 강사: 존재하지 않는 강사 ID입니다.")
-                    if errors:
-                        flash_msg = "<br>".join(errors)
-                        flash_type = "error"
-                    else:
-                        conn.execute("INSERT INTO classes(course_id, level_id, name, teacher_id, created_at, status, updated_at) VALUES(?,?,?,?,?,?,?)", (data.get("course_id") or None, data.get("level_id") or None, (data.get("name") or "").strip(), data.get("teacher_id") or None, now(), "active", now()))
-                        flash_msg = "반이 저장되었습니다."
+                    if not ensure_exists(conn, "courses", data.get("course_id")):
+                        add_error(errs, "class.course_id", "존재하지 않는 코스입니다")
+                    if data.get("level_id") and not ensure_exists(conn, "levels", data.get("level_id")):
+                        add_error(errs, "class.level_id", "존재하지 않는 레벨입니다")
+                    if data.get("teacher_id") and not ensure_exists(conn, "users", data.get("teacher_id"), extra_where="role='teacher'"):
+                        add_error(errs, "class.teacher_id", "존재하지 않는 강사입니다")
+                    if not (data.get("name") or "").strip():
+                        add_error(errs, "class.name", "필수값입니다")
+                    if not errs:
+                        conn.execute("INSERT INTO classes(course_id, level_id, name, teacher_id, created_at) VALUES(?,?,?,?,?)", (data.get("course_id"), data.get("level_id") or None, data.get("name").strip(), data.get("teacher_id") or None, now()))
                 elif typ == "classroom":
                     room_name = (data.get("name") or "").strip()
                     if not room_name:
-                        flash_msg = "교실명: 필수 입력입니다."
-                        flash_type = "error"
+                        add_error(errs, "classroom.name", "필수값입니다")
                     else:
-                        conn.execute("INSERT OR IGNORE INTO classrooms(name, created_at) VALUES(?,?)", (room_name, now()))
-                        flash_msg = "교실이 저장되었습니다."
+                        conn.execute("INSERT OR IGNORE INTO classrooms(name, room_name, room_code, status, created_at) VALUES(?,?,?,?,?)", (room_name, room_name, room_name, "active", now()))
                 elif typ == "time_slot":
                     st = (data.get("start_time") or "").strip()
                     et = (data.get("end_time") or "").strip()
-                    if st and et and parse_hhmm(et) and parse_hhmm(st) and parse_hhmm(et) > parse_hhmm(st):
+                    if not st or not et or parse_hhmm(st) is None or parse_hhmm(et) is None:
+                        add_error(errs, "time_slot", "시작/종료 시간을 HH:MM 형식으로 입력하세요")
+                    elif parse_hhmm(et) <= parse_hhmm(st):
+                        add_error(errs, "time_slot", "종료시간은 시작시간보다 커야 합니다")
+                    else:
                         label = f"{st}~{et}"
                         conn.execute("INSERT OR IGNORE INTO time_slots(label, start_time, end_time, created_at) VALUES(?,?,?,?)", (label, st, et, now()))
-                        flash_msg = "시간대가 저장되었습니다."
-                    else:
-                        flash_msg = t("academics.validation_end_before_start")
-                        flash_type = "error"
-                elif typ == "delete_course":
-                    rid = data.get("id")
-                    if conn.execute("SELECT id FROM levels WHERE course_id=? LIMIT 1", (rid,)).fetchone() or conn.execute("SELECT id FROM classes WHERE course_id=? LIMIT 1", (rid,)).fetchone():
-                        flash_msg = "연결된 레벨/반이 있어 코스를 삭제할 수 없습니다."
-                        flash_type = "error"
-                    else:
-                        conn.execute("DELETE FROM courses WHERE id=?", (rid,))
-                        flash_msg = "코스를 삭제했습니다."
-                elif typ == "delete_level":
-                    rid = data.get("id")
-                    if conn.execute("SELECT id FROM classes WHERE level_id=? LIMIT 1", (rid,)).fetchone():
-                        flash_msg = "연결된 반이 있어 레벨을 삭제할 수 없습니다."
-                        flash_type = "error"
-                    else:
-                        conn.execute("DELETE FROM levels WHERE id=?", (rid,))
-                        flash_msg = "레벨을 삭제했습니다."
-                elif typ == "delete_classroom":
-                    conn.execute("DELETE FROM classrooms WHERE id=?", (data.get("id"),))
-                    flash_msg = "교실을 삭제했습니다."
-                elif typ == "delete_time_slot":
-                    conn.execute("DELETE FROM time_slots WHERE id=?", (data.get("id"),))
-                    flash_msg = "시간대를 삭제했습니다."
-                elif typ == "delete_class":
-                    rid = data.get("id")
-                    conn.execute("UPDATE classes SET status='inactive', updated_at=? WHERE id=?", (now(), rid))
-                    flash_msg = "반을 비활성화했습니다."
-                else:
-                    flash_msg = "지원하지 않는 요청입니다."
+                elif typ in ("delete_course", "delete_level", "delete_class", "delete_classroom", "delete_time_slot"):
+                    del_id = data.get("id")
+                    table_map = {"delete_course": "courses", "delete_level": "levels", "delete_class": "classes", "delete_classroom": "classrooms", "delete_time_slot": "time_slots"}
+                    table = table_map[typ]
+                    if not ensure_exists(conn, table, del_id):
+                        add_error(errs, "delete.id", "삭제할 데이터가 없습니다")
+                    elif table == "courses" and conn.execute("SELECT 1 FROM classes WHERE course_id=? LIMIT 1", (del_id,)).fetchone():
+                        add_error(errs, "course", "반에서 사용 중인 코스는 삭제할 수 없습니다")
+                    elif table == "levels" and conn.execute("SELECT 1 FROM classes WHERE level_id=? LIMIT 1", (del_id,)).fetchone():
+                        add_error(errs, "level", "반에서 사용 중인 레벨은 삭제할 수 없습니다")
+                    elif table == "classes" and conn.execute("SELECT 1 FROM schedules WHERE class_id=? LIMIT 1", (del_id,)).fetchone():
+                        add_error(errs, "class", "시간표에서 사용 중인 반은 삭제할 수 없습니다")
+                    if not errs:
+                        conn.execute(f"DELETE FROM {table} WHERE id=?", (del_id,))
+                if errs:
+                    flash_msg = format_errors(errs)
                     flash_type = "error"
-                if flash_type != "error":
+                    log_event(conn, "ERROR", path, "마스터데이터 검증 실패", "\n".join(errs), user["id"])
+                else:
                     conn.commit()
-            except sqlite3.IntegrityError as e:
-                log_event(conn, "ERROR", "masterdata save failed", "masterdata", str(e))
-                flash_msg = f"저장 실패: 중복 또는 참조 제약 오류 ({e})"
+                    flash_msg = "삭제되었습니다" if str(typ).startswith("delete_") else t("common.save")
+            except Exception:
+                conn.rollback()
+                flash_msg = "저장/삭제 처리 중 오류가 발생했습니다"
                 flash_type = "error"
-            except Exception as e:
-                log_event(conn, "ERROR", "masterdata save failed", "masterdata", str(e))
-                flash_msg = f"저장 실패: {e}"
-                flash_type = "error"
+                log_event(conn, "ERROR", path, "마스터데이터 예외", traceback.format_exc(), user["id"])
+                conn.commit()
 
         courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
         levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
@@ -1774,43 +1558,6 @@ def app(environ, start_response):
                 out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
             return out
 
-        class_rows = ""
-        for c in classes:
-            edit_cta = f"<a class='btn secondary' href='/classes/{c['id']}/edit?lang={CURRENT_LANG}'>수정</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else "-"
-            delete_cta = f"<form method='post' style='display:inline'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else "-"
-            class_rows += f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td>{edit_cta} {delete_cta}</td></tr>"
-        if not class_rows:
-            class_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
-
-        can_manage_master = has_role(user, [ROLE_OWNER, ROLE_MANAGER])
-        course_rows = ""
-        for r in courses:
-            delete_btn = f"<form method='post'><input type='hidden' name='type' value='delete_course'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form>" if can_manage_master else "-"
-            course_rows += f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['created_at']}</td><td>{delete_btn}</td></tr>"
-        if not course_rows:
-            course_rows = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
-
-        level_rows = ""
-        for r in levels:
-            delete_btn = f"<form method='post'><input type='hidden' name='type' value='delete_level'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form>" if can_manage_master else "-"
-            level_rows += f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['course_name'] or '-'}</td><td>{r['created_at']}</td><td>{delete_btn}</td></tr>"
-        if not level_rows:
-            level_rows = f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"
-
-        room_rows = ""
-        for r in classrooms:
-            delete_btn = f"<form method='post'><input type='hidden' name='type' value='delete_classroom'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form>" if can_manage_master else "-"
-            room_rows += f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['created_at']}</td><td>{delete_btn}</td></tr>"
-        if not room_rows:
-            room_rows = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
-
-        slot_rows = ""
-        for r in time_slots:
-            delete_btn = f"<form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form>" if can_manage_master else "-"
-            slot_rows += f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td>{delete_btn}</td></tr>"
-        if not slot_rows:
-            slot_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
-
         html = render_html(t('menu.masterdata'), f"""
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
         <div class='card'>
@@ -1821,18 +1568,12 @@ def app(environ, start_response):
           <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
-        <div class='card'>
-          <div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap'>
-            <h4 style='margin:0'>{t('academics.class_list')}</h4>
-            {f"<a class='btn' href='/classes/new?lang={CURRENT_LANG}'>반 추가</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
-          </div>
-          <table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.edit')}</th></tr>{class_rows}</table>
-        </div>
-        <div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows}</table></div>
-        <div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows}</table></div>
+        <div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for c in classes]) or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_course'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in courses]) or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['course_name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_level'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in levels]) or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         <div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{rows_html(teachers,['id','name','username'])}</table></div>
-        <div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{room_rows}</table></div>
-        <div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{slot_rows}</table></div>
+        <div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_classroom'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in classrooms]) or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in time_slots]) or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
@@ -1880,70 +1621,75 @@ def app(environ, start_response):
                 sc_status = (data.get("status") or "active").strip() or "active"
                 note = (data.get("note") or "").strip()
 
-                errors = []
-                errors += validate_required(data, [("day_of_week", "요일"), ("start_time", "시작 시간"), ("end_time", "종료 시간")])
                 if not class_id:
-                    errors.append("반: 필수 선택입니다.")
-                elif not exists_by_id(conn, "classes", class_id):
-                    errors.append("반: 존재하지 않는 ID입니다.")
-                if validate_enum(sc_status, "상태", {"active", "pending", "ended", "inactive"}):
-                    errors.append(validate_enum(sc_status, "상태", {"active", "pending", "ended", "inactive"}))
-                if parse_hhmm(start_time) is None or parse_hhmm(end_time) is None:
-                    errors.append("시간 형식: HH:MM 형식이어야 합니다.")
-                elif parse_hhmm(end_time) <= parse_hhmm(start_time):
-                    errors.append(t("academics.validation_end_before_start"))
-                if errors:
-                    flash_msg = "<br>".join(errors)
+                    flash_msg = "class_id: 반을 먼저 선택하세요"
+                    flash_type = "error"
+                elif not ensure_exists(conn, "classes", class_id):
+                    flash_msg = "class_id: 존재하지 않는 반입니다"
+                    flash_type = "error"
+                elif teacher_id and not ensure_exists(conn, "users", teacher_id, extra_where="role='teacher'"):
+                    flash_msg = "teacher_id: 존재하지 않는 강사입니다"
+                    flash_type = "error"
+                elif classroom and not ensure_exists(conn, "classrooms", classroom, field="name") and not ensure_exists(conn, "classrooms", classroom, field="room_name"):
+                    flash_msg = "classroom: 등록된 교실만 선택할 수 있습니다"
+                    flash_type = "error"
+                elif day_of_week not in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"):
+                    flash_msg = "day_of_week: 허용되지 않는 요일 값입니다"
+                    flash_type = "error"
+                elif not start_time or not end_time or parse_hhmm(start_time) is None or parse_hhmm(end_time) is None:
+                    flash_msg = "start_time/end_time: HH:MM 형식으로 선택하세요"
+                    flash_type = "error"
+                elif parse_hhmm(end_time) is not None and parse_hhmm(start_time) is not None and parse_hhmm(end_time) <= parse_hhmm(start_time):
+                    flash_msg = t("academics.validation_end_before_start")
                     flash_type = "error"
                 else:
                     class_row = conn.execute("SELECT id, teacher_id FROM classes WHERE id=?", (class_id,)).fetchone()
                     class_teacher_id = class_row["teacher_id"] if class_row else None
                     selected_teacher = (data.get("teacher_id") or "").strip()
                     teacher_id = selected_teacher if selected_teacher else class_teacher_id
-                    if teacher_id and not exists_by_id(conn, "users", teacher_id, "role='teacher'"):
-                        flash_msg = "강사: 존재하지 않는 ID입니다."
+                    ignore_id = schedule_id if str(schedule_id).isdigit() else "0"
+                    existing = conn.execute(
+                        """SELECT sc.*, c.teacher_id AS cls_teacher_id
+                        FROM schedules sc LEFT JOIN classes c ON c.id=sc.class_id
+                        WHERE sc.day_of_week=? AND sc.id<>?""",
+                        (day_of_week, ignore_id),
+                    ).fetchall()
+                    conflict = None
+                    for ex in existing:
+                        if not is_time_overlap(start_time, end_time, ex["start_time"], ex["end_time"]):
+                            continue
+                        if str(ex["class_id"]) == str(class_id):
+                            conflict = t("academics.validation_conflict_class")
+                            break
+                        ex_teacher_id = ex["teacher_id"] or ex["cls_teacher_id"]
+                        if teacher_id and ex_teacher_id and str(ex_teacher_id) == str(teacher_id):
+                            conflict = t("academics.validation_conflict_teacher")
+                            break
+                        if classroom and ex["classroom"] and ex["classroom"].strip().lower() == classroom.lower():
+                            conflict = t("academics.validation_conflict_room")
+                            break
+                    if conflict:
+                        flash_msg = conflict
                         flash_type = "error"
+                        log_event(conn, "ERROR", path, "시간표 중복 검증 실패", conflict, user["id"])
                     else:
-                        ignore_id = schedule_id if str(schedule_id).isdigit() else "0"
-                        existing = conn.execute(
-                            """SELECT sc.*, c.teacher_id AS cls_teacher_id
-                            FROM schedules sc LEFT JOIN classes c ON c.id=sc.class_id
-                            WHERE sc.day_of_week=? AND sc.id<>?""",
-                            (day_of_week, ignore_id),
-                        ).fetchall()
-                        conflict = None
-                        for ex in existing:
-                            if not is_time_overlap(start_time, end_time, ex["start_time"], ex["end_time"]):
-                                continue
-                            if str(ex["class_id"]) == str(class_id):
-                                conflict = t("academics.validation_conflict_class")
-                                break
-                            ex_teacher_id = ex["teacher_id"] or ex["cls_teacher_id"]
-                            if teacher_id and ex_teacher_id and str(ex_teacher_id) == str(teacher_id):
-                                conflict = t("academics.validation_conflict_teacher")
-                                break
-                            if classroom and ex["classroom"] and ex["classroom"].strip().lower() == classroom.lower():
-                                conflict = t("academics.validation_conflict_room")
-                                break
-                        if conflict:
-                            flash_msg = conflict
-                            flash_type = "error"
+                        if str(schedule_id).isdigit():
+                            conn.execute(
+                                """UPDATE schedules SET class_id=?, day_of_week=?, start_time=?, end_time=?, classroom=?, status=?, note=?, teacher_id=?
+                                WHERE id=?""",
+                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, schedule_id),
+                            )
+                            flash_msg = t("academics.updated")
                         else:
-                            if str(schedule_id).isdigit():
-                                conn.execute(
-                                    """UPDATE schedules SET class_id=?, day_of_week=?, start_time=?, end_time=?, classroom=?, status=?, note=?, teacher_id=?
-                                    WHERE id=?""",
-                                    (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, schedule_id),
-                                )
-                                flash_msg = t("academics.updated")
-                            else:
-                                conn.execute(
-                                    """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at)
-                                    VALUES(?,?,?,?,?,?,?,?,?)""",
-                                    (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, now()),
-                                )
-                                flash_msg = t("academics.saved")
-                            conn.commit()
+                            conn.execute(
+                                """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at)
+                                VALUES(?,?,?,?,?,?,?,?,?)""",
+                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, now()),
+                            )
+                            flash_msg = t("academics.saved")
+                        conn.commit()
+            if flash_type == "error" and flash_msg:
+                log_event(conn, "ERROR", path, "시간표 저장 실패", flash_msg, user["id"])
 
         courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
         levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name, l.created_at
@@ -1982,7 +1728,6 @@ def app(environ, start_response):
             FROM schedules sc
             LEFT JOIN classes c ON c.id=sc.class_id
             LEFT JOIN users u ON u.id=c.teacher_id
-            LEFT JOIN users u2 ON u2.id=sc.teacher_id
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
             WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})"""
@@ -2295,31 +2040,30 @@ def app(environ, start_response):
         selected_student_id = query.get("selected_student_id", "")
         selected_class_id = query.get("selected_class_id", "")
         selected_teacher_id = query.get("selected_teacher_id", "")
+        flash_msg = ""
+        flash_type = "success"
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
         selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
-        flash_msg = ""
-        flash_type = "success"
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             class_id = d.get("class_id") or selected_class_id
             student_input_id = d.get("student_id") or selected_student_id
-            errors = []
-            if not exists_by_id(conn, "classes", class_id):
-                errors.append("반: 존재하지 않는 ID입니다.")
-            student_row = conn.execute("SELECT id, user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
-            if not student_row:
-                errors.append("학생: 존재하지 않는 학생 ID입니다.")
-            student_id = student_row["user_id"] if student_row else None
-            if not is_valid_date((d.get("lesson_date") or "").strip()):
-                errors.append("날짜: YYYY-MM-DD 형식이어야 합니다.")
-            enum_err = validate_enum((d.get("status") or "").strip(), "출결 상태", {"present", "late", "absent", "makeup", "cancelled"})
-            if enum_err:
-                errors.append(enum_err)
+            student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+            student_id = student_row["user_id"] if student_row else student_input_id
+            errs = []
+            if not ensure_exists(conn, "classes", class_id):
+                add_error(errs, "class_id", "존재하지 않는 반입니다")
+            if not ensure_exists(conn, "users", student_id, extra_where="role='student'"):
+                add_error(errs, "student_id", "존재하지 않는 학생입니다")
+            if (d.get("status") or "") not in ("present", "late", "absent", "makeup"):
+                add_error(errs, "status", "허용되지 않는 상태값입니다")
+            if not is_valid_date(d.get("lesson_date") or ""):
+                add_error(errs, "lesson_date", "YYYY-MM-DD 형식이어야 합니다")
             if has_role(user, [ROLE_TEACHER]):
                 class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
                 if not class_ok:
@@ -2327,19 +2071,19 @@ def app(environ, start_response):
                     status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                     start_response(status, headers)
                     return [body]
-            if errors:
-                flash_msg = "<br>".join(errors)
+            created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
+            if errs:
+                flash_msg = format_errors(errs)
                 flash_type = "error"
-                log_event(conn, "WARN", "attendance validation failed", "attendance", flash_msg)
+                log_event(conn, "ERROR", path, "출결 저장 검증 실패", "\n".join(errs), user["id"])
             else:
-                created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
                 conn.execute("INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at) VALUES(?,?,?,?,?,?,?)",
                              (class_id, student_id, d.get("lesson_date"), d.get("status"), d.get("note"), created_by, now()))
                 if d.get("status") == "absent":
                     conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
                                  ("absence", student_id, json.dumps({"student_id": student_id, "date": d.get("lesson_date")}, ensure_ascii=False), now()))
                 conn.commit()
-                flash_msg = "출결이 저장되었습니다."
+                flash_msg = "출결이 저장되었습니다"
 
         if has_role(user, [ROLE_TEACHER]):
             rows = conn.execute("SELECT a.* FROM attendance a JOIN classes c ON c.id=a.class_id WHERE c.teacher_id=? ORDER BY a.id DESC LIMIT 200", (user["id"],)).fetchall()
@@ -2490,6 +2234,7 @@ def app(environ, start_response):
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
+            errs = []
             if has_role(user, [ROLE_TEACHER]):
                 if typ == "exam":
                     class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
@@ -2506,36 +2251,33 @@ def app(environ, start_response):
                         start_response(status, headers)
                         return [body]
             if typ == "exam":
-                errors = validate_required(d, [("class_id", "반"), ("name", "시험명")])
-                if not exists_by_id(conn, "classes", d.get("class_id")):
-                    errors.append("반: 존재하지 않는 ID입니다.")
-                if (d.get("exam_date") or "").strip() and not is_valid_date(d.get("exam_date").strip()):
-                    errors.append("시험일: YYYY-MM-DD 형식이어야 합니다.")
-                if (d.get("linked_book_id") or "").strip() and not exists_by_id(conn, "books", d.get("linked_book_id")):
-                    errors.append("연계 도서: 존재하지 않는 ID입니다.")
-                if errors:
-                    flash_msg = "<br>".join(errors)
-                    flash_type = "error"
-                else:
+                if not ensure_exists(conn, "classes", d.get("class_id")):
+                    add_error(errs, "class_id", "존재하지 않는 반입니다")
+                if not (d.get("name") or "").strip():
+                    add_error(errs, "name", "필수값입니다")
+                if d.get("exam_date") and not is_valid_date(d.get("exam_date")):
+                    add_error(errs, "exam_date", "YYYY-MM-DD 형식이어야 합니다")
+                if d.get("linked_book_id") and not ensure_exists(conn, "books", d.get("linked_book_id")):
+                    add_error(errs, "linked_book_id", "존재하지 않는 도서입니다")
+                if not errs:
                     conn.execute("INSERT INTO exams(class_id, name, exam_date, report, linked_book_id, created_at) VALUES(?,?,?,?,?,?)", (d.get("class_id"), d.get("name"), d.get("exam_date"), d.get("report"), d.get("linked_book_id") or None, now()))
-                    conn.commit()
-                    flash_msg = "시험이 저장되었습니다."
             elif typ == "score":
-                errors = validate_required(d, [("exam_id", "시험"), ("student_id", "학생"), ("score", "점수")])
-                if not exists_by_id(conn, "exams", d.get("exam_id")):
-                    errors.append("시험: 존재하지 않는 ID입니다.")
-                if not exists_by_id(conn, "users", d.get("student_id")):
-                    errors.append("학생: 존재하지 않는 사용자 ID입니다.")
-                ferr, score_val = validate_float(d.get("score"), "점수", min_value=1, max_value=5, allow_empty=False)
-                if ferr:
-                    errors.append(ferr)
-                if errors:
-                    flash_msg = "<br>".join(errors)
-                    flash_type = "error"
-                else:
-                    conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (d.get("exam_id"), d.get("student_id"), score_val, now()))
-                    conn.commit()
-                    flash_msg = "성적이 저장되었습니다."
+                score_v = as_float(d.get("score"))
+                if not ensure_exists(conn, "exams", d.get("exam_id")):
+                    add_error(errs, "exam_id", "존재하지 않는 시험입니다")
+                if not ensure_exists(conn, "users", d.get("student_id"), extra_where="role='student'"):
+                    add_error(errs, "student_id", "존재하지 않는 학생입니다")
+                if score_v is None or score_v < 0 or score_v > 100:
+                    add_error(errs, "score", "0~100 범위의 숫자여야 합니다")
+                if not errs:
+                    conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (d.get("exam_id"), d.get("student_id"), score_v, now()))
+            if errs:
+                flash_msg = format_errors(errs)
+                flash_type = "error"
+                log_event(conn, "ERROR", path, "시험/성적 저장 검증 실패", "\n".join(errs), user["id"])
+            else:
+                conn.commit()
+                flash_msg = "저장되었습니다"
         if has_role(user, [ROLE_TEACHER]):
             exams = conn.execute("SELECT e.* FROM exams e JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
             scores = conn.execute("SELECT es.* FROM exam_scores es JOIN exams e ON e.id=es.exam_id JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY es.id DESC", (user["id"],)).fetchall()
@@ -2567,10 +2309,25 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
+        flash_msg = ""
+        flash_type = "success"
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
-            conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("parent_id"), d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
-            conn.commit()
+            errs = []
+            if not ensure_exists(conn, "users", d.get("student_id"), extra_where="role='student'"):
+                add_error(errs, "student_id", "존재하지 않는 학생입니다")
+            if d.get("parent_id") and not ensure_exists(conn, "users", d.get("parent_id"), extra_where="role='parent'"):
+                add_error(errs, "parent_id", "존재하지 않는 학부모입니다")
+            if not (d.get("memo") or "").strip():
+                add_error(errs, "memo", "필수값입니다")
+            if errs:
+                flash_msg = format_errors(errs)
+                flash_type = "error"
+                log_event(conn, "ERROR", path, "상담 저장 검증 실패", "\n".join(errs), user["id"])
+            else:
+                conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("parent_id") or None, d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
+                conn.commit()
+                flash_msg = "저장되었습니다"
         rows = conn.execute("SELECT * FROM counseling ORDER BY id DESC").fetchall()
         table_rows = "".join([
             f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['parent_id'] or '-'}</td><td>{r['memo'] or '-'}</td><td>{'Y' if r['is_special_note'] else '-'}</td><td>{r['created_at'] or '-'}</td></tr>"
@@ -2593,7 +2350,7 @@ def app(environ, start_response):
             {table_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
-        """, user, current_menu="counseling")
+        """, user, current_menu="counseling", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -2613,29 +2370,29 @@ def app(environ, start_response):
             d = parse_body(environ)
             student_input_id = d.get("student_id") or selected_student_id
             student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
-            errors = []
-            if not student_row:
-                errors.append("학생: 존재하지 않는 학생 ID입니다.")
-            if not is_valid_date((d.get("paid_date") or "").strip()):
-                errors.append("결제일: YYYY-MM-DD 형식이어야 합니다.")
-            e1, amount = validate_float(d.get("amount"), "금액", min_value=0, allow_empty=False)
-            if e1:
-                errors.append(e1)
-            e2, package_hours = validate_float(d.get("package_hours"), "패키지시간", min_value=0)
-            if e2:
-                errors.append(e2)
-            e3, remain = validate_int(d.get("remaining_classes"), "잔여수업수", min_value=0)
-            if e3:
-                errors.append(e3)
-            if errors:
-                flash_msg = "<br>".join(errors)
+            student_user_id = student_row["user_id"] if student_row else student_input_id
+            errs = []
+            amount_v = as_float(d.get("amount"))
+            hours_v = as_float(d.get("package_hours") or 0)
+            remain_v = as_int(d.get("remaining_classes") or 0)
+            if not ensure_exists(conn, "users", student_user_id, extra_where="role='student'"):
+                add_error(errs, "student_id", "존재하지 않는 학생입니다")
+            if not is_valid_date(d.get("paid_date") or ""):
+                add_error(errs, "paid_date", "YYYY-MM-DD 형식이어야 합니다")
+            if amount_v is None or amount_v < 0:
+                add_error(errs, "amount", "0 이상의 숫자여야 합니다")
+            if hours_v is None or hours_v < 0:
+                add_error(errs, "package_hours", "0 이상의 숫자여야 합니다")
+            if remain_v is None or remain_v < 0:
+                add_error(errs, "remaining_classes", "0 이상의 정수여야 합니다")
+            if errs:
+                flash_msg = format_errors(errs)
                 flash_type = "error"
-                log_event(conn, "WARN", "payment validation failed", "payments", flash_msg)
+                log_event(conn, "ERROR", path, "수납 저장 검증 실패", "\n".join(errs), user["id"])
             else:
-                student_user_id = student_row["user_id"]
-                conn.execute("INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)", (student_user_id, d.get("paid_date"), amount, package_hours if package_hours is not None else 0, remain if remain is not None else 0, now()))
+                conn.execute("INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)", (student_user_id, d.get("paid_date"), amount_v, hours_v, remain_v, now()))
                 conn.commit()
-                flash_msg = "수납이 저장되었습니다."
+                flash_msg = "저장되었습니다"
         if has_role(user, [ROLE_STUDENT]):
             rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_PARENT]):
@@ -2741,34 +2498,34 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-    if path == "/api/announcements" and method == "GET":
-        rows = conn.execute("SELECT * FROM announcements ORDER BY id DESC").fetchall()
-        conn.close()
-        status, headers, body = json_resp([dict(r) for r in rows])
-        start_response(status, headers)
-        return [body]
     if path == "/logs":
         if not has_role(user, [ROLE_OWNER]):
             conn.close()
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
-        rows = conn.execute("SELECT id, level, context, message, details, created_at FROM app_logs ORDER BY id DESC LIMIT 300").fetchall()
-        table_rows = "".join([
-            f"<tr><td>{r['id']}</td><td>{r['level']}</td><td>{r['context'] or '-'}</td><td>{r['message']}</td><td>{r['details'] or '-'}</td><td>{r['created_at']}</td></tr>"
+        rows = conn.execute("SELECT id, level, route, user_id, message, detail, created_at FROM app_logs ORDER BY id DESC LIMIT 300").fetchall()
+        row_html = "".join([
+            f"<tr><td>{r['id']}</td><td>{r['level']}</td><td>{r['route'] or '-'}</td><td>{r['user_id'] or '-'}</td><td>{r['message']}</td><td>{(r['detail'] or '-')}</td><td>{r['created_at']}</td></tr>"
             for r in rows
         ])
-        html = render_html("시스템 로그", f"""
+        html = render_html(menu_t("logs"), f"""
         <div class='card'>
-          <h4>시스템 로그 (최근 300건)</h4>
+          <h4>{menu_t('logs')}</h4>
           <table>
-            <tr><th>ID</th><th>level</th><th>context</th><th>message</th><th>details</th><th>created_at</th></tr>
-            {table_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+            <tr><th>ID</th><th>level</th><th>route</th><th>user_id</th><th>message</th><th>detail</th><th>created_at</th></tr>
+            {row_html or f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>"}
           </table>
         </div>
         """, user, current_menu="logs")
         status, headers, body = text_resp(html)
         conn.close()
+        start_response(status, headers)
+        return [body]
+    if path == "/api/announcements" and method == "GET":
+        rows = conn.execute("SELECT * FROM announcements ORDER BY id DESC").fetchall()
+        conn.close()
+        status, headers, body = json_resp([dict(r) for r in rows])
         start_response(status, headers)
         return [body]
     if path == "/api/books/loan-by-code" and method == "POST":

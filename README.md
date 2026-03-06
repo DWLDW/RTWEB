@@ -180,3 +180,27 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 2. 에러/알림 메시지 키 분리
 3. 상태값 외 도메인 코드(출결 상태 등) 번역 테이블화
 4. API 응답 메시지의 다국어 처리 정책 수립
+
+## 10) 입력 검증/오류 메시지 강화
+
+- 공통 검증 유틸 추가:
+  - 필수값, 숫자, 날짜(`YYYY-MM-DD`), 시간(`HH:MM`) 검증
+  - enum 허용값 검증
+  - 참조값 존재 검증(`ensure_exists`)
+- 적용 화면:
+  - 학생 등록/수정 (`/students`, `/students/{id}`)
+  - 마스터데이터 (`/masterdata`)
+  - 스케줄 (`/schedule`)
+  - 출결 (`/attendance`)
+  - 시험/성적 (`/exams`)
+  - 수납 (`/payments`)
+  - 상담 (`/counseling`)
+- 실패 시 조용히 무시하지 않고, 필드 단위 오류 메시지를 플래시로 표시합니다.
+
+### 시스템 로그 확인
+- owner 전용: `/logs`
+- 검증 실패 및 주요 저장 예외가 DB(`app_logs`)에 적재됩니다.
+
+### 마스터데이터 삭제
+- `/masterdata`의 코스/레벨/반/교실/시간슬롯 목록에 삭제 버튼 추가.
+- 참조 중 데이터는 삭제 차단(예: 시간표에서 사용 중인 반).
