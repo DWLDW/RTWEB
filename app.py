@@ -654,18 +654,28 @@ def fetch_student_candidates(conn, keyword, limit=10):
         ORDER BY id DESC LIMIT ?""",
         (like, like, like, limit),
     ).fetchall()
-def fetch_class_candidates(conn, keyword, limit=10):
+def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
     kw = (keyword or "").strip()
-    if not kw:
+    if not kw and not show_all_when_empty:
         return []
-    like = f"%{kw}%"
+    params = []
+    where_sql = ""
+    if kw:
+        like = f"%{kw}%"
+        where_sql = "WHERE c.name LIKE ? OR co.name LIKE ? OR l.name LIKE ? OR u.name LIKE ?"
+        params.extend([like, like, like, like])
+    params.append(limit)
     return conn.execute(
-        """SELECT c.id, c.name, COALESCE(co.name, '') AS course_name
+        f"""SELECT c.id, c.name, COALESCE(co.name, '') AS course_name, COALESCE(l.name, '') AS level_name,
+        COALESCE(u.name, '') AS teacher_name,
+        (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
         FROM classes c
         LEFT JOIN courses co ON co.id=c.course_id
-        WHERE c.name LIKE ? OR co.name LIKE ?
+        LEFT JOIN levels l ON l.id=c.level_id
+        LEFT JOIN users u ON u.id=c.teacher_id
+        {where_sql}
         ORDER BY c.id DESC LIMIT ?""",
-        (like, like, limit),
+        tuple(params),
     ).fetchall()
 def fetch_teacher_candidates(conn, keyword, limit=10):
     kw = (keyword or "").strip()
@@ -682,19 +692,58 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
     query_keep = query_keep or {}
     hidden = "".join([f"<input type='hidden' name='{k}' value='{v}'>" for k, v in query_keep.items() if v not in (None, "")])
     cand_rows = ""
+    is_class_picker = any('course_name' in c.keys() for c in candidates) if candidates else False
+    recent_ids = [x for x in str(query_keep.get("recent_class_ids", "")).split(",") if x]
+    recent_set = set(recent_ids)
+    ordered = []
+    if is_class_picker and recent_ids:
+        by_id = {str(r['id']): r for r in candidates}
+        for rid in recent_ids:
+            if rid in by_id:
+                ordered.append(by_id[rid])
     for c in candidates:
+        if c not in ordered:
+            ordered.append(c)
+
+    for c in ordered:
         cid = c['id']
         label = c.get('label', '') if isinstance(c, dict) else ''
         if not label:
             if 'student_no' in c.keys():
                 label = f"{c['name_ko']} ({c['student_no'] or '-'}, {c['phone'] or '-'})"
             elif 'course_name' in c.keys():
-                label = f"{c['name']} / {c['course_name'] or '-'}"
+                label = f"{c['name']} / {c['course_name'] or '-'} / {c['level_name'] or '-'} / {c['teacher_name'] or '-'} / {c['student_count'] or 0}"
             else:
                 label = f"{c['name']} ({c['username']})"
-        qp = "&".join([f"{k}={v}" for k, v in query_keep.items() if v not in (None, "")])
+        keep = dict(query_keep)
+        if is_class_picker and selected_name in ("selected_form_class_id", "selected_class_id"):
+            new_recent = [str(cid)] + [x for x in recent_ids if x != str(cid)]
+            keep["recent_class_ids"] = ",".join(new_recent[:5])
+        qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
         sep = "&" if qp else ""
         cand_rows += f"<li><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{label}</a></li>"
+    class_table = ""
+    if is_class_picker:
+        rows = ""
+        for c in ordered:
+            cid = c['id']
+            keep = dict(query_keep)
+            if selected_name in ("selected_form_class_id", "selected_class_id"):
+                new_recent = [str(cid)] + [x for x in recent_ids if x != str(cid)]
+                keep["recent_class_ids"] = ",".join(new_recent[:5])
+            qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
+            sep = "&" if qp else ""
+            rows += f"<tr><td><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td></tr>"
+        class_table = f"""
+        <table>
+          <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>
+          {rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+        </table>
+        """
+
+    list_inner = cand_rows if cand_rows else ("<li class='empty-msg'>" + t('common.no_data') + "</li>")
+    list_html = "<ul style='margin:0; padding-left:18px'>" + list_inner + "</ul>"
+
     return f"""
     <div class='card'>
       <h4>{title}</h4>
@@ -705,7 +754,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
         <button>{t("common.search")}</button>
       </form>
       <div style='margin:6px 0'>{t("common.selected")}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
-      <ul style='margin:0; padding-left:18px'>{cand_rows or f'<li class="empty-msg">{t("common.no_data")}</li>'}</ul>
+      {class_table or list_html}
     </div>
     """
 def app(environ, start_response):
@@ -1475,6 +1524,7 @@ def app(environ, start_response):
             return [body]
         flash_msg = ""
         flash_type = "success"
+        md_view = query.get("md_view", "classes")
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             typ = data.get("type")
@@ -1571,8 +1621,47 @@ def app(environ, start_response):
                 out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
             return out
 
+        section_nav = f"""
+        <div class='card'><div class='filter-row'>
+          <a class='btn {'secondary' if md_view!='classes' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=classes'>반</a>
+          <a class='btn {'secondary' if md_view!='courses' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=courses'>코스/레벨</a>
+          <a class='btn {'secondary' if md_view!='teachers' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=teachers'>교사</a>
+          <a class='btn {'secondary' if md_view!='rooms' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=rooms'>교실/시간대</a>
+        </div></div>
+        """
+
+        class_rows_md = "".join([
+            f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for c in classes
+        ])
+        course_rows_md = "".join([
+            f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_course'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for r in courses
+        ])
+        level_rows_md = "".join([
+            f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['course_name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_level'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for r in levels
+        ])
+        room_rows_md = "".join([
+            f"<tr><td>{r['id']}</td><td>{r['name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_classroom'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for r in classrooms
+        ])
+        slot_rows_md = "".join([
+            f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for r in time_slots
+        ])
+        empty6 = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
+        empty5 = f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"
+        empty4 = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
+        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md or empty6}</table></div>"
+        course_cards = f"<div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows_md or empty5}</table></div>"
+        teacher_card = f"<div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{rows_html(teachers,['id','name','username'])}</table></div>"
+        room_cards = f"<div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{room_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{slot_rows_md or empty6}</table></div>"
+        section_body = classes_card if md_view == 'classes' else course_cards if md_view == 'courses' else teacher_card if md_view == 'teachers' else room_cards
+
         html = render_html(t('menu.masterdata'), f"""
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
+        {section_nav}
         <div class='card'>
           <h4>{t('academics.register')}</h4>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
@@ -1581,12 +1670,7 @@ def app(environ, start_response):
           <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
-        <div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for c in classes]) or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_course'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in courses]) or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name']}</td><td>{r['course_name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_level'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in levels]) or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{rows_html(teachers,['id','name','username'])}</table></div>
-        <div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['name'] or '-'}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_classroom'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in classrooms]) or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{''.join([f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>" for r in time_slots]) or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        {section_body}
         """, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
@@ -1608,6 +1692,7 @@ def app(environ, start_response):
         selected_class_q = query.get("class_q", "").strip()
         selected_schedule_id = query.get("schedule_id", "")
         selected_form_class_id = query.get("selected_form_class_id", "")
+        recent_class_ids = query.get("recent_class_ids", "")
 
         flash_msg = ""
         flash_type = "success"
@@ -1628,11 +1713,17 @@ def app(environ, start_response):
                 schedule_id = data.get("schedule_id", "").strip()
                 class_id = (data.get("class_id") or data.get("selected_form_class_id") or "").strip()
                 day_of_week = (data.get("day_of_week") or "").strip()
+                time_slot_value = (data.get("time_slot") or "").strip()
                 start_time = (data.get("start_time") or "").strip()
                 end_time = (data.get("end_time") or "").strip()
+                if time_slot_value and "|" in time_slot_value:
+                    sp = time_slot_value.split("|", 1)
+                    start_time, end_time = sp[0].strip(), sp[1].strip()
                 classroom = (data.get("classroom") or "").strip()
                 sc_status = (data.get("status") or "active").strip() or "active"
                 note = (data.get("note") or "").strip()
+                selected_teacher = (data.get("teacher_id") or "").strip()
+                form_teacher_id = selected_teacher if selected_teacher else None
 
                 if not class_id:
                     flash_msg = "class_id: 반을 먼저 선택하세요"
@@ -1640,7 +1731,7 @@ def app(environ, start_response):
                 elif not ensure_exists(conn, "classes", class_id):
                     flash_msg = "class_id: 존재하지 않는 반입니다"
                     flash_type = "error"
-                elif teacher_id and not ensure_exists(conn, "users", teacher_id, extra_where="role='teacher'"):
+                elif form_teacher_id and not ensure_exists(conn, "users", form_teacher_id, extra_where="role='teacher'"):
                     flash_msg = "teacher_id: 존재하지 않는 강사입니다"
                     flash_type = "error"
                 elif classroom and not ensure_exists(conn, "classrooms", classroom, field="name") and not ensure_exists(conn, "classrooms", classroom, field="room_name"):
@@ -1658,8 +1749,7 @@ def app(environ, start_response):
                 else:
                     class_row = conn.execute("SELECT id, teacher_id FROM classes WHERE id=?", (class_id,)).fetchone()
                     class_teacher_id = class_row["teacher_id"] if class_row else None
-                    selected_teacher = (data.get("teacher_id") or "").strip()
-                    teacher_id = selected_teacher if selected_teacher else class_teacher_id
+                    form_teacher_id = selected_teacher if selected_teacher else class_teacher_id
                     ignore_id = schedule_id if str(schedule_id).isdigit() else "0"
                     existing = conn.execute(
                         """SELECT sc.*, c.teacher_id AS cls_teacher_id
@@ -1675,7 +1765,7 @@ def app(environ, start_response):
                             conflict = t("academics.validation_conflict_class")
                             break
                         ex_teacher_id = ex["teacher_id"] or ex["cls_teacher_id"]
-                        if teacher_id and ex_teacher_id and str(ex_teacher_id) == str(teacher_id):
+                        if form_teacher_id and ex_teacher_id and str(ex_teacher_id) == str(form_teacher_id):
                             conflict = t("academics.validation_conflict_teacher")
                             break
                         if classroom and ex["classroom"] and ex["classroom"].strip().lower() == classroom.lower():
@@ -1690,14 +1780,14 @@ def app(environ, start_response):
                             conn.execute(
                                 """UPDATE schedules SET class_id=?, day_of_week=?, start_time=?, end_time=?, classroom=?, status=?, note=?, teacher_id=?
                                 WHERE id=?""",
-                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, schedule_id),
+                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, form_teacher_id, schedule_id),
                             )
                             flash_msg = t("academics.updated")
                         else:
                             conn.execute(
                                 """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at)
                                 VALUES(?,?,?,?,?,?,?,?,?)""",
-                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, teacher_id, now()),
+                                (class_id, day_of_week, start_time, end_time, classroom or None, sc_status, note or None, form_teacher_id, now()),
                             )
                             flash_msg = t("academics.saved")
                         conn.commit()
@@ -1869,7 +1959,7 @@ def app(environ, start_response):
             sel = "selected" if cl == selected_course_level else ""
             cl_options.append(f"<option value='{cl}' {sel}>{cl}</option>")
 
-        class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=10)
+        class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=20, show_all_when_empty=True)
         if selected_schedule and not selected_form_class_id:
             selected_form_class_id = str(selected_schedule['class_id'])
         selected_form_class = conn.execute(
@@ -1902,16 +1992,18 @@ def app(environ, start_response):
         for d in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]:
             sel = "selected" if selected_schedule_day == d else ""
             day_select_options.append(f"<option value='{d}' {sel}>{d}</option>")
-        common_time_slots = ["16:25", "17:20", "17:25", "18:20", "18:30", "19:25", "19:35", "20:30"]
-        start_time_options = [f"<option value=''>{t('academics.day_all')}</option>"]
-        end_time_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        slot_rows = conn.execute("SELECT label, start_time, end_time FROM time_slots ORDER BY start_time, end_time").fetchall()
+        slot_pairs = [(r['start_time'], r['end_time']) for r in slot_rows if r['start_time'] and r['end_time']]
+        if not slot_pairs:
+            slot_pairs = [("16:25", "17:20"), ("17:25", "18:20"), ("18:30", "19:25"), ("19:35", "20:30")]
         selected_start = selected_schedule['start_time'] if selected_schedule else ''
         selected_end = selected_schedule['end_time'] if selected_schedule else ''
-        for tm in common_time_slots:
-            s_sel = "selected" if selected_start == tm else ""
-            e_sel = "selected" if selected_end == tm else ""
-            start_time_options.append(f"<option value='{tm}' {s_sel}>{tm}</option>")
-            end_time_options.append(f"<option value='{tm}' {e_sel}>{tm}</option>")
+        selected_slot = f"{selected_start}|{selected_end}" if selected_start and selected_end else ""
+        slot_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        for st, et in slot_pairs:
+            val = f"{st}|{et}"
+            sel = "selected" if val == selected_slot else ""
+            slot_options.append(f"<option value='{val}' {sel}>{st}-{et}</option>")
 
         form_class_picker = render_picker_block(
             t("picker.class"),
@@ -1921,12 +2013,12 @@ def app(environ, start_response):
             selected_form_class_id,
             (selected_form_class['name'] if selected_form_class else ""),
             class_candidates,
-            "/academics",
+            "/schedule",
             CURRENT_LANG,
             {
                 "week": str(week_offset), "day": selected_day, "teacher_id": selected_teacher_id,
                 "classroom": selected_room, "course_level": selected_course_level, "class_q": selected_class_q,
-                "schedule_id": selected_schedule_id,
+                "schedule_id": selected_schedule_id, "recent_class_ids": recent_class_ids,
             }
         )
 
@@ -1966,6 +2058,7 @@ def app(environ, start_response):
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='week' value='{week_offset}'>
+            <input type='hidden' name='recent_class_ids' value='{recent_class_ids}'>
             <label>{t('academics.week_current')} <strong>{week_label}</strong></label>
             <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week={week_offset-1}'>{t('academics.week_prev')}</a>
             <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&week=0'>{t('academics.week_current')}</a>
@@ -2005,8 +2098,7 @@ def app(environ, start_response):
                 <label>{t('academics.schedule_pick_teacher')} <select name='teacher_id'>{''.join(teacher_select_options)}</select></label>
                 <label>{t('academics.schedule_pick_student')} <input value='{selected_form_class['student_count'] if selected_form_class else 0}' readonly></label>
                 <label>{t('academics.day_of_week')} <select name='day_of_week'>{''.join(day_select_options)}</select></label>
-                <label>{t('academics.start_time')} <select name='start_time'>{''.join(start_time_options)}</select></label>
-                <label>{t('academics.end_time')} <select name='end_time'>{''.join(end_time_options)}</select></label>
+                <label>{t('academics.time_slot')} <select name='time_slot'>{''.join(slot_options)}</select></label>
                 <label>{t('academics.classroom')} <select name='classroom'>{''.join(room_options)}</select></label>
                 <label>{t('academics.status')} <select name='status'>
                   <option value='active' {'selected' if selected_schedule_status=='active' else ''}>{status_t('active')}</option>
@@ -2022,21 +2114,16 @@ def app(environ, start_response):
           <div>
             {detail_html}
             {register_forms}
-            <div class='card'>
+            <details class='card' open>
+              <summary><strong>{t('academics.class_list')}</strong></summary>
+              <div style='margin-top:8px'>
               <h4>{t('academics.class_list')}</h4>
               <table>
                 <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>
                 {class_rows}
               </table>
-            </div>
-            <div class='card'>
-              <h4>{t('academics.course')}</h4>
-              <table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th></tr>{course_rows}</table>
-            </div>
-            <div class='card'>
-              <h4>{t('academics.level')}</h4>
-              <table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th></tr>{level_rows}</table>
-            </div>
+              </div>
+            </details>
           </div>
         </div>
         """, user, current_menu="schedule", flash_msg=flash_msg, flash_type=flash_type)
