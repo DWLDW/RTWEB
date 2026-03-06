@@ -28,20 +28,54 @@ CURRENT_LANG = "ko"
 LANG_LABELS = {"ko": "한국어", "en": "English", "zh": "中文"}
 
 NAV_LABELS = {
-    "dashboard": {"ko": "대시보드", "en": "Dashboard", "zh": "仪表盘"},
-    "users": {"ko": "사용자", "en": "Users", "zh": "用户"},
-    "students": {"ko": "학생관리", "en": "Students", "zh": "学生管理"},
-    "academics": {"ko": "학사구조", "en": "Academics", "zh": "学术结构"},
-    "attendance": {"ko": "출결", "en": "Attendance", "zh": "考勤"},
-    "homework": {"ko": "숙제", "en": "Homework", "zh": "作业"},
-    "exams": {"ko": "시험/성적", "en": "Exams/Scores", "zh": "考试/成绩"},
-    "counseling": {"ko": "상담/특이사항", "en": "Counseling", "zh": "咨询/备注"},
-    "payments": {"ko": "수납", "en": "Payments", "zh": "收费"},
-    "announcements": {"ko": "공지/알림", "en": "Announcements", "zh": "公告/通知"},
-    "library": {"ko": "도서대출", "en": "Library", "zh": "图书借阅"},
-    "logout": {"ko": "로그아웃", "en": "Logout", "zh": "退出登录"},
-    "login_as": {"ko": "로그인", "en": "Signed in", "zh": "当前登录"},
-    "lang": {"ko": "언어", "en": "Language", "zh": "语言"},
+    "dashboard": "menu.dashboard",
+    "users": "menu.users",
+    "students": "menu.students",
+    "academics": "menu.academics",
+    "attendance": "menu.attendance",
+    "homework": "menu.homework",
+    "exams": "menu.exams",
+    "counseling": "menu.counseling",
+    "payments": "menu.payments",
+    "announcements": "menu.announcements",
+    "library": "menu.library",
+    "logout": "common.logout",
+    "login_as": "common.login_as",
+    "lang": "common.language",
+}
+
+
+I18N_TEXTS = {
+    "ko": {
+        "menu.dashboard": "대시보드", "menu.users": "사용자", "menu.students": "학생관리", "menu.academics": "학사구조",
+        "menu.attendance": "출결", "menu.homework": "숙제", "menu.exams": "시험/성적", "menu.counseling": "상담/특이사항",
+        "menu.payments": "수납", "menu.announcements": "공지/알림", "menu.library": "도서대출",
+        "common.login_as": "로그인", "common.language": "언어", "common.login": "로그인", "common.logout": "로그아웃",
+        "common.save": "저장", "common.edit": "수정", "common.delete": "삭제", "common.search": "검색",
+        "common.no_data": "데이터 없음", "common.selected": "선택됨", "common.forbidden": "접근 권한이 없습니다",
+        "login.title": "LMS 로그인", "login.username": "아이디", "login.password": "비밀번호", "login.failed": "로그인 실패",
+        "status.active": "정상", "status.leave": "휴학", "status.ended": "종료",
+    },
+    "en": {
+        "menu.dashboard": "Dashboard", "menu.users": "Users", "menu.students": "Students", "menu.academics": "Academics",
+        "menu.attendance": "Attendance", "menu.homework": "Homework", "menu.exams": "Exams/Scores", "menu.counseling": "Counseling",
+        "menu.payments": "Payments", "menu.announcements": "Announcements", "menu.library": "Library",
+        "common.login_as": "Signed in", "common.language": "Language", "common.login": "Login", "common.logout": "Logout",
+        "common.save": "Save", "common.edit": "Edit", "common.delete": "Delete", "common.search": "Search",
+        "common.no_data": "No Data", "common.selected": "Selected", "common.forbidden": "Forbidden",
+        "login.title": "LMS Login", "login.username": "Username", "login.password": "Password", "login.failed": "Login failed",
+        "status.active": "Active", "status.leave": "Leave", "status.ended": "Ended",
+    },
+    "zh": {
+        "menu.dashboard": "仪表盘", "menu.users": "用户", "menu.students": "学生管理", "menu.academics": "学术结构",
+        "menu.attendance": "考勤", "menu.homework": "作业", "menu.exams": "考试/成绩", "menu.counseling": "咨询/备注",
+        "menu.payments": "收费", "menu.announcements": "公告/通知", "menu.library": "图书借阅",
+        "common.login_as": "当前登录", "common.language": "语言", "common.login": "登录", "common.logout": "退出登录",
+        "common.save": "保存", "common.edit": "编辑", "common.delete": "删除", "common.search": "搜索",
+        "common.no_data": "无数据", "common.selected": "已选择", "common.forbidden": "无权限",
+        "login.title": "LMS 登录", "login.username": "账号", "login.password": "密码", "login.failed": "登录失败",
+        "status.active": "正常", "status.leave": "休学", "status.ended": "结束",
+    },
 }
 
 
@@ -70,9 +104,17 @@ ROLE_MENU_KEYS = {
 
 def t(key, lang=None):
     lang = lang or CURRENT_LANG
-    if key in NAV_LABELS:
-        return NAV_LABELS[key].get(lang, NAV_LABELS[key]["ko"])
-    return key
+    table = I18N_TEXTS.get(lang, I18N_TEXTS["ko"])
+    return table.get(key, I18N_TEXTS["ko"].get(key, key))
+
+
+def menu_t(key, lang=None):
+    token = NAV_LABELS.get(key, key)
+    return t(token, lang)
+
+
+def status_t(status, lang=None):
+    return t(f"status.{status}", lang)
 
 
 def get_db():
@@ -133,6 +175,10 @@ def get_lang(environ):
     lang = q.get("lang", "").strip().lower()
     if lang in ("ko", "en", "zh"):
         return lang
+    cookies = parse_cookie(environ.get("HTTP_COOKIE", ""))
+    cookie_lang = (cookies.get("lang") or "").strip().lower()
+    if cookie_lang in ("ko", "en", "zh"):
+        return cookie_lang
     return "ko"
 
 
@@ -181,13 +227,13 @@ def render_html(title, body, user=None, lang=None):
             for code, label in LANG_LABELS.items()
         ])
         keys = ROLE_MENU_KEYS.get(user["role"], ["dashboard"])
-        menu_links = " | ".join([f"<a href='{NAV_PATHS[k]}?lang={lang}'>{t(k, lang)}</a>" for k in keys])
+        menu_links = " | ".join([f"<a href='{NAV_PATHS[k]}?lang={lang}'>{menu_t(k, lang)}</a>" for k in keys])
         nav = f"""
         <div style='margin-bottom:16px'>
-            {t('login_as', lang)}: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
+            {menu_t('login_as', lang)}: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
             {menu_links} |
-            <a href='/logout'>{t('logout', lang)}</a>
-            <span style='margin-left:10px'>{t('lang', lang)}:</span>
+            <a href='/logout'>{menu_t('logout', lang)}</a>
+            <span style='margin-left:10px'>{menu_t('lang', lang)}:</span>
             <select onchange="const u=new URL(window.location.href);u.searchParams.set('lang', this.value);window.location=u.toString();">
               {lang_options}
             </select>
@@ -224,7 +270,9 @@ def route_allowed(user, route_key):
     return route_key in ROLE_MENU_KEYS.get(user["role"], [])
 
 
-def forbidden_html(user, msg="접근 권한이 없습니다 / Forbidden / 无权限"):
+def forbidden_html(user, msg=None):
+    if msg is None:
+        msg = t("common.forbidden")
     html = render_html("403 Forbidden", f"<p style='color:red'>{msg}</p>", user)
     return "403 Forbidden", [("Content-Type", "text/html; charset=utf-8")], html
 
@@ -318,20 +366,28 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
         <input type='hidden' name='lang' value='{lang}'>
         {hidden}
         <input name='{search_name}' value='{search_value or ''}' placeholder='search'>
-        <button>검색</button>
+        <button>{t("common.search")}</button>
       </form>
-      <div>선택됨: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
-      <ul>{cand_rows or '<li>검색 결과 없음</li>'}</ul>
+      <div>{t("common.selected")}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
+      <ul>{cand_rows or '<li>{t("common.no_data")}</li>'}</ul>
     </div>
     """
 
 
 def app(environ, start_response):
     global CURRENT_LANG
+    query = parse_query(environ)
     CURRENT_LANG = get_lang(environ)
+
+    _orig_start_response = start_response
+
+    def start_response(status, headers, exc_info=None):
+        if query.get("lang", "").strip().lower() in ("ko", "en", "zh"):
+            headers.append(("Set-Cookie", f"lang={CURRENT_LANG}; Path=/; Max-Age=31536000"))
+        return _orig_start_response(status, headers, exc_info)
+
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
-    query = parse_query(environ)
 
     # 인증 API
     if path == "/api/auth/login" and method == "POST":
@@ -357,11 +413,11 @@ def app(environ, start_response):
 
     if path == "/login":
         if method == "GET":
-            html = render_html("LMS 로그인", """
+            html = render_html(t("login.title"), f"""
             <form method='post'>
-              <div>아이디 <input name='username'></div>
-              <div>비밀번호 <input name='password' type='password'></div>
-              <button type='submit'>로그인</button>
+              <div>{t('login.username')} <input name='username'></div>
+              <div>{t('login.password')} <input name='password' type='password'></div>
+              <button type='submit'>{t('common.login')}</button>
             </form>
             <p>기본 계정: owner/1234, manager/1234, teacher/1234, parent/1234, student/1234</p>
             """)
@@ -376,7 +432,7 @@ def app(environ, start_response):
         ).fetchone()
         if not user:
             conn.close()
-            html = render_html("LMS 로그인", "<p style='color:red'>로그인 실패</p>")
+            html = render_html(t("login.title"), f"<p style='color:red'>{t('login.failed')}</p>")
             status, headers, body = text_resp(html, "401 Unauthorized")
             start_response(status, headers)
             return [body]
@@ -440,7 +496,7 @@ def app(environ, start_response):
             역할<select name='role'>
               <option value='owner'>원장</option><option value='manager'>매니저</option><option value='teacher'>강사</option>
               <option value='parent'>학부모</option><option value='student'>학생</option>
-            </select><button>저장</button></form>
+            </select><button>{t("common.save")}</button></form>
             """
         html = render_html("학생/학부모/강사 관리(사용자 기반)", form + f"<table border='1'><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>{rows}</table>", user)
         status, headers, body = text_resp(html)
@@ -541,9 +597,9 @@ def app(environ, start_response):
               현재 반 <select name='current_class_id'>{class_options}</select>
               남은 크레딧 <input name='remaining_credits' value='{student['remaining_credits'] or 0}'>
               상태 <select name='status'>
-                <option value='active' {'selected' if student['status']=='active' else ''}>정상/Active/正常</option>
-                <option value='leave' {'selected' if student['status']=='leave' else ''}>휴학/Leave/休学</option>
-                <option value='ended' {'selected' if student['status']=='ended' else ''}>종료/Ended/结束</option>
+                <option value='active' {'selected' if student['status']=='active' else ''}>{status_t('active')}</option>
+                <option value='leave' {'selected' if student['status']=='leave' else ''}>{status_t('leave')}</option>
+                <option value='ended' {'selected' if student['status']=='ended' else ''}>{status_t('ended')}</option>
               </select><br>
               입학일 <input name='enrolled_at' value='{student['enrolled_at'] or ''}'>
               휴학시작 <input name='leave_start_date' value='{student['leave_start_date'] or ''}'>
@@ -570,7 +626,7 @@ def app(environ, start_response):
           <tr><th>보호자정보 / Guardian / 监护人</th><td>{student['guardian_name'] or '-'} ({student['guardian_phone'] or '-'})</td></tr>
           <tr><th>현재반 / Class / 当前班级</th><td>{student['class_name'] or '-'}</td></tr>
           <tr><th>남은크레딧 / Credits / 剩余学分</th><td>{student['remaining_credits'] or 0}</td></tr>
-          <tr><th>상태 / Status / 状态</th><td>{student['status'] or '-'}</td></tr>
+          <tr><th>상태 / Status / 状态</th><td>{status_t(student['status']) if student['status'] else '-'}</td></tr>
           <tr><th>입/휴학 / Enrollment-Leave / 入学休学</th><td>입학일: {student['enrolled_at'] or '-'} / 휴학: {student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
           <tr><th>메모 / Memo / 备注</th><td>{student['memo'] or '-'}</td></tr>
         </table>
@@ -651,7 +707,7 @@ def app(environ, start_response):
               <td>{st['guardian_phone'] or '-'}</td>
               <td>{st['class_name'] or '-'}</td>
               <td>{st['remaining_credits'] or 0}</td>
-              <td>{st['status'] or '-'}</td>
+              <td>{status_t(st['status']) if st['status'] else '-'}</td>
             </tr>
             """
 
@@ -661,7 +717,7 @@ def app(environ, start_response):
           이름 <input name='name' value='{q_name}'>
           학생번호 <input name='student_no' value='{q_student_no}'>
           연락처 <input name='phone' value='{q_phone}'>
-          <button>검색 / Search / 搜索</button>
+          <button>{t("common.search")}</button>
           <a href='/students?lang={CURRENT_LANG}'>초기화 / Reset / 重置</a>
         </form>
         <table border='1' cellpadding='6' cellspacing='0'>
@@ -801,7 +857,7 @@ def app(environ, start_response):
         학생ID <input name='student_id_manual' value='{selected_student_id}' readonly> 반ID <input name='class_id_manual' value='{selected_class_id}' readonly> 강사ID <input name='teacher_id_manual' value='{selected_teacher_id}' readonly>
         날짜<input name='lesson_date' placeholder='2026-03-06'>
         상태<select name='status'><option value='present'>출석</option><option value='late'>지각</option><option value='absent'>결석</option><option value='makeup'>보강</option></select>
-        메모<input name='note'><button>저장</button></form>
+        메모<input name='note'><button>{t("common.save")}</button></form>
         <pre>{[dict(r) for r in rows]}</pre>
         """, user)
         status, headers, body = text_resp(html)
@@ -918,7 +974,7 @@ def app(environ, start_response):
             conn.commit()
         rows = conn.execute("SELECT * FROM counseling ORDER BY id DESC").fetchall()
         html = render_html("상담 기록/학생 특이사항", f"""
-        <form method='post'>학생ID<input name='student_id'> 학부모ID<input name='parent_id'> 메모<input name='memo'> 특이사항<input type='checkbox' name='is_special_note' value='1'><button>저장</button></form>
+        <form method='post'>학생ID<input name='student_id'> 학부모ID<input name='parent_id'> 메모<input name='memo'> 특이사항<input type='checkbox' name='is_special_note' value='1'><button>{t("common.save")}</button></form>
         <pre>{[dict(r) for r in rows]}</pre>
         """, user)
         status, headers, body = text_resp(html)
@@ -943,7 +999,7 @@ def app(environ, start_response):
         else:
             rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
         html = render_html("수납 기록", f"""
-        <form method='post'>학생ID<input name='student_id'> 결제일<input name='paid_date'> 금액<input name='amount'> 패키지시간<input name='package_hours'> 잔여수업수<input name='remaining_classes'><button>저장</button></form>
+        <form method='post'>학생ID<input name='student_id'> 결제일<input name='paid_date'> 금액<input name='amount'> 패키지시간<input name='package_hours'> 잔여수업수<input name='remaining_classes'><button>{t("common.save")}</button></form>
         <pre>{[dict(r) for r in rows]}</pre>
         """, user)
         status, headers, body = text_resp(html)

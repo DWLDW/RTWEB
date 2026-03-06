@@ -150,3 +150,25 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - teacher: 수업 운영 기능 중심 접근(`payments` 차단)
 - parent/student: 조회 중심 접근, 운영 관리 화면 일부 차단
 - 권한 없는 페이지/API 접근 시 403 응답을 반환합니다.
+
+
+## 9) i18n 기본 구조 (ko/zh/en)
+
+- 현재 언어 저장: `lang` 쿠키 (`?lang=ko|zh|en` 선택 시 자동 저장)
+- 공통 번역 사전: `app.py`의 `I18N_TEXTS`
+- 공통 함수:
+  - `t(key)` : 일반 문구
+  - `menu_t(key)` : 메뉴 문구
+  - `status_t(status)` : 상태(active/leave/ended)
+
+### 이번 단계 적용 범위
+- 상단 메뉴
+- 로그인 화면
+- 공통 버튼 일부(저장/검색/로그인/로그아웃)
+- 학생 상태값(active/leave/ended) 표기
+
+### 향후 확대 적용 포인트
+1. 페이지 제목/폼 라벨을 `t()`로 단계적 치환
+2. 에러/알림 메시지 키 분리
+3. 상태값 외 도메인 코드(출결 상태 등) 번역 테이블화
+4. API 응답 메시지의 다국어 처리 정책 수립
