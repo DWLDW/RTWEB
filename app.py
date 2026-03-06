@@ -306,6 +306,20 @@ def ensure_schedule_columns(conn):
         conn.execute("ALTER TABLE schedules ADD COLUMN note TEXT")
     if "teacher_id" not in cols:
         conn.execute("ALTER TABLE schedules ADD COLUMN teacher_id INTEGER")
+
+def ensure_class_columns(conn):
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(classes)").fetchall()}
+    if "classroom" not in cols:
+        conn.execute("ALTER TABLE classes ADD COLUMN classroom TEXT")
+    if "capacity" not in cols:
+        conn.execute("ALTER TABLE classes ADD COLUMN capacity INTEGER")
+    if "status" not in cols:
+        conn.execute("ALTER TABLE classes ADD COLUMN status TEXT DEFAULT 'active'")
+    if "memo" not in cols:
+        conn.execute("ALTER TABLE classes ADD COLUMN memo TEXT")
+    if "updated_at" not in cols:
+        conn.execute("ALTER TABLE classes ADD COLUMN updated_at TEXT")
+
 def ensure_master_tables(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS classrooms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -335,6 +349,7 @@ def init_db():
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
+    ensure_class_columns(conn)
     ensure_master_tables(conn)
     cur = conn.execute("SELECT COUNT(*) AS c FROM users")
     if cur.fetchone()["c"] == 0:
@@ -493,6 +508,63 @@ def require_login(environ):
     return user, None
 def redirect(path):
     return "302 Found", [("Location", path)], b""
+
+def class_status_text(status):
+    labels = {
+        "active": "운영중",
+        "pending": "대기",
+        "ended": "종료",
+        "inactive": "비활성",
+    }
+    return labels.get((status or "").strip(), status or "-")
+
+def render_class_form(class_data, courses, levels, teachers, student_count=0, errors=None):
+    errors = errors or []
+    class_id = class_data.get("id")
+    action = f"/classes/{class_id}/edit?lang={CURRENT_LANG}" if class_id else f"/classes/new?lang={CURRENT_LANG}"
+    title = "반 수정" if class_id else "반 추가"
+    selected_course = str(class_data.get("course_id") or "")
+    selected_level = str(class_data.get("level_id") or "")
+    selected_teacher = str(class_data.get("teacher_id") or "")
+    selected_status = (class_data.get("status") or "active").strip() or "active"
+
+    course_options = "<option value=''>-</option>" + "".join([
+        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_course else ''}>{r['name']}</option>" for r in courses
+    ])
+    level_options = "<option value=''>-</option>" + "".join([
+        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_level else ''}>{r['name']} ({r['course_name'] or '-'})</option>" for r in levels
+    ])
+    teacher_options = "<option value=''>-</option>" + "".join([
+        f"<option value='{r['id']}' {'selected' if str(r['id']) == selected_teacher else ''}>{r['name']} ({r['username']})</option>" for r in teachers
+    ])
+    status_options = "".join([
+        f"<option value='{k}' {'selected' if selected_status == k else ''}>{v}</option>"
+        for k, v in (("active", "운영중"), ("pending", "대기"), ("ended", "종료"), ("inactive", "비활성"))
+    ])
+    error_html = "" if not errors else "<div class='muted' style='color:#fda4af'>" + "<br>".join(errors) + "</div>"
+
+    return f"""
+    <div class='card'>
+      <h3>{title}</h3>
+      {error_html}
+      <form method='post' action='{action}'>
+        <label>{t('academics.class_name')} <input name='name' value='{class_data.get('name') or ''}' required></label>
+        <label>{t('academics.course')} <select name='course_id'>{course_options}</select></label>
+        <label>{t('academics.level')} <select name='level_id'>{level_options}</select></label>
+        <label>{t('academics.teacher')} <select name='teacher_id'>{teacher_options}</select></label>
+        <label>{t('academics.classroom')} <input name='classroom' value='{class_data.get('classroom') or ''}'></label>
+        <label>정원 <input name='capacity' type='number' min='0' value='{class_data.get('capacity') or ''}'></label>
+        <label>{t('field.status')} <select name='status'>{status_options}</select></label>
+        <label>{t('field.note')} <textarea name='memo' rows='3'>{class_data.get('memo') or ''}</textarea></label>
+        <label>{t('academics.student_count')} <input value='{student_count}' readonly></label>
+        <div style='display:flex;gap:8px;flex-wrap:wrap'>
+          <button>{t('common.save')}</button>
+          <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>목록으로</a>
+          {f"<a class='btn secondary' href='/classes/{class_id}?lang={CURRENT_LANG}'>상세로</a>" if class_id else ''}
+        </div>
+      </form>
+    </div>
+    """
 def has_role(user, roles):
     return user and user["role"] in roles
 def route_allowed(user, route_key):
@@ -1110,6 +1182,160 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
+    if path == "/classes/new":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
+        courses = conn.execute("SELECT id, name FROM courses ORDER BY id DESC").fetchall()
+        levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name
+                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
+        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
+        form_data = {"name": "", "course_id": "", "level_id": "", "teacher_id": "", "classroom": "", "capacity": "", "status": "active", "memo": ""}
+        flash_msg = query.get("saved", "")
+        flash_type = "success"
+        errors = []
+
+        if method == "POST":
+            data = parse_body(environ)
+            form_data = {
+                "name": (data.get("name") or "").strip(),
+                "course_id": (data.get("course_id") or "").strip(),
+                "level_id": (data.get("level_id") or "").strip(),
+                "teacher_id": (data.get("teacher_id") or "").strip(),
+                "classroom": (data.get("classroom") or "").strip(),
+                "capacity": (data.get("capacity") or "").strip(),
+                "status": (data.get("status") or "active").strip() or "active",
+                "memo": (data.get("memo") or "").strip(),
+            }
+            if not form_data["name"]:
+                errors.append("반명을 입력하세요.")
+            if form_data["capacity"] and (not form_data["capacity"].isdigit() or int(form_data["capacity"]) < 0):
+                errors.append("정원은 0 이상의 숫자여야 합니다.")
+            if form_data["status"] not in ("active", "pending", "ended", "inactive"):
+                errors.append("상태 값이 올바르지 않습니다.")
+            for fk in ("course_id", "level_id", "teacher_id"):
+                if form_data[fk] and not form_data[fk].isdigit():
+                    errors.append("선택 값이 올바르지 않습니다.")
+                    break
+            if not errors:
+                conn.execute(
+                    """INSERT INTO classes(course_id, level_id, name, teacher_id, classroom, capacity, status, memo, created_at, updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        form_data["course_id"] or None,
+                        form_data["level_id"] or None,
+                        form_data["name"],
+                        form_data["teacher_id"] or None,
+                        form_data["classroom"] or None,
+                        int(form_data["capacity"]) if form_data["capacity"] else None,
+                        form_data["status"],
+                        form_data["memo"] or None,
+                        now(),
+                        now(),
+                    ),
+                )
+                class_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+                conn.commit()
+                conn.close()
+                status, headers, body = redirect(f"/classes/{class_id}?lang={CURRENT_LANG}&saved=1")
+                start_response(status, headers)
+                return [body]
+            flash_msg = "입력값을 확인해주세요."
+            flash_type = "error"
+
+        body_html = render_class_form(form_data, courses, levels, teachers, student_count=0, errors=errors)
+        html = render_html("반 추가", body_html, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
+    if path.startswith("/classes/") and path.endswith("/edit"):
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
+        class_id = path.split("/")[-2]
+        if not class_id.isdigit():
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Not Found".encode("utf-8")]
+
+        class_row = conn.execute("SELECT * FROM classes WHERE id=?", (class_id,)).fetchone()
+        if not class_row:
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Class Not Found".encode("utf-8")]
+
+        courses = conn.execute("SELECT id, name FROM courses ORDER BY id DESC").fetchall()
+        levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name
+                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
+        teachers = conn.execute("SELECT id, name, username FROM users WHERE role='teacher' ORDER BY id DESC").fetchall()
+        student_count = conn.execute("SELECT COUNT(*) AS c FROM students WHERE current_class_id=?", (class_id,)).fetchone()["c"]
+        form_data = dict(class_row)
+        flash_msg = query.get("saved", "")
+        flash_type = "success"
+        errors = []
+
+        if method == "POST":
+            data = parse_body(environ)
+            form_data = {
+                "id": class_row["id"],
+                "name": (data.get("name") or "").strip(),
+                "course_id": (data.get("course_id") or "").strip(),
+                "level_id": (data.get("level_id") or "").strip(),
+                "teacher_id": (data.get("teacher_id") or "").strip(),
+                "classroom": (data.get("classroom") or "").strip(),
+                "capacity": (data.get("capacity") or "").strip(),
+                "status": (data.get("status") or "active").strip() or "active",
+                "memo": (data.get("memo") or "").strip(),
+            }
+            if not form_data["name"]:
+                errors.append("반명을 입력하세요.")
+            if form_data["capacity"] and (not form_data["capacity"].isdigit() or int(form_data["capacity"]) < 0):
+                errors.append("정원은 0 이상의 숫자여야 합니다.")
+            if form_data["status"] not in ("active", "pending", "ended", "inactive"):
+                errors.append("상태 값이 올바르지 않습니다.")
+            for fk in ("course_id", "level_id", "teacher_id"):
+                if form_data[fk] and not form_data[fk].isdigit():
+                    errors.append("선택 값이 올바르지 않습니다.")
+                    break
+            if not errors:
+                conn.execute(
+                    """UPDATE classes
+                    SET course_id=?, level_id=?, name=?, teacher_id=?, classroom=?, capacity=?, status=?, memo=?, updated_at=?
+                    WHERE id=?""",
+                    (
+                        form_data["course_id"] or None,
+                        form_data["level_id"] or None,
+                        form_data["name"],
+                        form_data["teacher_id"] or None,
+                        form_data["classroom"] or None,
+                        int(form_data["capacity"]) if form_data["capacity"] else None,
+                        form_data["status"],
+                        form_data["memo"] or None,
+                        now(),
+                        class_id,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                status, headers, body = redirect(f"/classes/{class_id}?lang={CURRENT_LANG}&saved=1")
+                start_response(status, headers)
+                return [body]
+            flash_msg = "입력값을 확인해주세요."
+            flash_type = "error"
+
+        body_html = render_class_form(form_data, courses, levels, teachers, student_count=student_count, errors=errors)
+        html = render_html("반 수정", body_html, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
     # 학사 구조
     if path.startswith("/classes/"):
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
@@ -1129,7 +1355,6 @@ def app(environ, start_response):
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
                 LEFT JOIN users u ON u.id=c.teacher_id
-            LEFT JOIN users u2 ON u2.id=sc.teacher_id
                 WHERE c.id=? AND c.teacher_id=?""",
                 (class_id, user["id"]),
             ).fetchone()
@@ -1226,14 +1451,23 @@ def app(environ, start_response):
         homework_html = rows_html(homework_rows, ["title", "due_date", "submitted_count", "total_submissions"])
         exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
         next_order = "desc" if student_order == "asc" else "asc"
+        flash_msg = t("common.save") if query.get("saved") == "1" else ""
         html = render_html(t('academics.class_detail.title'), f"""
         <div class='card'>
-        <div><a href='/masterdata?lang={CURRENT_LANG}'>← {t('academics.back_to_list')}</a></div>
+        <div style='display:flex;gap:8px;flex-wrap:wrap'>
+          <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>← 목록으로</a>
+          {"<a class='btn' href='/classes/" + str(class_row['id']) + "/edit?lang=" + CURRENT_LANG + "'>" + t('common.edit') + "</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
+          <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&selected_form_class_id={class_row['id']}'>시간표 추가</a>
+        </div>
         <h3>{class_row['name']}</h3>
         <table>
           <tr><th>{t('academics.basic_info')}</th><td>{t('academics.class_name')}: {class_row['name']}</td></tr>
           <tr><th>{t('academics.course_level')}</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
           <tr><th>{t('academics.teacher')}</th><td>{class_row['teacher_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.classroom')}</th><td>{class_row['classroom'] or '-'}</td></tr>
+          <tr><th>정원</th><td>{class_row['capacity'] if class_row['capacity'] is not None else '-'}</td></tr>
+          <tr><th>{t('field.status')}</th><td>{class_status_text(class_row['status'])}</td></tr>
+          <tr><th>{t('field.note')}</th><td>{class_row['memo'] or '-'}</td></tr>
           <tr><th>{t('academics.student_count')}</th><td>{len(students)}</td></tr>
         </table>
         </div>
@@ -1282,7 +1516,7 @@ def app(environ, start_response):
           {exam_html}
         </table>
         </div>
-        """, user, current_menu="masterdata")
+        """, user, current_menu="masterdata", flash_msg=flash_msg)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -1352,6 +1586,13 @@ def app(environ, start_response):
                 out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
             return out
 
+        class_rows = ""
+        for c in classes:
+            edit_cta = f"<a class='btn secondary' href='/classes/{c['id']}/edit?lang={CURRENT_LANG}'>수정</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else "-"
+            class_rows += f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td>{edit_cta}</td></tr>"
+        if not class_rows:
+            class_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
+
         html = render_html(t('menu.masterdata'), f"""
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
         <div class='card'>
@@ -1362,7 +1603,13 @@ def app(environ, start_response):
           <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
-        <div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>{''.join([f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td></tr>" for c in classes]) or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'>
+          <div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap'>
+            <h4 style='margin:0'>{t('academics.class_list')}</h4>
+            {f"<a class='btn' href='/classes/new?lang={CURRENT_LANG}'>반 추가</a>" if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
+          </div>
+          <table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.edit')}</th></tr>{class_rows}</table>
+        </div>
         <div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th></tr>{rows_html(courses,['id','name','created_at'])}</table></div>
         <div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th></tr>{rows_html(levels,['id','name','course_name','created_at'])}</table></div>
         <div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{rows_html(teachers,['id','name','username'])}</table></div>
