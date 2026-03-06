@@ -72,7 +72,7 @@ I18N_TEXTS = {
         "ann.title": "공지/알림 구조", "ann.write": "공지 작성", "ann.list": "공지 목록", "ann.noti": "알림 데이터",
         "library.title": "도서 대출 관리", "library.book_add": "도서 등록", "library.loan": "대출 처리", "library.return": "반납 처리", "library.books": "도서 목록", "library.history": "대출/반납 이력",
         "field.class_id": "반ID", "field.student_id": "학생ID", "field.teacher_id": "강사ID", "field.date": "날짜", "field.status": "상태", "field.note": "메모", "field.title": "제목", "field.content": "내용", "field.type": "유형", "field.target": "대상", "field.data": "데이터", "field.writer": "작성자", "field.created_at": "생성일", "field.score": "점수",
-        "status.present": "출석", "status.late": "지각", "status.absent": "결석", "status.makeup": "보강",
+        "status.present": "출석", "status.late": "지각", "status.absent": "결석", "status.makeup": "보강", "status.cancelled": "휴강",
     },
     "en": {
         "menu.dashboard": "Dashboard", "menu.users": "Users", "menu.students": "Students", "menu.academics": "Academics",
@@ -107,7 +107,7 @@ I18N_TEXTS = {
         "ann.title": "Announcements/Notifications", "ann.write": "Write Announcement", "ann.list": "Announcement List", "ann.noti": "Notification Data",
         "library.title": "Library Loan Management", "library.book_add": "Add Book", "library.loan": "Loan Process", "library.return": "Return Process", "library.books": "Book List", "library.history": "Loan/Return History",
         "field.class_id": "Class ID", "field.student_id": "Student ID", "field.teacher_id": "Teacher ID", "field.date": "Date", "field.status": "Status", "field.note": "Note", "field.title": "Title", "field.content": "Content", "field.type": "Type", "field.target": "Target", "field.data": "Data", "field.writer": "Writer", "field.created_at": "Created At", "field.score": "Score",
-        "status.present": "Present", "status.late": "Late", "status.absent": "Absent", "status.makeup": "Makeup",
+        "status.present": "Present", "status.late": "Late", "status.absent": "Absent", "status.makeup": "Makeup", "status.cancelled": "Cancelled",
     },
     "zh": {
         "menu.dashboard": "仪表盘", "menu.users": "用户", "menu.students": "学生管理", "menu.academics": "学术结构",
@@ -142,7 +142,7 @@ I18N_TEXTS = {
         "ann.title": "公告/通知结构", "ann.write": "发布公告", "ann.list": "公告列表", "ann.noti": "通知数据",
         "library.title": "图书借阅管理", "library.book_add": "登记图书", "library.loan": "借出处理", "library.return": "归还处理", "library.books": "图书列表", "library.history": "借还记录",
         "field.class_id": "班级ID", "field.student_id": "学生ID", "field.teacher_id": "教师ID", "field.date": "日期", "field.status": "状态", "field.note": "备注", "field.title": "标题", "field.content": "内容", "field.type": "类型", "field.target": "对象", "field.data": "数据", "field.writer": "创建者", "field.created_at": "创建时间", "field.score": "分数",
-        "status.present": "出勤", "status.late": "迟到", "status.absent": "缺勤", "status.makeup": "补课",
+        "status.present": "出勤", "status.late": "迟到", "status.absent": "缺勤", "status.makeup": "补课", "status.cancelled": "停课",
     },
 }
 
@@ -163,7 +163,7 @@ I18N_TEXTS["ko"].update({
     "academics.timetable_title": "시간표 관리", "academics.timetable_desc": "주간 수업 배치와 수업별 업무 이동을 관리합니다.", "academics.filter": "필터", "academics.week_prev": "이전 주", "academics.week_current": "현재 주", "academics.week_next": "다음 주",
     "academics.day_filter": "요일", "academics.teacher_filter": "강사", "academics.classroom_filter": "교실", "academics.course_level_filter": "코스/레벨", "academics.class_filter": "반 검색", "academics.search": "검색", "academics.add_lesson": "새 수업 추가",
     "academics.timetable": "주간 타임테이블", "academics.time_slot": "시간대", "academics.teacher_room": "강사/교실", "academics.students_summary": "학생", "academics.more_students": "+더보기", "academics.view_class": "반 상세", "academics.go_attendance": "출결", "academics.go_homework": "숙제", "academics.go_exams": "성적",
-    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실"
+    "academics.lesson_detail": "수업 상세", "academics.edit_schedule": "수업 수정", "academics.schedule_form": "시간표 등록/수정", "academics.schedule_pick_class": "반 선택", "academics.schedule_pick_teacher": "강사", "academics.schedule_autofill": "선택한 반 정보를 자동으로 불러옵니다", "academics.schedule_pick_day": "요일 선택", "academics.schedule_pick_time": "시간 선택", "academics.schedule_pick_room": "교실 선택", "academics.schedule_pick_status": "상태 선택", "academics.schedule_pick_student": "학생", "academics.go_structure": "학사구조 관리로 이동", "academics.validation_class_required": "반을 먼저 선택하세요", "academics.validation_end_before_start": "종료 시간이 시작 시간보다 이를 수 없습니다", "academics.validation_conflict_class": "같은 반의 시간표가 겹칩니다", "academics.validation_conflict_teacher": "같은 강사의 시간표가 겹칩니다", "academics.validation_conflict_room": "같은 교실의 시간표가 겹칩니다", "academics.saved": "시간표가 저장되었습니다", "academics.updated": "시간표가 수정되었습니다", "academics.day_all": "전체", "academics.status": "상태", "academics.classroom": "교실"
 })
 I18N_TEXTS["en"].update({
     "common.add": "Add", "role.owner": "Owner", "role.manager": "Manager", "role.teacher": "Teacher", "role.parent": "Parent", "role.student": "Student",
@@ -182,7 +182,7 @@ I18N_TEXTS["en"].update({
     "academics.timetable_title": "Timetable Management", "academics.timetable_desc": "Manage weekly lesson placement and quick jumps to class operations.", "academics.filter": "Filters", "academics.week_prev": "Previous Week", "academics.week_current": "Current Week", "academics.week_next": "Next Week",
     "academics.day_filter": "Day", "academics.teacher_filter": "Teacher", "academics.classroom_filter": "Classroom", "academics.course_level_filter": "Course/Level", "academics.class_filter": "Class Search", "academics.search": "Search", "academics.add_lesson": "Add Lesson",
     "academics.timetable": "Weekly Timetable", "academics.time_slot": "Time Slots", "academics.teacher_room": "Teacher/Room", "academics.students_summary": "Students", "academics.more_students": "+more", "academics.view_class": "Class Detail", "academics.go_attendance": "Attendance", "academics.go_homework": "Homework", "academics.go_exams": "Scores",
-    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom"
+    "academics.lesson_detail": "Lesson Detail", "academics.edit_schedule": "Edit Lesson", "academics.schedule_form": "Schedule Create/Edit", "academics.schedule_pick_class": "Select Class", "academics.schedule_pick_teacher": "Teacher", "academics.schedule_autofill": "Class info is auto-filled from selected class", "academics.schedule_pick_day": "Select Day", "academics.schedule_pick_time": "Select Time", "academics.schedule_pick_room": "Select Classroom", "academics.schedule_pick_status": "Select Status", "academics.schedule_pick_student": "Students", "academics.go_structure": "Go to academic structure management", "academics.validation_class_required": "Please select a class first", "academics.validation_end_before_start": "End time must be after start time", "academics.validation_conflict_class": "Class schedule conflicts with existing slot", "academics.validation_conflict_teacher": "Teacher schedule conflicts with existing slot", "academics.validation_conflict_room": "Classroom schedule conflicts with existing slot", "academics.saved": "Schedule saved", "academics.updated": "Schedule updated", "academics.day_all": "All", "academics.status": "Status", "academics.classroom": "Classroom"
 })
 I18N_TEXTS["zh"].update({
     "common.add": "添加", "role.owner": "院长", "role.manager": "经理", "role.teacher": "教师", "role.parent": "家长", "role.student": "学生",
@@ -201,7 +201,7 @@ I18N_TEXTS["zh"].update({
     "academics.timetable_title": "课表管理", "academics.timetable_desc": "管理每周课程排布并快速跳转到班级业务。", "academics.filter": "筛选", "academics.week_prev": "上一周", "academics.week_current": "本周", "academics.week_next": "下一周",
     "academics.day_filter": "星期", "academics.teacher_filter": "教师", "academics.classroom_filter": "教室", "academics.course_level_filter": "课程/级别", "academics.class_filter": "班级搜索", "academics.search": "搜索", "academics.add_lesson": "新增课程",
     "academics.timetable": "周课表", "academics.time_slot": "时间段", "academics.teacher_room": "教师/教室", "academics.students_summary": "学生", "academics.more_students": "+更多", "academics.view_class": "班级详情", "academics.go_attendance": "考勤", "academics.go_homework": "作业", "academics.go_exams": "成绩",
-    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室"
+    "academics.lesson_detail": "课程详情", "academics.edit_schedule": "编辑课程", "academics.schedule_form": "课表新增/编辑", "academics.schedule_pick_class": "选择班级", "academics.schedule_pick_teacher": "教师", "academics.schedule_autofill": "所选班级信息将自动填充", "academics.schedule_pick_day": "选择星期", "academics.schedule_pick_time": "选择时间", "academics.schedule_pick_room": "选择教室", "academics.schedule_pick_status": "选择状态", "academics.schedule_pick_student": "学生", "academics.go_structure": "前往学术结构管理", "academics.validation_class_required": "请先选择班级", "academics.validation_end_before_start": "结束时间必须晚于开始时间", "academics.validation_conflict_class": "同一班级时间冲突", "academics.validation_conflict_teacher": "同一教师时间冲突", "academics.validation_conflict_room": "同一教室时间冲突", "academics.saved": "课表已保存", "academics.updated": "课表已更新", "academics.day_all": "全部", "academics.status": "状态", "academics.classroom": "教室"
 })
 
 def load_locale_files():
@@ -1278,6 +1278,7 @@ def app(environ, start_response):
         selected_course_level = query.get("course_level", "")
         selected_class_q = query.get("class_q", "").strip()
         selected_schedule_id = query.get("schedule_id", "")
+        selected_form_class_id = query.get("selected_form_class_id", "")
 
         flash_msg = ""
         flash_type = "success"
@@ -1296,7 +1297,7 @@ def app(environ, start_response):
                 conn.commit()
             elif typ == "schedule":
                 schedule_id = data.get("schedule_id", "").strip()
-                class_id = (data.get("class_id") or "").strip()
+                class_id = (data.get("class_id") or data.get("selected_form_class_id") or "").strip()
                 day_of_week = (data.get("day_of_week") or "").strip()
                 start_time = (data.get("start_time") or "").strip()
                 end_time = (data.get("end_time") or "").strip()
@@ -1305,7 +1306,7 @@ def app(environ, start_response):
                 note = (data.get("note") or "").strip()
 
                 if not class_id or not day_of_week or not start_time or not end_time:
-                    flash_msg = t("common.no_data")
+                    flash_msg = t("academics.validation_class_required")
                     flash_type = "error"
                 elif parse_hhmm(end_time) is not None and parse_hhmm(start_time) is not None and parse_hhmm(end_time) <= parse_hhmm(start_time):
                     flash_msg = t("academics.validation_end_before_start")
@@ -1517,21 +1518,63 @@ def app(environ, start_response):
             sel = "selected" if cl == selected_course_level else ""
             cl_options.append(f"<option value='{cl}' {sel}>{cl}</option>")
 
-        class_candidates = fetch_class_candidates(conn, selected_class_q, limit=10)
+        class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=10)
+        if selected_schedule and not selected_form_class_id:
+            selected_form_class_id = str(selected_schedule['class_id'])
+        selected_form_class = conn.execute(
+            """SELECT c.id, c.name, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
+            (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+            FROM classes c
+            LEFT JOIN courses co ON co.id=c.course_id
+            LEFT JOIN levels l ON l.id=c.level_id
+            LEFT JOIN users u ON u.id=c.teacher_id
+            WHERE c.id=?""",
+            (selected_form_class_id,),
+        ).fetchone() if selected_form_class_id else None
+
         selected_schedule_day = selected_schedule['day_of_week'] if selected_schedule else ''
         selected_schedule_status = selected_schedule['status'] if selected_schedule else 'active'
 
+        selected_room_form = (selected_schedule['classroom'] if selected_schedule else '') or ''
+        existing_rooms = sorted({(r['classroom'] or '').strip() for r in schedules if (r['classroom'] or '').strip()} | ({selected_room_form} if selected_room_form else set()))
+        room_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        for r in existing_rooms:
+            sel = "selected" if r == selected_room_form else ""
+            room_options.append(f"<option value='{r}' {sel}>{r}</option>")
+        day_select_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        for d in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]:
+            sel = "selected" if selected_schedule_day == d else ""
+            day_select_options.append(f"<option value='{d}' {sel}>{d}</option>")
+        common_time_slots = ["16:25", "17:20", "17:25", "18:20", "18:30", "19:25", "19:35", "20:30"]
+        start_time_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        end_time_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        selected_start = selected_schedule['start_time'] if selected_schedule else ''
+        selected_end = selected_schedule['end_time'] if selected_schedule else ''
+        for tm in common_time_slots:
+            s_sel = "selected" if selected_start == tm else ""
+            e_sel = "selected" if selected_end == tm else ""
+            start_time_options.append(f"<option value='{tm}' {s_sel}>{tm}</option>")
+            end_time_options.append(f"<option value='{tm}' {e_sel}>{tm}</option>")
+
+        form_class_picker = render_picker_block(
+            t("picker.class"),
+            "form_class_q",
+            query.get("form_class_q", ""),
+            "selected_form_class_id",
+            selected_form_class_id,
+            (selected_form_class['name'] if selected_form_class else ""),
+            class_candidates,
+            "/academics",
+            CURRENT_LANG,
+            {
+                "week": str(week_offset), "day": selected_day, "teacher_id": selected_teacher_id,
+                "classroom": selected_room, "course_level": selected_course_level, "class_q": selected_class_q,
+                "schedule_id": selected_schedule_id,
+            }
+        )
+
         detail_html = f"<div class='card'><h4>{t('academics.lesson_detail')}</h4><p class='empty-msg'>{t('common.no_data')}</p></div>"
-        register_forms = ""
-        if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            register_forms = f"""
-            <div class='card'>
-              <h4>{t('academics.register')}</h4>
-              <form method='post' class='filter-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
-              <form method='post' class='filter-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><button>{t('common.add')}</button></form>
-              <form method='post' class='filter-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><label>{t('academics.level_id')} <input name='level_id'></label><label>{t('field.teacher_id')} <input name='teacher_id'></label><button>{t('common.add')}</button></form>
-            </div>
-            """
+        register_forms = f"<div class='card'><a class='btn secondary' href='/academics?lang={CURRENT_LANG}'>{t('academics.go_structure')}</a></div>"
         if selected_schedule:
             stu_rows = conn.execute("SELECT name_ko FROM students WHERE current_class_id=? ORDER BY id LIMIT 20", (selected_schedule['class_id'],)).fetchall()
             stu_text = ", ".join([r['name_ko'] for r in stu_rows]) if stu_rows else "-"
@@ -1594,26 +1637,29 @@ def app(environ, start_response):
             </div>
             <div class='card' id='schedule-form'>
               <h4>{t('academics.schedule_form')}</h4>
+              {form_class_picker}
               <form method='post' class='filter-row'>
                 <input type='hidden' name='type' value='schedule'>
                 <input type='hidden' name='schedule_id' value='{selected_schedule['id'] if selected_schedule else ''}'>
-                <label>{t('academics.class_name')} <input name='class_q' value='{selected_class_q}' placeholder='class'></label>
-                <label>{t('academics.class_name')} ID <input name='class_id' value='{selected_schedule['class_id'] if selected_schedule else ''}'></label>
-                <label>{t('academics.day_of_week')} <input name='day_of_week' value='{selected_schedule_day}'></label>
-                <label>{t('academics.start_time')} <input name='start_time' value='{selected_schedule['start_time'] if selected_schedule else ''}' placeholder='16:25'></label>
-                <label>{t('academics.end_time')} <input name='end_time' value='{selected_schedule['end_time'] if selected_schedule else ''}' placeholder='17:20'></label>
-                <label>{t('academics.classroom')} <input name='classroom' value='{selected_schedule['classroom'] if selected_schedule else ''}'></label>
+                <input type='hidden' name='selected_form_class_id' value='{selected_form_class_id}'>
+                <label>{t('academics.schedule_pick_class')} <input value='{selected_form_class['name'] if selected_form_class else '-'}' readonly></label>
+                <label>{t('academics.course')} <input value='{selected_form_class['course_name'] if selected_form_class else '-'}' readonly></label>
+                <label>{t('academics.level')} <input value='{selected_form_class['level_name'] if selected_form_class else '-'}' readonly></label>
+                <label>{t('academics.schedule_pick_teacher')} <input value='{selected_form_class['teacher_name'] if selected_form_class else '-'}' readonly></label>
+                <label>{t('academics.schedule_pick_student')} <input value='{selected_form_class['student_count'] if selected_form_class else 0}' readonly></label>
+                <label>{t('academics.day_of_week')} <select name='day_of_week'>{''.join(day_select_options)}</select></label>
+                <label>{t('academics.start_time')} <select name='start_time'>{''.join(start_time_options)}</select></label>
+                <label>{t('academics.end_time')} <select name='end_time'>{''.join(end_time_options)}</select></label>
+                <label>{t('academics.classroom')} <select name='classroom'>{''.join(room_options)}</select></label>
                 <label>{t('academics.status')} <select name='status'>
                   <option value='active' {'selected' if selected_schedule_status=='active' else ''}>{status_t('active')}</option>
                   <option value='makeup' {'selected' if selected_schedule_status=='makeup' else ''}>{status_t('makeup')}</option>
-                  <option value='ended' {'selected' if selected_schedule_status=='ended' else ''}>{status_t('ended')}</option>
+                  <option value='cancelled' {'selected' if selected_schedule_status=='cancelled' else ''}>{status_t('cancelled')}</option>
                 </select></label>
                 <label>{t('field.note')} <input name='note' value='{selected_schedule['note'] if selected_schedule else ''}'></label>
                 <button>{t('common.save')}</button>
               </form>
-              <div class='muted'>
-                {''.join([f"<div><a href='/academics?lang={CURRENT_LANG}&class_q={c['name']}'>{c['name']}</a></div>" for c in class_candidates]) or t('common.no_data')}
-              </div>
+              <div class='muted'>{t('academics.schedule_autofill')}</div>
             </div>
           </div>
           <div>
