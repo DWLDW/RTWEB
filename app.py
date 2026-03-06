@@ -1,3 +1,4 @@
+import html as html_lib
 import json
 import os
 import sqlite3
@@ -328,6 +329,12 @@ def format_errors(errors):
     return "<br>".join(errors)
 
 
+def h(v):
+    if v is None:
+        return ""
+    return html_lib.escape(str(v), quote=True)
+
+
 def ensure_exists(conn, table, value, field="id", extra_where="", extra_params=()):
     if value is None or str(value).strip() == "":
         return False
@@ -470,7 +477,7 @@ def ensure_master_tables(conn):
       created_at TEXT NOT NULL
     )""")
 
- 
+
 def repair_profile_integrity(conn):
     # 학생 role 사용자 -> students 프로필 보강
     student_users = conn.execute("SELECT id, name FROM users WHERE role=?", (ROLE_STUDENT,)).fetchall()
@@ -1434,15 +1441,15 @@ def app(environ, start_response):
                 continue
             rows += f"""
             <tr>
-              <td>{st['student_no'] or '-'}</td>
-              <td><a href='/students/{st['id']}?lang={CURRENT_LANG}'>{st['name_ko'] or '-'}</a></td>
-              <td>{st['name_en'] or '-'}</td>
-              <td>{st['phone'] or '-'}</td>
-              <td>{st['guardian_name'] or '-'}</td>
-              <td>{st['guardian_phone'] or '-'}</td>
-              <td>{st['class_name'] or '-'}</td>
-              <td>{st['remaining_credits'] or 0}</td>
-              <td><span class='badge {st['status'] or ''}'>{status_t(st['status']) if st['status'] else '-'}</span></td>
+              <td>{h(st['student_no'] or '-')}</td>
+              <td><a href='/students/{st['id']}?lang={CURRENT_LANG}'>{h(st['name_ko'] or '-')}</a></td>
+              <td>{h(st['name_en'] or '-')}</td>
+              <td>{h(st['phone'] or '-')}</td>
+              <td>{h(st['guardian_name'] or '-')}</td>
+              <td>{h(st['guardian_phone'] or '-')}</td>
+              <td>{h(st['class_name'] or '-')}</td>
+              <td>{h(st['remaining_credits'] or 0)}</td>
+              <td><span class='badge {h(st['status'] or '')}'>{h(status_t(st['status']) if st['status'] else '-')}</span></td>
             </tr>
             """
         html = render_html(t('menu.students'), f"""
@@ -1450,9 +1457,9 @@ def app(environ, start_response):
           <h3>{t("students.search")}</h3>
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
-            <label>{t('field.name')} <input name='name' value='{q_name}'></label>
-            <label>{t('students.field.student_no')} <input name='student_no' value='{q_student_no}'></label>
-            <label>{t('students.field.phone')} <input name='phone' value='{q_phone}'></label>
+            <label>{t('field.name')} <input name='name' value='{h(q_name)}'></label>
+            <label>{t('students.field.student_no')} <input name='student_no' value='{h(q_student_no)}'></label>
+            <label>{t('students.field.phone')} <input name='phone' value='{h(q_phone)}'></label>
             <button>{t("common.search")}</button>
             <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>{t('common.reset')}</a>
           </form>
@@ -2407,7 +2414,20 @@ def app(environ, start_response):
             elif typ == "submission" and has_role(user, [ROLE_STUDENT]):
                 conn.execute("INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at) VALUES(?,?,?,?)", (d.get("homework_id"), user["id"], 1 if d.get("submitted") else 0, now()))
             elif typ == "feedback" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
-                conn.execute("UPDATE homework_submissions SET feedback=?, feedback_by=?, feedback_at=? WHERE id=?", (d.get("feedback"), user["id"], now(), d.get("submission_id")))
+                submission_id = d.get("submission_id")
+                can_update = False
+                if str(submission_id).isdigit():
+                    if has_role(user, [ROLE_TEACHER]):
+                        can_update = conn.execute(
+                            "SELECT hs.id FROM homework_submissions hs JOIN homework h ON h.id=hs.homework_id JOIN classes c ON c.id=h.class_id WHERE hs.id=? AND c.teacher_id=?",
+                            (submission_id, user["id"]),
+                        ).fetchone() is not None
+                    else:
+                        can_update = conn.execute("SELECT id FROM homework_submissions WHERE id=?", (submission_id,)).fetchone() is not None
+                if can_update:
+                    conn.execute("UPDATE homework_submissions SET feedback=?, feedback_by=?, feedback_at=? WHERE id=?", (d.get("feedback"), user["id"], now(), submission_id))
+                else:
+                    log_event(conn, "ERROR", path, "숙제 피드백 권한/대상 검증 실패", f"submission_id={submission_id}", user["id"])
             conn.commit()
 
         if has_role(user, [ROLE_TEACHER]):
@@ -2699,11 +2719,13 @@ def app(environ, start_response):
             elif typ == "loan":
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
-                    conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
                     student_input_id = d.get("student_id") or selected_student_id
                     student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
-                    student_user_id = student_row["user_id"] if student_row else student_input_id
-                    conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_user_id, now(), d.get("teacher_id") or selected_teacher_id or user["id"], now()))
+                    if student_row:
+                        conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
+                        conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_row["user_id"], now(), d.get("teacher_id") or selected_teacher_id or user["id"], now()))
+                    else:
+                        log_event(conn, "ERROR", path, "도서 대출 실패", f"invalid student_id={student_input_id}", user["id"])
             elif typ == "return":
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
@@ -2780,11 +2802,15 @@ def app(environ, start_response):
             status, headers, body = json_resp({"error": t('library.not_found')}, "404 Not Found")
             start_response(status, headers)
             return [body]
-        conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
         student_input_id = d.get("student_id")
         student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
-        student_user_id = student_row["user_id"] if student_row else student_input_id
-        conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_user_id, now(), user["id"], now()))
+        if not student_row:
+            conn.close()
+            status, headers, body = json_resp({"error": "student_id: 존재하지 않는 학생입니다"}, "400 Bad Request")
+            start_response(status, headers)
+            return [body]
+        conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
+        conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_row["user_id"], now(), user["id"], now()))
         conn.commit()
         conn.close()
         status, headers, body = json_resp({"message": t('library.loan_done')})
