@@ -217,35 +217,76 @@ def current_user(environ):
     ).fetchone()
     conn.close()
     return row
-def render_html(title, body, user=None, lang=None):
+def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg="", flash_type="success"):
     lang = lang or CURRENT_LANG
-    nav = ""
+    css = """
+    <style>
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; }
+      .app { display:flex; min-height:100vh; }
+      .sidebar { width:240px; background:#111827; color:#e5e7eb; padding:18px 14px; }
+      .brand { font-size:18px; font-weight:700; margin-bottom:18px; }
+      .nav-link { display:block; color:#cbd5e1; text-decoration:none; padding:8px 10px; border-radius:8px; margin-bottom:6px; }
+      .nav-link:hover { background:#1f2937; color:white; }
+      .nav-link.active { background:#2563eb; color:white; }
+      .main { flex:1; padding:18px 22px; }
+      .topbar { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+      .page-title { margin:0 0 14px 0; font-size:24px; }
+      .card { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:14px; margin-bottom:14px; }
+      .card h3, .card h4 { margin:0 0 10px 0; }
+      .filter-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+      input, select, textarea { border:1px solid #d1d5db; border-radius:8px; padding:7px 9px; }
+      button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 12px; text-decoration:none; display:inline-block; }
+      .btn.secondary { background:#6b7280; }
+      table { width:100%; border-collapse:collapse; background:white; }
+      th, td { border:1px solid #e5e7eb; padding:8px; text-align:left; vertical-align:top; }
+      th { background:#f9fafb; }
+      .badge { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#e5e7eb; }
+      .badge.active { background:#dcfce7; color:#166534; }
+      .badge.leave { background:#fef3c7; color:#92400e; }
+      .badge.ended { background:#fee2e2; color:#991b1b; }
+      .empty-msg { color:#6b7280; font-style:italic; }
+      .flash { border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+      .flash.success { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+      .flash.error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    </style>
+    """
+    layout = body
     if user:
         lang_options = "".join([
             f"<option value='{code}' {'selected' if lang == code else ''}>{label}</option>"
             for code, label in LANG_LABELS.items()
         ])
         keys = ROLE_MENU_KEYS.get(user["role"], ["dashboard"])
-        menu_links = " | ".join([f"<a href='{NAV_PATHS[k]}?lang={lang}'>{menu_t(k, lang)}</a>" for k in keys])
-        nav = f"""
-        <div style='margin-bottom:16px'>
-            {menu_t('login_as', lang)}: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
-            {menu_links} |
-            <a href='/logout'>{menu_t('logout', lang)}</a>
-            <span style='margin-left:10px'>{menu_t('lang', lang)}:</span>
-            <select onchange="const u=new URL(window.location.href);u.searchParams.set('lang', this.value);window.location=u.toString();">
-              {lang_options}
-            </select>
+        menu_links = "".join([
+            f"<a class='nav-link {'active' if current_menu==k else ''}' href='{NAV_PATHS[k]}?lang={lang}'>{menu_t(k, lang)}</a>"
+            for k in keys
+        ])
+        flash_html = f"<div class='flash {flash_type}'>{flash_msg}</div>" if flash_msg else ""
+        layout = f"""
+        <div class='app'>
+          <aside class='sidebar'>
+            <div class='brand'>ReadingTown LMS</div>
+            {menu_links}
+          </aside>
+          <main class='main'>
+            <div class='topbar'>
+              <div>{menu_t('login_as', lang)}: <strong>{user['name']}</strong> ({ROLE_LABELS.get(user['role'], user['role'])})</div>
+              <div>
+                <span>{menu_t('lang', lang)}:</span>
+                <select onchange="const u=new URL(window.location.href);u.searchParams.set('lang', this.value);window.location=u.toString();">{lang_options}</select>
+                <a class='btn secondary' href='/logout'>{menu_t('logout', lang)}</a>
+              </div>
+            </div>
+            <h2 class='page-title'>{title}</h2>
+            {flash_html}
+            {body}
+          </main>
         </div>
         """
-    return f"""
-    <html><head><meta charset='utf-8'><title>{title}</title></head>
-    <body style='font-family:Arial; max-width:1200px; margin:24px auto'>
-      <h2>{title}</h2>
-      {nav}
-      {body}
-    </body></html>
-    """.encode("utf-8")
+    else:
+        layout = f"<div style='max-width:980px;margin:24px auto'><h2 class='page-title'>{title}</h2>{body}</div>"
+    return f"<html><head><meta charset='utf-8'><title>{title}</title>{css}</head><body>{layout}</body></html>".encode("utf-8")
 def require_login(environ):
     user = current_user(environ)
     if not user:
@@ -426,7 +467,34 @@ def app(environ, start_response):
         return [body]
     # Dashboard
     if path == "/dashboard":
-        html = render_html("영어학원 LMS 대시보드", "<p>MVP 관리 화면입니다.</p>", user)
+         stats = {}
+        conn_dash = get_db()
+        stats["users"] = conn_dash.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+        stats["students"] = conn_dash.execute("SELECT COUNT(*) c FROM students").fetchone()["c"]
+        stats["classes"] = conn_dash.execute("SELECT COUNT(*) c FROM classes").fetchone()["c"]
+        stats["attendance"] = conn_dash.execute("SELECT COUNT(*) c FROM attendance").fetchone()["c"]
+        conn_dash.close()
+        body_html = f"""
+        <div class='card'>
+          <h3>운영 현황</h3>
+          <div class='filter-row'>
+            <div class='card' style='min-width:160px'><strong>사용자</strong><div>{stats['users']}</div></div>
+            <div class='card' style='min-width:160px'><strong>학생</strong><div>{stats['students']}</div></div>
+            <div class='card' style='min-width:160px'><strong>반</strong><div>{stats['classes']}</div></div>
+            <div class='card' style='min-width:160px'><strong>출결 기록</strong><div>{stats['attendance']}</div></div>
+          </div>
+        </div>
+        <div class='card'>
+          <h3>빠른 이동</h3>
+          <div class='filter-row'>
+            <a class='btn' href='/students?lang={CURRENT_LANG}'>학생관리</a>
+            <a class='btn' href='/academics?lang={CURRENT_LANG}'>학사구조</a>
+            <a class='btn' href='/attendance?lang={CURRENT_LANG}'>출결</a>
+            <a class='btn' href='/homework?lang={CURRENT_LANG}'>숙제</a>
+          </div>
+        </div>
+        """
+        html = render_html("영어학원 LMS 대시보드", body_html, user, current_menu="dashboard")
         status, headers, body = text_resp(html)
         start_response(status, headers)
         return [body]
@@ -438,6 +506,7 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
+         flash_msg = ""
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             conn.execute(
@@ -445,20 +514,40 @@ def app(environ, start_response):
                 (data.get("name"), data.get("username"), hash_pw(data.get("password", "1234")), data.get("role"), now()),
             )
             conn.commit()
+            flash_msg = "사용자가 저장되었습니다."
         users = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
-        rows = "".join([f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td>{ROLE_LABELS.get(u['role'],u['role'])}</td></tr>" for u in users])
+        rows = "".join([
+            f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td></tr>"
+            for u in users
+        ])
         form = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             form = f"""
-            <h3>사용자 추가</h3>
-            <form method='post'>
-            이름<input name='name'> 아이디<input name='username'> 비밀번호<input name='password'>
-            역할<select name='role'>
-              <option value='owner'>원장</option><option value='manager'>매니저</option><option value='teacher'>강사</option>
-              <option value='parent'>학부모</option><option value='student'>학생</option>
-            </select><button>{t("common.save")}</button></form>
+            <div class='card'>
+              <h3>사용자 추가</h3>
+              <form method='post' class='filter-row'>
+                <label>이름 <input name='name'></label>
+                <label>아이디 <input name='username'></label>
+                <label>비밀번호 <input name='password' type='password'></label>
+                <label>역할
+                <select name='role'>
+                  <option value='owner'>원장</option><option value='manager'>매니저</option><option value='teacher'>강사</option>
+                  <option value='parent'>학부모</option><option value='student'>학생</option>
+                </select></label>
+                <button>{t("common.save")}</button>
+              </form>
+            </div>
             """
-        html = render_html("학생/학부모/강사 관리(사용자 기반)", form + f"<table border='1'><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>{rows}</table>", user)
+        body_html = form + f"""
+        <div class='card'>
+          <h3>사용자 목록</h3>
+          <table>
+            <tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>
+            {rows or "<tr><td colspan='4' class='empty-msg'>데이터 없음</td></tr>"}
+          </table>
+        </div>
+        """
+        html = render_html("학생/학부모/강사 관리(사용자 기반)", body_html, user, current_menu="users", flash_msg=flash_msg)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -667,10 +756,9 @@ def app(environ, start_response):
             edit_button_html = f'<div style="margin:8px 0"><button type="button" onclick="location.hash=\'student-edit\'">{t("students.detail.edit")}</button></div>'
         body_html = f"""
         <div><a href='/students?lang={CURRENT_LANG}'>← {t("students.detail.back")}</a></div>
-        {f"<p style='color:green'>{message}</p>" if message else ''}
         <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>{edit_button_html}
         <h4>{t('students.detail.section.basic')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.student_no')}</th><td>{student['student_no'] or '-'}</td></tr>
           <tr><th>{t('students.field.name_ko')}</th><td>{student['name_ko'] or '-'}</td></tr>
           <tr><th>{t('students.field.name_en')}</th><td>{student['name_en'] or '-'}</td></tr>
@@ -685,37 +773,37 @@ def app(environ, start_response):
           <tr><th>{t('students.field.memo')}</th><td>{student['memo'] or '-'}</td></tr>
         </table>
         <h4>{t('students.detail.section.attendance')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('students.field.note')}</th></tr>
           {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
         </table>
         {section_pager('att_page', att_page, attendance_has_next)}
         <h4>{t('students.detail.section.homework')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.homework')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
           {rows_html(submission_rows, ['title', 'submitted', 'submitted_at', 'feedback'], 4)}
         </table>
         {section_pager('hw_page', hw_page, submission_has_next)}
         <h4>{t('students.detail.section.exams')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.exam_name')}</th><th>{t('students.field.score')}</th><th>{t('students.field.exam_date')}</th></tr>
           {rows_html(exam_rows, ['exam_name', 'score', 'exam_date'], 3)}
         </table>
         {section_pager('exam_page', exam_page, exam_has_next)}
         <h4>{t('students.detail.section.counseling')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.recorded_at')}</th><th>{t('students.field.memo')}</th><th>{t('students.field.special_note')}</th></tr>
           {rows_html(counseling_rows, ['recorded_at', 'memo', 'is_special_note'], 3)}
         </table>
         {section_pager('counseling_page', counseling_page, counseling_has_next)}
         <h4>{t('students.detail.section.payments')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.paid_date')}</th><th>{t('students.field.amount')}</th><th>{t('students.field.package_hours')}</th><th>{t('students.field.remaining_classes')}</th></tr>
           {rows_html(payment_rows, ['paid_date', 'amount', 'package_hours', 'remaining_classes'], 4)}
         </table>
         {section_pager('payment_page', payment_page, payment_has_next)}
         <h4>{t('students.detail.section.loans')}</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>{t('students.field.code')}</th><th>{t('students.field.title')}</th><th>{t('students.field.loaned_at')}</th><th>{t('students.field.returned_at')}</th></tr>
           {rows_html(loan_rows, ['code', 'title', 'loaned_at', 'returned_at'], 4)}
         </table>
@@ -723,7 +811,7 @@ def app(environ, start_response):
         {edit_form}
         {pw_form}
         """
-        html = render_html(t("students.detail.title"), body_html, user)
+        html = render_html(t("students.detail.title"), body_html, user, current_menu="students", flash_msg=message)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -793,25 +881,31 @@ def app(environ, start_response):
               <td>{st['guardian_phone'] or '-'}</td>
               <td>{st['class_name'] or '-'}</td>
               <td>{st['remaining_credits'] or 0}</td>
-              <td>{status_t(st['status']) if st['status'] else '-'}</td>
+              <td><span class='badge {st['status'] or ''}'>{status_t(st['status']) if st['status'] else '-'}</span></td>
             </tr>
             """
         html = render_html("학생 관리 / Student Management / 学生管理", f"""
-        <form method='get' style='margin-bottom:10px'>
-          <input type='hidden' name='lang' value='{CURRENT_LANG}'>
-          이름 <input name='name' value='{q_name}'>
-          학생번호 <input name='student_no' value='{q_student_no}'>
-          연락처 <input name='phone' value='{q_phone}'>
-          <button>{t("common.search")}</button>
-          <a href='/students?lang={CURRENT_LANG}'>초기화 / Reset / 重置</a>
-        </form>
-        <table border='1' cellpadding='6' cellspacing='0'>
-          <tr>
-            <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
-          </tr>
-          {rows or "<tr><td colspan='9'>데이터 없음 / No Data / 无数据</td></tr>"}
-        </table>
-        """, user)
+        <div class='card'>
+          <h3>검색</h3>
+          <form method='get' class='filter-row'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <label>이름 <input name='name' value='{q_name}'></label>
+            <label>학생번호 <input name='student_no' value='{q_student_no}'></label>
+            <label>연락처 <input name='phone' value='{q_phone}'></label>
+            <button>{t("common.search")}</button>
+            <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>초기화</a>
+          </form>
+        </div>
+        <div class='card'>
+          <h3>학생 목록</h3>
+          <table>
+            <tr>
+              <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
+            </tr>
+            {rows or "<tr><td colspan='9' class='empty-msg'>데이터 없음 / No Data / 无数据</td></tr>"}
+          </table>
+        </div>
+        """, user, current_menu="students")
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -926,14 +1020,17 @@ def app(environ, start_response):
         exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
         next_order = "desc" if student_order == "asc" else "asc"
         html = render_html("반 상세 / Class Detail / 班级详情", f"""
+        <div class='card'>
         <div><a href='/academics?lang={CURRENT_LANG}'>← 학사구조 목록</a></div>
         <h3>{class_row['name']}</h3>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>기본정보</th><td>반명: {class_row['name']}</td></tr>
           <tr><th>코스/레벨</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
           <tr><th>담당 강사</th><td>{class_row['teacher_name'] or '-'}</td></tr>
           <tr><th>학생 수</th><td>{len(students)}</td></tr>
         </table>
+        </div>
+        <div class='card'>
         <h4>소속 학생</h4>
         <div style='margin-bottom:8px'>
           정렬: {student_sort} ({student_order}) |
@@ -942,34 +1039,43 @@ def app(environ, start_response):
           <a href='?lang={CURRENT_LANG}&student_sort=status&student_order={next_order}'>상태 정렬</a> |
           <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=students_csv'>학생 CSV 내보내기</a>
         </div>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>학생번호</th><th>이름</th><th>연락처</th><th>상태</th></tr>
           {student_rows}
         </table>
+        </div>
+        <div class='card'>
         <h4>시간표</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>요일</th><th>시작</th><th>종료</th></tr>
           {schedule_rows}
         </table>
+        </div>
+        <div class='card'>
         <h4>최근 출결</h4>
         <div style='margin-bottom:8px'>
           <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=attendance_csv'>출결 CSV 내보내기</a>
         </div>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>날짜</th><th>학생</th><th>상태</th><th>메모</th></tr>
           {attendance_html}
         </table>
+        </div>
+        <div class='card'>
         <h4>최근 숙제</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>숙제명</th><th>마감일</th><th>제출수</th><th>총대상(등록수)</th></tr>
           {homework_html}
         </table>
+        </div>
+        <div class='card'>
         <h4>최근 시험/성적</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>시험명</th><th>시험일</th><th>평균점수</th><th>입력건수</th></tr>
           {exam_html}
         </table>
-        """, user)
+        </div>
+        """, user, current_menu="academics")
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -1048,32 +1154,42 @@ def app(environ, start_response):
                 """
         schedule_rows = rows_html(schedules, ["id", "class_name", "day_of_week", "start_time", "end_time"])
         html = render_html("코스/레벨/반/시간표 관리", f"""
+        <div class='card'>
         <h3>등록</h3>
-        <form method='post'>코스 <input name='name'><input type='hidden' name='type' value='course'><button>추가</button></form>
-        <form method='post'>레벨명 <input name='name'> 코스ID <input name='course_id'><input type='hidden' name='type' value='level'><button>추가</button></form>
-        <form method='post'>반명 <input name='name'> 코스ID <input name='course_id'> 레벨ID <input name='level_id'> 강사ID <input name='teacher_id'><input type='hidden' name='type' value='class'><button>추가</button></form>
-        <form method='post'>시간표 반ID <input name='class_id'> 요일 <input name='day_of_week'> 시작 <input name='start_time'> 종료 <input name='end_time'><input type='hidden' name='type' value='schedule'><button>추가</button></form>
+        <form method='post' class='filter-row'><label>코스 <input name='name'></label><input type='hidden' name='type' value='course'><button>추가</button></form>
+        <form method='post' class='filter-row'><label>레벨명 <input name='name'></label><label>코스ID <input name='course_id'></label><input type='hidden' name='type' value='level'><button>추가</button></form>
+        <form method='post' class='filter-row'><label>반명 <input name='name'></label><label>코스ID <input name='course_id'></label><label>레벨ID <input name='level_id'></label><label>강사ID <input name='teacher_id'></label><input type='hidden' name='type' value='class'><button>추가</button></form>
+        <form method='post' class='filter-row'><label>시간표 반ID <input name='class_id'></label><label>요일 <input name='day_of_week'></label><label>시작 <input name='start_time'></label><label>종료 <input name='end_time'></label><input type='hidden' name='type' value='schedule'><button>추가</button></form>
+        </div>
+        <div class='card'>
         <h4>코스</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>ID</th><th>코스명</th><th>생성일</th></tr>
           {course_rows}
         </table>
+        </div>
+        <div class='card'>
         <h4>레벨</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>ID</th><th>레벨명</th><th>코스</th><th>생성일</th></tr>
           {level_rows}
         </table>
+        </div>
+        <div class='card'>
         <h4>반 목록</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>반명</th><th>코스</th><th>레벨</th><th>담당 강사</th><th>학생 수</th></tr>
           {class_rows}
         </table>
+        </div>
+        <div class='card'>
         <h4>시간표</h4>
-        <table border='1' cellpadding='6' cellspacing='0'>
+        <table>
           <tr><th>ID</th><th>반</th><th>요일</th><th>시작</th><th>종료</th></tr>
           {schedule_rows}
         </table>
-        """, user)
+        </div>
+        """, user, current_menu="academics")
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
