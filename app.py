@@ -576,6 +576,52 @@ def app(environ, start_response):
             "empty_pw": "비밀번호를 입력하세요 / Enter password / 请输入密码",
         }
         message = msg_map.get(msg_key, "")
+        student_user_id = student["user_id"]
+        attendance_rows = conn.execute(
+            """SELECT a.lesson_date, a.status, a.note, c.name AS class_name
+            FROM attendance a LEFT JOIN classes c ON c.id=a.class_id
+            WHERE a.student_id=? ORDER BY a.id DESC LIMIT 10""",
+            (student_user_id,),
+        ).fetchall()
+        submission_rows = conn.execute(
+            """SELECT hs.id, h.title, hs.submitted, hs.submitted_at, hs.feedback
+            FROM homework_submissions hs LEFT JOIN homework h ON h.id=hs.homework_id
+            WHERE hs.student_id=? ORDER BY hs.id DESC LIMIT 10""",
+            (student_user_id,),
+        ).fetchall()
+        exam_rows = conn.execute(
+            """SELECT e.name AS exam_name, es.score, e.exam_date
+            FROM exam_scores es LEFT JOIN exams e ON e.id=es.exam_id
+            WHERE es.student_id=? ORDER BY es.id DESC LIMIT 10""",
+            (student_user_id,),
+        ).fetchall()
+        counseling_rows = conn.execute(
+            """SELECT recorded_at, memo, is_special_note FROM (
+            SELECT c.created_at AS recorded_at, c.memo, c.is_special_note
+            FROM counseling c WHERE c.student_id=? ORDER BY c.id DESC LIMIT 10
+            )""",
+            (student_user_id,),
+        ).fetchall()
+        payment_rows = conn.execute(
+            """SELECT paid_date, amount, package_hours, remaining_classes
+            FROM payments WHERE student_id=? ORDER BY id DESC LIMIT 10""",
+            (student_user_id,),
+        ).fetchall()
+        loan_rows = conn.execute(
+            """SELECT b.code, b.title, bl.loaned_at, bl.returned_at
+            FROM book_loans bl LEFT JOIN books b ON b.id=bl.book_id
+            WHERE bl.student_id=? ORDER BY bl.id DESC LIMIT 10""",
+            (student_user_id,),
+        ).fetchall()
+
+        def rows_html(rows, cols, empty_colspan):
+            if not rows:
+                return f"<tr><td colspan='{empty_colspan}'>데이터 없음</td></tr>"
+            out = ""
+            for r in rows:
+                out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
+            return out
+
         class_opts = ["<option value=''>-</option>"]
         for c in classes:
             selected = "selected" if student["current_class_id"] == c["id"] else ""
@@ -585,7 +631,7 @@ def app(environ, start_response):
         pw_form = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             edit_form = f"""
-            <form method='post' style='margin-bottom:16px'>
+            <form id='student-edit' method='post' style='margin-bottom:16px'>
               <input type='hidden' name='action' value='save'>
               <h4>수정 / Edit / 编辑</h4>
               학생번호 <input name='student_no' value='{student['student_no'] or ''}'>
@@ -617,10 +663,14 @@ def app(environ, start_response):
             </form>
             """
 
+        edit_button_html = ""
+        if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            edit_button_html = '<div style="margin:8px 0"><button type="button" onclick="location.hash=\'student-edit\'">수정</button></div>'
+
         body_html = f"""
         <div><a href='/students?lang={CURRENT_LANG}'>← 학생 목록 / Student List / 学生列表</a></div>
         {f"<p style='color:green'>{message}</p>" if message else ''}
-        <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>
+        <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>{edit_button_html}
         <table border='1' cellpadding='6'>
           <tr><th>기본정보 / Basic / 基本信息</th><td>한글이름: {student['name_ko'] or '-'} / 영문이름: {student['name_en'] or '-'} / 연락처: {student['phone'] or '-'}</td></tr>
           <tr><th>보호자정보 / Guardian / 监护人</th><td>{student['guardian_name'] or '-'} ({student['guardian_phone'] or '-'})</td></tr>
@@ -630,6 +680,43 @@ def app(environ, start_response):
           <tr><th>입/휴학 / Enrollment-Leave / 入学休学</th><td>입학일: {student['enrolled_at'] or '-'} / 휴학: {student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
           <tr><th>메모 / Memo / 备注</th><td>{student['memo'] or '-'}</td></tr>
         </table>
+
+        <h4>출결 (최근)</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>날짜</th><th>반</th><th>상태</th><th>메모</th></tr>
+          {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
+        </table>
+
+        <h4>숙제 (최근 제출)</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>숙제</th><th>제출여부</th><th>제출일</th><th>피드백</th></tr>
+          {rows_html(submission_rows, ['title', 'submitted', 'submitted_at', 'feedback'], 4)}
+        </table>
+
+        <h4>시험 (점수 목록)</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>시험명</th><th>점수</th><th>시험일</th></tr>
+          {rows_html(exam_rows, ['exam_name', 'score', 'exam_date'], 3)}
+        </table>
+
+        <h4>상담 기록</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>기록일</th><th>메모</th><th>특이사항</th></tr>
+          {rows_html(counseling_rows, ['recorded_at', 'memo', 'is_special_note'], 3)}
+        </table>
+
+        <h4>수납 기록</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>결제일</th><th>금액</th><th>패키지시간</th><th>잔여수업수</th></tr>
+          {rows_html(payment_rows, ['paid_date', 'amount', 'package_hours', 'remaining_classes'], 4)}
+        </table>
+
+        <h4>도서 대출 기록</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>코드</th><th>제목</th><th>대출일</th><th>반납일</th></tr>
+          {rows_html(loan_rows, ['code', 'title', 'loaned_at', 'returned_at'], 4)}
+        </table>
+
         {edit_form}
         {pw_form}
         """
