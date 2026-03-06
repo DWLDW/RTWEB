@@ -47,6 +47,9 @@ I18N_TEXTS = {
         "common.no_data": "데이터 없음", "common.selected": "선택됨", "common.forbidden": "접근 권한이 없습니다",
         "common.yes": "예", "common.no": "아니오", "common.prev": "이전", "common.next": "다음",
         "login.title": "LMS 로그인", "login.username": "아이디", "login.password": "비밀번호", "login.failed": "로그인 실패",
+        "dash.title": "영어학원 LMS 대시보드", "dash.stats": "운영 현황", "dash.quick": "빠른 이동", "dash.users": "사용자", "dash.students": "학생", "dash.classes": "반", "dash.attendance": "출결 기록",
+        "users.page_title": "학생/학부모/강사 관리(사용자 기반)", "users.add": "사용자 추가", "users.list": "사용자 목록", "users.saved": "사용자가 저장되었습니다.",
+        "students.search": "검색", "students.list": "학생 목록", "common.reset": "초기화",
         "students.detail.title": "학생 상세", "students.detail.back": "학생 목록", "students.detail.edit": "수정",
         "students.detail.section.basic": "기본정보", "students.detail.section.attendance": "최근 출결", "students.detail.section.homework": "최근 숙제 제출/피드백",
         "students.detail.section.exams": "최근 시험/성적", "students.detail.section.counseling": "최근 상담 기록", "students.detail.section.payments": "최근 수납 기록", "students.detail.section.loans": "최근 도서 대출 기록",
@@ -69,6 +72,9 @@ I18N_TEXTS = {
         "common.no_data": "No Data", "common.selected": "Selected", "common.forbidden": "Forbidden",
         "common.yes": "Yes", "common.no": "No", "common.prev": "Prev", "common.next": "Next",
         "login.title": "LMS Login", "login.username": "Username", "login.password": "Password", "login.failed": "Login failed",
+        "dash.title": "ReadingTown LMS Dashboard", "dash.stats": "Operations Overview", "dash.quick": "Quick Links", "dash.users": "Users", "dash.students": "Students", "dash.classes": "Classes", "dash.attendance": "Attendance Records",
+        "users.page_title": "User Management", "users.add": "Add User", "users.list": "User List", "users.saved": "User saved.",
+        "students.search": "Search", "students.list": "Student List", "common.reset": "Reset",
         "students.detail.title": "Student Detail", "students.detail.back": "Student List", "students.detail.edit": "Edit",
         "students.detail.section.basic": "Basic Info", "students.detail.section.attendance": "Recent Attendance", "students.detail.section.homework": "Recent Homework Submissions/Feedback",
         "students.detail.section.exams": "Recent Exams/Scores", "students.detail.section.counseling": "Recent Counseling Records", "students.detail.section.payments": "Recent Payments", "students.detail.section.loans": "Recent Book Loans",
@@ -91,6 +97,9 @@ I18N_TEXTS = {
         "common.no_data": "无数据", "common.selected": "已选择", "common.forbidden": "无权限",
         "common.yes": "是", "common.no": "否", "common.prev": "上一页", "common.next": "下一页",
         "login.title": "LMS 登录", "login.username": "账号", "login.password": "密码", "login.failed": "登录失败",
+        "dash.title": "ReadingTown LMS 仪表盘", "dash.stats": "运营概况", "dash.quick": "快捷入口", "dash.users": "用户", "dash.students": "学生", "dash.classes": "班级", "dash.attendance": "考勤记录",
+        "users.page_title": "用户管理", "users.add": "新增用户", "users.list": "用户列表", "users.saved": "用户已保存。",
+        "students.search": "搜索", "students.list": "学生列表", "common.reset": "重置",
         "students.detail.title": "学生详情", "students.detail.back": "学生列表", "students.detail.edit": "编辑",
         "students.detail.section.basic": "基本信息", "students.detail.section.attendance": "最近考勤", "students.detail.section.homework": "最近作业提交/反馈",
         "students.detail.section.exams": "最近考试/成绩", "students.detail.section.counseling": "最近咨询记录", "students.detail.section.payments": "最近缴费记录", "students.detail.section.loans": "最近图书借阅记录",
@@ -476,25 +485,25 @@ def app(environ, start_response):
         conn_dash.close()
         body_html = f"""
         <div class='card'>
-          <h3>운영 현황</h3>
+          <h3>{t("dash.stats")}</h3>
           <div class='filter-row'>
-            <div class='card' style='min-width:160px'><strong>사용자</strong><div>{stats['users']}</div></div>
-            <div class='card' style='min-width:160px'><strong>학생</strong><div>{stats['students']}</div></div>
-            <div class='card' style='min-width:160px'><strong>반</strong><div>{stats['classes']}</div></div>
-            <div class='card' style='min-width:160px'><strong>출결 기록</strong><div>{stats['attendance']}</div></div>
+            <div class='card' style='min-width:160px'><strong>{t('dash.users')}</strong><div>{stats['users']}</div></div>
+            <div class='card' style='min-width:160px'><strong>{t('dash.students')}</strong><div>{stats['students']}</div></div>
+            <div class='card' style='min-width:160px'><strong>{t('dash.classes')}</strong><div>{stats['classes']}</div></div>
+            <div class='card' style='min-width:160px'><strong>{t('dash.attendance')}</strong><div>{stats['attendance']}</div></div>
           </div>
         </div>
         <div class='card'>
-          <h3>빠른 이동</h3>
+          <h3>{t("dash.quick")}</h3>
           <div class='filter-row'>
-            <a class='btn' href='/students?lang={CURRENT_LANG}'>학생관리</a>
-            <a class='btn' href='/academics?lang={CURRENT_LANG}'>학사구조</a>
-            <a class='btn' href='/attendance?lang={CURRENT_LANG}'>출결</a>
-            <a class='btn' href='/homework?lang={CURRENT_LANG}'>숙제</a>
+            <a class='btn' href='/students?lang={CURRENT_LANG}'>{menu_t('students')}</a>
+            <a class='btn' href='/academics?lang={CURRENT_LANG}'>{menu_t('academics')}</a>
+            <a class='btn' href='/attendance?lang={CURRENT_LANG}'>{menu_t('attendance')}</a>
+            <a class='btn' href='/homework?lang={CURRENT_LANG}'>{menu_t('homework')}</a>
           </div>
         </div>
         """
-        html = render_html("영어학원 LMS 대시보드", body_html, user, current_menu="dashboard")
+        html = render_html(t("dash.title"), body_html, user, current_menu="dashboard")
         status, headers, body = text_resp(html)
         start_response(status, headers)
         return [body]
@@ -514,7 +523,7 @@ def app(environ, start_response):
                 (data.get("name"), data.get("username"), hash_pw(data.get("password", "1234")), data.get("role"), now()),
             )
             conn.commit()
-            flash_msg = "사용자가 저장되었습니다."
+            flash_msg = t("users.saved")
         users = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
         rows = "".join([
             f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td></tr>"
@@ -524,7 +533,7 @@ def app(environ, start_response):
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             form = f"""
             <div class='card'>
-              <h3>사용자 추가</h3>
+              <h3>{t("users.add")}</h3>
               <form method='post' class='filter-row'>
                 <label>이름 <input name='name'></label>
                 <label>아이디 <input name='username'></label>
@@ -540,14 +549,14 @@ def app(environ, start_response):
             """
         body_html = form + f"""
         <div class='card'>
-          <h3>사용자 목록</h3>
+          <h3>{t("users.list")}</h3>
           <table>
             <tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th></tr>
             {rows or "<tr><td colspan='4' class='empty-msg'>데이터 없음</td></tr>"}
           </table>
         </div>
         """
-        html = render_html("학생/학부모/강사 관리(사용자 기반)", body_html, user, current_menu="users", flash_msg=flash_msg)
+        html = render_html(t("users.page_title"), body_html, user, current_menu="users", flash_msg=flash_msg)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
@@ -886,18 +895,18 @@ def app(environ, start_response):
             """
         html = render_html("학생 관리 / Student Management / 学生管理", f"""
         <div class='card'>
-          <h3>검색</h3>
+          <h3>{t("students.search")}</h3>
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <label>이름 <input name='name' value='{q_name}'></label>
             <label>학생번호 <input name='student_no' value='{q_student_no}'></label>
             <label>연락처 <input name='phone' value='{q_phone}'></label>
             <button>{t("common.search")}</button>
-            <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>초기화</a>
+            <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>{t('common.reset')}</a>
           </form>
         </div>
         <div class='card'>
-          <h3>학생 목록</h3>
+          <h3>{t("students.list")}</h3>
           <table>
             <tr>
               <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
