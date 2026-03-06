@@ -1129,7 +1129,6 @@ def app(environ, start_response):
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
                 LEFT JOIN users u ON u.id=c.teacher_id
-            LEFT JOIN users u2 ON u2.id=sc.teacher_id
                 WHERE c.id=? AND c.teacher_id=?""",
                 (class_id, user["id"]),
             ).fetchone()
@@ -1504,6 +1503,7 @@ def app(environ, start_response):
             FROM schedules sc
             LEFT JOIN classes c ON c.id=sc.class_id
             LEFT JOIN users u ON u.id=c.teacher_id
+            LEFT JOIN users u2 ON u2.id=sc.teacher_id
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
             WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})"""
