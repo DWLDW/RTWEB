@@ -72,8 +72,10 @@ CREATE TABLE IF NOT EXISTS schedules (
   classroom TEXT,
   status TEXT DEFAULT 'active',
   note TEXT,
+  teacher_id INTEGER,
   created_at TEXT NOT NULL,
-  FOREIGN KEY(class_id) REFERENCES classes(id)
+  FOREIGN KEY(class_id) REFERENCES classes(id),
+  FOREIGN KEY(teacher_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS classrooms (
