@@ -467,7 +467,7 @@ def app(environ, start_response):
         return [body]
     # Dashboard
     if path == "/dashboard":
-         stats = {}
+        stats = {}
         conn_dash = get_db()
         stats["users"] = conn_dash.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
         stats["students"] = conn_dash.execute("SELECT COUNT(*) c FROM students").fetchone()["c"]
