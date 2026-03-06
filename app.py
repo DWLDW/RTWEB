@@ -23,6 +23,34 @@ ROLE_LABELS = {
     ROLE_STUDENT: "학생",
 }
 
+CURRENT_LANG = "ko"
+
+LANG_LABELS = {"ko": "한국어", "en": "English", "zh": "中文"}
+
+NAV_LABELS = {
+    "dashboard": {"ko": "대시보드", "en": "Dashboard", "zh": "仪表盘"},
+    "users": {"ko": "사용자", "en": "Users", "zh": "用户"},
+    "students": {"ko": "학생관리", "en": "Students", "zh": "学生管理"},
+    "academics": {"ko": "학사구조", "en": "Academics", "zh": "学术结构"},
+    "attendance": {"ko": "출결", "en": "Attendance", "zh": "考勤"},
+    "homework": {"ko": "숙제", "en": "Homework", "zh": "作业"},
+    "exams": {"ko": "시험/성적", "en": "Exams/Scores", "zh": "考试/成绩"},
+    "counseling": {"ko": "상담/특이사항", "en": "Counseling", "zh": "咨询/备注"},
+    "payments": {"ko": "수납", "en": "Payments", "zh": "收费"},
+    "announcements": {"ko": "공지/알림", "en": "Announcements", "zh": "公告/通知"},
+    "library": {"ko": "도서대출", "en": "Library", "zh": "图书借阅"},
+    "logout": {"ko": "로그아웃", "en": "Logout", "zh": "退出登录"},
+    "login_as": {"ko": "로그인", "en": "Signed in", "zh": "当前登录"},
+    "lang": {"ko": "언어", "en": "Language", "zh": "语言"},
+}
+
+
+def t(key, lang=None):
+    lang = lang or CURRENT_LANG
+    if key in NAV_LABELS:
+        return NAV_LABELS[key].get(lang, NAV_LABELS[key]["ko"])
+    return key
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -73,6 +101,18 @@ def init_db():
     conn.close()
 
 
+def parse_query(environ):
+    return {k: v[0] for k, v in parse_qs(environ.get("QUERY_STRING", "")).items()}
+
+
+def get_lang(environ):
+    q = parse_query(environ)
+    lang = q.get("lang", "").strip().lower()
+    if lang in ("ko", "en", "zh"): 
+        return lang
+    return "ko"
+
+
 def parse_body(environ):
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -109,24 +149,33 @@ def current_user(environ):
     return row
 
 
-def render_html(title, body, user=None):
+def render_html(title, body, user=None, lang=None):
+    lang = lang or CURRENT_LANG
     nav = ""
     if user:
+        lang_options = "".join([
+            f"<option value='{code}' {'selected' if lang == code else ''}>{label}</option>"
+            for code, label in LANG_LABELS.items()
+        ])
         nav = f"""
         <div style='margin-bottom:16px'>
-            로그인: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
-            <a href='/dashboard'>대시보드</a> |
-            <a href='/users'>사용자</a> |
-            <a href='/students'>학생상세</a> |
-            <a href='/academics'>학사구조</a> |
-            <a href='/attendance'>출결</a> |
-            <a href='/homework'>숙제</a> |
-            <a href='/exams'>시험/성적</a> |
-            <a href='/counseling'>상담/특이사항</a> |
-            <a href='/payments'>수납</a> |
-            <a href='/announcements'>공지/알림</a> |
-            <a href='/library'>도서대출</a> |
-            <a href='/logout'>로그아웃</a>
+            {t('login_as', lang)}: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
+            <a href='/dashboard?lang={lang}'>{t('dashboard', lang)}</a> |
+            <a href='/users?lang={lang}'>{t('users', lang)}</a> |
+            <a href='/students?lang={lang}'>{t('students', lang)}</a> |
+            <a href='/academics?lang={lang}'>{t('academics', lang)}</a> |
+            <a href='/attendance?lang={lang}'>{t('attendance', lang)}</a> |
+            <a href='/homework?lang={lang}'>{t('homework', lang)}</a> |
+            <a href='/exams?lang={lang}'>{t('exams', lang)}</a> |
+            <a href='/counseling?lang={lang}'>{t('counseling', lang)}</a> |
+            <a href='/payments?lang={lang}'>{t('payments', lang)}</a> |
+            <a href='/announcements?lang={lang}'>{t('announcements', lang)}</a> |
+            <a href='/library?lang={lang}'>{t('library', lang)}</a> |
+            <a href='/logout'>{t('logout', lang)}</a>
+            <span style='margin-left:10px'>{t('lang', lang)}:</span>
+            <select onchange="const u=new URL(window.location.href);u.searchParams.set('lang', this.value);window.location=u.toString();">
+              {lang_options}
+            </select>
         </div>
         """
     return f"""
@@ -163,8 +212,11 @@ def text_resp(text, status="200 OK"):
 
 
 def app(environ, start_response):
+    global CURRENT_LANG
+    CURRENT_LANG = get_lang(environ)
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
+    query = parse_query(environ)
 
     # 인증 API
     if path == "/api/auth/login" and method == "POST":
@@ -276,6 +328,136 @@ def app(environ, start_response):
         start_response(status, headers)
         return [body]
 
+    if path.startswith("/students/"):
+        student_id = path.split("/")[-1]
+        if not student_id.isdigit():
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Not Found".encode("utf-8")]
+
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            d = parse_body(environ)
+            action = d.get("action")
+            if action == "save":
+                conn.execute(
+                    """UPDATE students SET
+                    student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
+                    current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                    WHERE id=?""",
+                    (
+                        d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
+                        d.get("current_class_id") or None, d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"),
+                        d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_id,
+                    ),
+                )
+                conn.commit()
+                status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=saved")
+                conn.close()
+                start_response(status, headers)
+                return [body]
+            if action == "password":
+                new_password = d.get("new_password", "").strip()
+                student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_id,)).fetchone()
+                if not student_row or not student_row["user_id"]:
+                    status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=no_user")
+                    conn.close()
+                    start_response(status, headers)
+                    return [body]
+                if not new_password:
+                    status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=empty_pw")
+                    conn.close()
+                    start_response(status, headers)
+                    return [body]
+                conn.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_pw(new_password), student_row["user_id"]))
+                conn.commit()
+                status, headers, body = redirect(f"/students/{student_id}?lang={CURRENT_LANG}&msg=pw_saved")
+                conn.close()
+                start_response(status, headers)
+                return [body]
+
+        student = conn.execute(
+            """SELECT s.*, u.username, c.name AS class_name FROM students s
+            LEFT JOIN users u ON u.id=s.user_id
+            LEFT JOIN classes c ON c.id=s.current_class_id
+            WHERE s.id=?""",
+            (student_id,),
+        ).fetchone()
+        classes = conn.execute("SELECT id, name FROM classes ORDER BY id DESC").fetchall()
+        if not student:
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Student Not Found".encode("utf-8")]
+        msg_key = query.get("msg", "")
+        msg_map = {
+            "saved": "저장되었습니다 / Saved / 已保存",
+            "pw_saved": "비밀번호가 변경되었습니다 / Password updated / 密码已更新",
+            "no_user": "연결된 계정이 없습니다 / No linked user / 未关联用户账号",
+            "empty_pw": "비밀번호를 입력하세요 / Enter password / 请输入密码",
+        }
+        message = msg_map.get(msg_key, "")
+        class_opts = ["<option value=''>-</option>"]
+        for c in classes:
+            selected = "selected" if student["current_class_id"] == c["id"] else ""
+            class_opts.append(f"<option value='{c['id']}' {selected}>{c['name']}</option>")
+        class_options = "".join(class_opts)
+        edit_form = ""
+        pw_form = ""
+        if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            edit_form = f"""
+            <form method='post' style='margin-bottom:16px'>
+              <input type='hidden' name='action' value='save'>
+              <h4>수정 / Edit / 编辑</h4>
+              학생번호 <input name='student_no' value='{student['student_no'] or ''}'>
+              한글이름 <input name='name_ko' value='{student['name_ko'] or ''}'>
+              영문이름 <input name='name_en' value='{student['name_en'] or ''}'><br>
+              연락처 <input name='phone' value='{student['phone'] or ''}'>
+              보호자명 <input name='guardian_name' value='{student['guardian_name'] or ''}'>
+              보호자연락처 <input name='guardian_phone' value='{student['guardian_phone'] or ''}'><br>
+              현재 반 <select name='current_class_id'>{class_options}</select>
+              남은 크레딧 <input name='remaining_credits' value='{student['remaining_credits'] or 0}'>
+              상태 <select name='status'>
+                <option value='active' {'selected' if student['status']=='active' else ''}>정상/Active/正常</option>
+                <option value='leave' {'selected' if student['status']=='leave' else ''}>휴학/Leave/休学</option>
+                <option value='ended' {'selected' if student['status']=='ended' else ''}>종료/Ended/结束</option>
+              </select><br>
+              입학일 <input name='enrolled_at' value='{student['enrolled_at'] or ''}'>
+              휴학시작 <input name='leave_start_date' value='{student['leave_start_date'] or ''}'>
+              휴학종료 <input name='leave_end_date' value='{student['leave_end_date'] or ''}'><br>
+              메모 <input name='memo' style='width:500px' value='{student['memo'] or ''}'><br>
+              <button>저장 / Save / 保存</button>
+            </form>
+            """
+            pw_form = """
+            <form method='post'>
+              <input type='hidden' name='action' value='password'>
+              <h4>학생 계정 비밀번호 변경 / Password Reset / 重置密码</h4>
+              새 비밀번호 <input name='new_password' type='password'>
+              <button>변경 / Update / 更新</button>
+            </form>
+            """
+
+        body_html = f"""
+        <div><a href='/students?lang={CURRENT_LANG}'>← 학생 목록 / Student List / 学生列表</a></div>
+        {f"<p style='color:green'>{message}</p>" if message else ''}
+        <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>
+        <table border='1' cellpadding='6'>
+          <tr><th>기본정보 / Basic / 基本信息</th><td>한글이름: {student['name_ko'] or '-'} / 영문이름: {student['name_en'] or '-'} / 연락처: {student['phone'] or '-'}</td></tr>
+          <tr><th>보호자정보 / Guardian / 监护人</th><td>{student['guardian_name'] or '-'} ({student['guardian_phone'] or '-'})</td></tr>
+          <tr><th>현재반 / Class / 当前班级</th><td>{student['class_name'] or '-'}</td></tr>
+          <tr><th>남은크레딧 / Credits / 剩余学分</th><td>{student['remaining_credits'] or 0}</td></tr>
+          <tr><th>상태 / Status / 状态</th><td>{student['status'] or '-'}</td></tr>
+          <tr><th>입/휴학 / Enrollment-Leave / 入学休学</th><td>입학일: {student['enrolled_at'] or '-'} / 휴학: {student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
+          <tr><th>메모 / Memo / 备注</th><td>{student['memo'] or '-'}</td></tr>
+        </table>
+        {edit_form}
+        {pw_form}
+        """
+        html = render_html("학생 상세 / Student Detail / 学生详情", body_html, user)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
     if path == "/students":
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
@@ -289,7 +471,7 @@ def app(environ, start_response):
                     WHERE user_id=?""",
                     (
                         d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                        d.get("current_class_id"), d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
+                        d.get("current_class_id") or None, d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
                     ),
                 )
             else:
@@ -300,28 +482,67 @@ def app(environ, start_response):
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         student_user_id, d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                        d.get("current_class_id"), d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
+                        d.get("current_class_id") or None, d.get("remaining_credits") or 0, d.get("status") or "active", d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
                     ),
                 )
             conn.commit()
 
+        where = []
+        params = []
+        q_name = query.get("name", "").strip()
+        q_student_no = query.get("student_no", "").strip()
+        q_phone = query.get("phone", "").strip()
+        if q_name:
+            where.append("(s.name_ko LIKE ? OR s.name_en LIKE ?)")
+            params += [f"%{q_name}%", f"%{q_name}%"]
+        if q_student_no:
+            where.append("s.student_no LIKE ?")
+            params.append(f"%{q_student_no}%")
+        if q_phone:
+            where.append("s.phone LIKE ?")
+            params.append(f"%{q_phone}%")
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
         students = conn.execute(
-            """SELECT s.*, u.username FROM students s
-            JOIN users u ON u.id=s.user_id
-            ORDER BY s.id DESC"""
+            f"""SELECT s.*, c.name AS class_name
+            FROM students s
+            LEFT JOIN classes c ON c.id=s.current_class_id
+            {where_sql}
+            ORDER BY s.id DESC""",
+            params,
         ).fetchall()
-        student_users = conn.execute("SELECT id, name, username FROM users WHERE role='student' ORDER BY id DESC").fetchall()
-        html = render_html("학생 상세 정보(운영형 필드)", f"""
-        <form method='post'>
-          학생 사용자ID <input name='user_id'> 학생번호 <input name='student_no'> 한글이름 <input name='name_ko'> 영문이름 <input name='name_en'><br>
-          연락처 <input name='phone'> 보호자명 <input name='guardian_name'> 보호자 연락처 <input name='guardian_phone'><br>
-          현재반ID <input name='current_class_id'> 남은크레딧 <input name='remaining_credits'> 상태
-          <select name='status'><option value='active'>정상</option><option value='leave'>휴학</option><option value='ended'>종료</option></select><br>
-          입학일 <input name='enrolled_at' placeholder='2026-03-01'> 휴학시작 <input name='leave_start_date'> 휴학종료 <input name='leave_end_date'><br>
-          메모 <input name='memo' style='width:400px'> <button>저장/수정</button>
+
+        rows = ""
+        for st in students:
+            rows += f"""
+            <tr>
+              <td>{st['student_no'] or '-'}</td>
+              <td><a href='/students/{st['id']}?lang={CURRENT_LANG}'>{st['name_ko'] or '-'}</a></td>
+              <td>{st['name_en'] or '-'}</td>
+              <td>{st['phone'] or '-'}</td>
+              <td>{st['guardian_name'] or '-'}</td>
+              <td>{st['guardian_phone'] or '-'}</td>
+              <td>{st['class_name'] or '-'}</td>
+              <td>{st['remaining_credits'] or 0}</td>
+              <td>{st['status'] or '-'}</td>
+            </tr>
+            """
+
+        html = render_html("학생 관리 / Student Management / 学生管理", f"""
+        <form method='get' style='margin-bottom:10px'>
+          <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+          이름 <input name='name' value='{q_name}'>
+          학생번호 <input name='student_no' value='{q_student_no}'>
+          연락처 <input name='phone' value='{q_phone}'>
+          <button>검색 / Search / 搜索</button>
+          <a href='/students?lang={CURRENT_LANG}'>초기화 / Reset / 重置</a>
         </form>
-        <h4>학생 사용자 목록</h4><pre>{[dict(r) for r in student_users]}</pre>
-        <h4>학생 상세</h4><pre>{[dict(r) for r in students]}</pre>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr>
+            <th>학생번호</th><th>한글이름</th><th>영문이름</th><th>연락처</th><th>보호자명</th><th>보호자 연락처</th><th>현재 반</th><th>남은 크레딧</th><th>상태</th>
+          </tr>
+          {rows or "<tr><td colspan='9'>데이터 없음 / No Data / 无数据</td></tr>"}
+        </table>
         """, user)
         status, headers, body = text_resp(html)
         conn.close()

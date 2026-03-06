@@ -135,3 +135,9 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - DB 마이그레이션 SQL:
   - `migrations/001_init.sql`
   - `migrations/002_add_students_table.sql`
+
+
+## 7) 다국어 메뉴 (한국어/English/中文)
+
+- 로그인 후 상단 네비게이션의 언어 드롭다운에서 **한국어 / English / 中文** 전환이 가능합니다.
+- 현재 버전은 메뉴/학생관리 화면 중심으로 3개 언어 라벨을 제공합니다.
