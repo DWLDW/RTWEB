@@ -285,6 +285,67 @@ I18N_TEXTS["zh"].update({
     "academics.chinese_teacher": "中文教师"
 })
 
+I18N_TEXTS["en"].update({
+    "attendance.absence_charge_type": "Absence Charge Type",
+    "attendance.charge.deduct": "Deduct Credit",
+    "attendance.charge.no_deduct": "No Credit Deduction",
+    "attendance.requires_makeup": "Requires Makeup",
+    "attendance.makeup_completed": "Makeup Completed",
+    "attendance.students_needing_makeup": "Students Needing Makeup",
+    "attendance.credit_impact": "Credit Impact",
+    "attendance.correction": "Attendance Correction",
+    "attendance.filter.date_from": "Date From",
+    "attendance.filter.date_to": "Date To",
+    "attendance.filter.deductible": "Deductible Absence",
+    "attendance.export_csv": "Export CSV",
+    "attendance.updated": "Attendance updated",
+    "attendance.makeup_marked": "Makeup marked as completed",
+    "attendance.validation.charge_required": "Please choose absence charge type for absent students",
+    "attendance.validation.charge_invalid": "Invalid absence charge type",
+    "attendance.validation.bool_invalid": "Invalid boolean option",
+    "attendance.list_desc": "Use filters below to manage attendance and makeup follow-ups."
+})
+I18N_TEXTS["ko"].update({
+    "attendance.absence_charge_type": "결석 차감 유형",
+    "attendance.charge.deduct": "수업 차감",
+    "attendance.charge.no_deduct": "차감 없음",
+    "attendance.requires_makeup": "보강 필요",
+    "attendance.makeup_completed": "보강 완료",
+    "attendance.students_needing_makeup": "보강 필요 학생",
+    "attendance.credit_impact": "크레딧 반영",
+    "attendance.correction": "출결 정정",
+    "attendance.filter.date_from": "시작일",
+    "attendance.filter.date_to": "종료일",
+    "attendance.filter.deductible": "차감 결석",
+    "attendance.export_csv": "CSV 내보내기",
+    "attendance.updated": "출결이 수정되었습니다",
+    "attendance.makeup_marked": "보강 완료로 처리되었습니다",
+    "attendance.validation.charge_required": "결석 학생은 차감 유형을 선택해야 합니다",
+    "attendance.validation.charge_invalid": "잘못된 결석 차감 유형입니다",
+    "attendance.validation.bool_invalid": "잘못된 예/아니오 값입니다",
+    "attendance.list_desc": "아래 필터로 출결 및 보강 대상 상태를 관리하세요."
+})
+I18N_TEXTS["zh"].update({
+    "attendance.absence_charge_type": "缺勤扣课类型",
+    "attendance.charge.deduct": "扣课",
+    "attendance.charge.no_deduct": "不扣课",
+    "attendance.requires_makeup": "需要补课",
+    "attendance.makeup_completed": "补课完成",
+    "attendance.students_needing_makeup": "需补课学生",
+    "attendance.credit_impact": "学分影响",
+    "attendance.correction": "考勤更正",
+    "attendance.filter.date_from": "开始日期",
+    "attendance.filter.date_to": "结束日期",
+    "attendance.filter.deductible": "可扣课缺勤",
+    "attendance.export_csv": "导出CSV",
+    "attendance.updated": "考勤已更新",
+    "attendance.makeup_marked": "已标记为补课完成",
+    "attendance.validation.charge_required": "缺勤学生必须选择扣课类型",
+    "attendance.validation.charge_invalid": "缺勤扣课类型无效",
+    "attendance.validation.bool_invalid": "布尔值无效",
+    "attendance.list_desc": "使用以下筛选管理考勤与补课跟进。"
+})
+
 
 def load_locale_files():
     locales_dir = os.path.join(BASE_DIR, "locales")
@@ -394,6 +455,48 @@ def as_float(v):
         return float(str(v).strip())
     except Exception:
         return None
+
+
+def parse_bool_flag(v):
+    vv = str(v or "").strip().lower()
+    if vv in ("1", "true", "yes", "y", "on"):
+        return 1
+    if vv in ("0", "false", "no", "n", "off", ""):
+        return 0
+    return None
+
+
+def get_class_credit_unit(conn, class_id):
+    try:
+        row = conn.execute("SELECT credit_unit FROM classes WHERE id=?", (class_id,)).fetchone()
+        unit = as_float(row["credit_unit"]) if row and "credit_unit" in row.keys() else None
+        return unit if unit is not None and unit > 0 else 1.0
+    except Exception:
+        return 1.0
+
+
+def calc_credit_delta(status_v, absence_charge_type, credit_unit):
+    if status_v in ("present", "late"):
+        return -float(credit_unit)
+    if status_v == "absent":
+        return -float(credit_unit) if absence_charge_type == "deduct" else 0.0
+    return 0.0
+
+
+def apply_credit_adjustment(conn, student_user_id, old_delta, new_delta):
+    old_v = as_float(old_delta) if old_delta is not None else 0.0
+    new_v = as_float(new_delta) if new_delta is not None else 0.0
+    if old_v is None:
+        old_v = 0.0
+    if new_v is None:
+        new_v = 0.0
+    adjustment = new_v - old_v
+    if abs(adjustment) < 1e-9:
+        return
+    conn.execute(
+        "UPDATE students SET remaining_credits=COALESCE(remaining_credits, 0) + ? WHERE user_id=?",
+        (adjustment, student_user_id),
+    )
 
 
 def add_error(errors, field, msg):
@@ -559,6 +662,20 @@ def ensure_extended_columns(conn):
         conn.execute("ALTER TABLE classes ADD COLUMN status TEXT DEFAULT 'active'")
     if "memo" not in ccols:
         conn.execute("ALTER TABLE classes ADD COLUMN memo TEXT")
+    if "credit_unit" not in ccols:
+        conn.execute("ALTER TABLE classes ADD COLUMN credit_unit REAL DEFAULT 1")
+
+    acols = {r["name"] for r in conn.execute("PRAGMA table_info(attendance)").fetchall()}
+    if "absence_charge_type" not in acols:
+        conn.execute("ALTER TABLE attendance ADD COLUMN absence_charge_type TEXT")
+    if "requires_makeup" not in acols:
+        conn.execute("ALTER TABLE attendance ADD COLUMN requires_makeup INTEGER DEFAULT 0")
+    if "makeup_completed" not in acols:
+        conn.execute("ALTER TABLE attendance ADD COLUMN makeup_completed INTEGER DEFAULT 0")
+    if "credit_delta" not in acols:
+        conn.execute("ALTER TABLE attendance ADD COLUMN credit_delta REAL DEFAULT 0")
+    if "makeup_attendance_id" not in acols:
+        conn.execute("ALTER TABLE attendance ADD COLUMN makeup_attendance_id INTEGER")
 
     scols = {r["name"] for r in conn.execute("PRAGMA table_info(schedules)").fetchall()}
     if "room_id" not in scols:
@@ -2714,7 +2831,7 @@ def app(environ, start_response):
                 lesson_date = datetime.utcnow().date().isoformat()
 
             class_info = conn.execute(
-                """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                """SELECT c.id, c.name, c.teacher_id, COALESCE(c.credit_unit, 1) AS credit_unit, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
@@ -2779,7 +2896,25 @@ def app(environ, start_response):
                     status_v = (d.get(f"status_{sid}") or "present").strip()
                     if status_v not in ("present", "late", "absent", "makeup"):
                         row_errors.append(f"{st['name_ko']}: {t('validation.status_invalid')}")
-                    row = {"student_user_id": st["user_id"], "status": status_v, "teacher_memo": (d.get(f"teacher_memo_{sid}") or "").strip()}
+                    absence_charge_type = (d.get(f"absence_charge_type_{sid}") or "").strip()
+                    requires_makeup = parse_bool_flag(d.get(f"requires_makeup_{sid}"))
+                    if requires_makeup is None:
+                        row_errors.append(f"{st['name_ko']}: {t('attendance.validation.bool_invalid')}")
+                        requires_makeup = 0
+                    if status_v == "absent":
+                        if absence_charge_type not in ("deduct", "no_deduct"):
+                            row_errors.append(f"{st['name_ko']}: {t('attendance.validation.charge_required')}")
+                    else:
+                        absence_charge_type = ""
+                        requires_makeup = 0
+                    row = {
+                        "student_user_id": st["user_id"],
+                        "status": status_v,
+                        "teacher_memo": (d.get(f"teacher_memo_{sid}") or "").strip(),
+                        "absence_charge_type": absence_charge_type,
+                        "requires_makeup": requires_makeup,
+                        "makeup_completed": 0,
+                    }
                     for sf in score_fields:
                         raw = (d.get(f"{sf}_{sid}") or "").strip()
                         if raw == "":
@@ -2796,15 +2931,17 @@ def app(environ, start_response):
                     flash_type = "error"
                     log_event(conn, "ERROR", path, "수업기록 저장 검증 실패", "\n".join(errs + row_errors), user["id"])
                 else:
+                    class_credit_unit = get_class_credit_unit(conn, class_id_for_lesson)
                     for row in parsed:
+                        row_credit_delta = calc_credit_delta(row["status"], row["absence_charge_type"], class_credit_unit)
                         if target_schedule_id is not None:
                             existing = conn.execute(
-                                "SELECT id FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
+                                "SELECT id, credit_delta FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
                                 (target_schedule_id, row["student_user_id"], post_lesson_date),
                             ).fetchone()
                         else:
                             existing = conn.execute(
-                                "SELECT id FROM attendance WHERE class_id=? AND schedule_id IS NULL AND student_id=? AND lesson_date=?",
+                                "SELECT id, credit_delta FROM attendance WHERE class_id=? AND schedule_id IS NULL AND student_id=? AND lesson_date=?",
                                 (class_id_for_lesson, row["student_user_id"], post_lesson_date),
                             ).fetchone()
 
@@ -2812,27 +2949,33 @@ def app(environ, start_response):
                             keep_id = existing["id"]
                             conn.execute(
                                 """UPDATE attendance SET status=?, note=?, created_by=?, schedule_id=?,
-                                participation_score=?, fluency_score=?, vocabulary_score=?, reading_score=?, homework_score=?, attitude_score=?, teacher_memo=?
+                                participation_score=?, fluency_score=?, vocabulary_score=?, reading_score=?, homework_score=?, attitude_score=?, teacher_memo=?,
+                                absence_charge_type=?, requires_makeup=?, makeup_completed=?, credit_delta=?
                                 WHERE id=?""",
                                 (
                                     row["status"], row["teacher_memo"] or None, user["id"], target_schedule_id,
                                     row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
+                                    (row["absence_charge_type"] or None), row["requires_makeup"], row["makeup_completed"], row_credit_delta,
                                     keep_id,
                                 ),
                             )
+                            apply_credit_adjustment(conn, row["student_user_id"], existing["credit_delta"], row_credit_delta)
                         else:
                             cur = conn.execute(
                                 """INSERT INTO attendance(
                                 class_id, student_id, lesson_date, status, note, created_by, created_at, schedule_id,
-                                participation_score, fluency_score, vocabulary_score, reading_score, homework_score, attitude_score, teacher_memo
-                                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                participation_score, fluency_score, vocabulary_score, reading_score, homework_score, attitude_score, teacher_memo,
+                                absence_charge_type, requires_makeup, makeup_completed, credit_delta
+                                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                 (
                                     class_id_for_lesson, row["student_user_id"], post_lesson_date, row["status"], row["teacher_memo"] or None, user["id"], now(),
                                     target_schedule_id,
                                     row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
+                                    (row["absence_charge_type"] or None), row["requires_makeup"], row["makeup_completed"], row_credit_delta,
                                 ),
                             )
                             keep_id = cur.lastrowid
+                            apply_credit_adjustment(conn, row["student_user_id"], 0.0, row_credit_delta)
                         if target_schedule_id is not None:
                             conn.execute("DELETE FROM attendance WHERE id<>? AND schedule_id=? AND student_id=? AND lesson_date=?", (keep_id, target_schedule_id, row["student_user_id"], post_lesson_date))
                         else:
@@ -2866,6 +3009,8 @@ def app(environ, start_response):
                     val = ex[field] if ex and field in ex.keys() else None
                     return f"<input name='{field}_{sid}' value='{h(val if val is not None else '')}' style='width:70px'>"
                 status_val = (ex["status"] if ex else "present")
+                charge_val = (ex["absence_charge_type"] if ex and 'absence_charge_type' in ex.keys() and ex["absence_charge_type"] else 'deduct')
+                requires_makeup_val = 1 if ex and 'requires_makeup' in ex.keys() and str(ex['requires_makeup']) in ('1','true','True') else 0
                 student_rows_html += f"""
                 <tr>
                   <td>{h(st['student_no'] or '-')}</td>
@@ -2875,6 +3020,14 @@ def app(environ, start_response):
                     <option value='late' {'selected' if status_val=='late' else ''}>{attendance_status_t('late')}</option>
                     <option value='absent' {'selected' if status_val=='absent' else ''}>{attendance_status_t('absent')}</option>
                     <option value='makeup' {'selected' if status_val=='makeup' else ''}>{attendance_status_t('makeup')}</option>
+                  </select></td>
+                  <td><select name='absence_charge_type_{sid}'>
+                    <option value='deduct' {'selected' if charge_val=='deduct' else ''}>{t('attendance.charge.deduct')}</option>
+                    <option value='no_deduct' {'selected' if charge_val=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option>
+                  </select></td>
+                  <td><select name='requires_makeup_{sid}'>
+                    <option value='0' {'selected' if requires_makeup_val==0 else ''}>{t('common.no')}</option>
+                    <option value='1' {'selected' if requires_makeup_val==1 else ''}>{t('common.yes')}</option>
                   </select></td>
                   <td>{score_cell('participation_score')}</td>
                   <td>{score_cell('fluency_score')}</td>
@@ -2911,10 +3064,10 @@ def app(environ, start_response):
                 {empty_student_notice}
                 <table>
                   <tr>
-                    <th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('field.status')}</th>
+                    <th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th>
                     <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>{t('lesson.score.teacher_memo')}</th>
                   </tr>
-                  {student_rows_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+                  {student_rows_html or f"<tr><td colspan='12' class='empty-msg'>{t('common.no_data')}</td></tr>"}
                 </table>
                 <div style='margin-top:10px'><button>{t('common.save')}</button></div>
               </form>
@@ -2925,98 +3078,297 @@ def app(environ, start_response):
             start_response(status, headers)
             return [body]
 
-        # 기존 수동 입력형 출결(관리/비상용)
+        # 출결 관리/정정 화면
+        selected_student_id = (query.get("selected_student_id", "") or "").strip()
+        selected_class_id = (query.get("selected_class_id", "") or "").strip()
+        status_filter = (query.get("status", "") or "").strip()
+        deductible_filter = (query.get("deductible", "") or "").strip()
+        requires_makeup_filter = (query.get("requires_makeup", "") or "").strip()
+        makeup_completed_filter = (query.get("makeup_completed", "") or "").strip()
+        date_from = (query.get("date_from", "") or "").strip()
+        date_to = (query.get("date_to", "") or "").strip()
+        makeup_needed_only = query.get("makeup_needed", "") == "1"
+
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10, show_all_when_empty=True)
-        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
-        selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
-            class_id = d.get("class_id") or selected_class_id
-            student_input_id = d.get("student_id") or selected_student_id
-            student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
-            student_id = student_row["user_id"] if student_row else student_input_id
+            typ = (d.get("type") or "manual").strip()
             errs = []
-            if not ensure_exists(conn, "classes", class_id):
-                add_error(errs, "class_id", "존재하지 않는 반입니다")
-            if not ensure_exists(conn, "users", student_id, extra_where="role='student'"):
-                add_error(errs, "student_id", "존재하지 않는 학생입니다")
-            if (d.get("status") or "") not in ("present", "late", "absent", "makeup"):
-                add_error(errs, "status", "허용되지 않는 상태값입니다")
-            if not is_valid_date(d.get("lesson_date") or ""):
-                add_error(errs, "lesson_date", "YYYY-MM-DD 형식이어야 합니다")
-            if has_role(user, [ROLE_TEACHER]):
-                class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
-                if not class_ok:
+            if typ == "update_attendance":
+                attendance_id = (d.get("attendance_id") or "").strip()
+                if not attendance_id.isdigit():
+                    add_error(errs, "attendance_id", "Invalid attendance id")
+                row = conn.execute(
+                    """SELECT a.id, a.student_id, a.credit_delta, a.class_id, c.teacher_id
+                    FROM attendance a LEFT JOIN classes c ON c.id=a.class_id WHERE a.id=?""",
+                    (attendance_id,),
+                ).fetchone() if attendance_id.isdigit() else None
+                if not row:
+                    add_error(errs, "attendance_id", "Attendance not found")
+                else:
+                    if has_role(user, [ROLE_TEACHER]) and str(row["teacher_id"] or "") != str(user["id"]):
+                        conn.close()
+                        status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+                        start_response(status, headers)
+                        return [body]
+                status_v = (d.get("status") or "").strip()
+                if status_v not in ("present", "late", "absent", "makeup"):
+                    add_error(errs, "status", t("validation.status_invalid"))
+                charge_type = (d.get("absence_charge_type") or "").strip()
+                if status_v == "absent":
+                    if charge_type not in ("deduct", "no_deduct"):
+                        add_error(errs, "absence_charge_type", t("attendance.validation.charge_required"))
+                else:
+                    charge_type = ""
+                requires_makeup = parse_bool_flag(d.get("requires_makeup"))
+                makeup_completed = parse_bool_flag(d.get("makeup_completed"))
+                if requires_makeup is None or makeup_completed is None:
+                    add_error(errs, "makeup", t("attendance.validation.bool_invalid"))
+                if status_v != "absent":
+                    requires_makeup = 0
+                if requires_makeup == 0:
+                    makeup_completed = 0
+                note_v = (d.get("note") or "").strip()
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+                else:
+                    unit = get_class_credit_unit(conn, row["class_id"])
+                    new_delta = calc_credit_delta(status_v, charge_type, unit)
+                    conn.execute(
+                        """UPDATE attendance SET status=?, note=?, absence_charge_type=?, requires_makeup=?, makeup_completed=?, credit_delta=? WHERE id=?""",
+                        (status_v, note_v or None, charge_type or None, requires_makeup, makeup_completed, new_delta, attendance_id),
+                    )
+                    apply_credit_adjustment(conn, row["student_id"], row["credit_delta"], new_delta)
+                    conn.commit()
+                    flash_msg = t("attendance.updated")
+            elif typ == "mark_makeup_completed":
+                attendance_id = (d.get("attendance_id") or "").strip()
+                row = conn.execute(
+                    """SELECT a.id, a.class_id, c.teacher_id FROM attendance a
+                    LEFT JOIN classes c ON c.id=a.class_id WHERE a.id=?""",
+                    (attendance_id,),
+                ).fetchone() if attendance_id.isdigit() else None
+                if not row:
+                    flash_msg = "Invalid attendance id"
+                    flash_type = "error"
+                elif has_role(user, [ROLE_TEACHER]) and str(row["teacher_id"] or "") != str(user["id"]):
                     conn.close()
                     status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                     start_response(status, headers)
                     return [body]
-            created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
-            if errs:
-                flash_msg = format_errors(errs)
-                flash_type = "error"
-                log_event(conn, "ERROR", path, "출결 저장 검증 실패", "\n".join(errs), user["id"])
+                else:
+                    conn.execute("UPDATE attendance SET makeup_completed=1 WHERE id=?", (attendance_id,))
+                    conn.commit()
+                    flash_msg = t("attendance.makeup_marked")
             else:
-                conn.execute("INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at) VALUES(?,?,?,?,?,?,?)",
-                             (class_id, student_id, d.get("lesson_date"), d.get("status"), d.get("note"), created_by, now()))
-                if d.get("status") == "absent":
-                    conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
-                                 ("absence", student_id, json.dumps({"student_id": student_id, "date": d.get("lesson_date")}, ensure_ascii=False), now()))
-                conn.commit()
-                flash_msg = "출결이 저장되었습니다"
+                # emergency manual entry remains supported
+                class_id = d.get("class_id") or selected_class_id
+                student_input_id = d.get("student_id") or selected_student_id
+                student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+                student_id = student_row["user_id"] if student_row else student_input_id
+                if not ensure_exists(conn, "classes", class_id):
+                    add_error(errs, "class_id", "Invalid class")
+                if not ensure_exists(conn, "users", student_id, extra_where="role='student'"):
+                    add_error(errs, "student_id", "Invalid student")
+                status_v = (d.get("status") or "").strip()
+                if status_v not in ("present", "late", "absent", "makeup"):
+                    add_error(errs, "status", t("validation.status_invalid"))
+                lesson_date_v = (d.get("lesson_date") or "").strip()
+                if not is_valid_date(lesson_date_v):
+                    add_error(errs, "lesson_date", t("validation.date"))
+                charge_type = (d.get("absence_charge_type") or "").strip()
+                if status_v == "absent" and charge_type not in ("deduct", "no_deduct"):
+                    add_error(errs, "absence_charge_type", t("attendance.validation.charge_required"))
+                if status_v != "absent":
+                    charge_type = ""
+                requires_makeup = parse_bool_flag(d.get("requires_makeup"))
+                if requires_makeup is None:
+                    add_error(errs, "requires_makeup", t("attendance.validation.bool_invalid"))
+                    requires_makeup = 0
+                if status_v != "absent":
+                    requires_makeup = 0
+                created_by = user["id"]
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+                else:
+                    unit = get_class_credit_unit(conn, class_id)
+                    credit_delta = calc_credit_delta(status_v, charge_type, unit)
+                    cur = conn.execute(
+                        """INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at,
+                        absence_charge_type, requires_makeup, makeup_completed, credit_delta)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                        (class_id, student_id, lesson_date_v, status_v, d.get("note"), created_by, now(), charge_type or None, requires_makeup, 0, credit_delta),
+                    )
+                    apply_credit_adjustment(conn, student_id, 0.0, credit_delta)
+                    if status_v == "absent":
+                        conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
+                                     ("absence", student_id, json.dumps({"student_id": student_id, "date": lesson_date_v}, ensure_ascii=False), now()))
+                    conn.commit()
+                    flash_msg = t("common.save")
 
+        where = []
+        params = []
         if has_role(user, [ROLE_TEACHER]):
-            rows = conn.execute("SELECT a.* FROM attendance a JOIN classes c ON c.id=a.class_id WHERE c.teacher_id=? ORDER BY a.id DESC LIMIT 200", (user["id"],)).fetchall()
+            where.append("COALESCE(c.foreign_teacher_id, c.teacher_id)=?")
+            params.append(user["id"])
         elif has_role(user, [ROLE_STUDENT]):
-            rows = conn.execute("SELECT * FROM attendance WHERE student_id=? ORDER BY id DESC LIMIT 200", (user["id"],)).fetchall()
+            where.append("a.student_id=?")
+            params.append(user["id"])
         elif has_role(user, [ROLE_PARENT]):
-            rows = conn.execute("""SELECT a.* FROM attendance a JOIN students s ON s.user_id=a.student_id WHERE s.guardian_name=? ORDER BY a.id DESC LIMIT 200""", (user["name"],)).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
+            where.append("s.guardian_name=?")
+            params.append(user["name"])
+        if selected_student_id and selected_student_id.isdigit():
+            stu = conn.execute("SELECT user_id FROM students WHERE id=?", (selected_student_id,)).fetchone()
+            if stu:
+                where.append("a.student_id=?")
+                params.append(stu["user_id"])
+        if selected_class_id and selected_class_id.isdigit():
+            where.append("a.class_id=?")
+            params.append(selected_class_id)
+        if status_filter in ("present", "late", "absent", "makeup"):
+            where.append("a.status=?")
+            params.append(status_filter)
+        if deductible_filter in ("deduct", "no_deduct"):
+            where.append("a.absence_charge_type=?")
+            params.append(deductible_filter)
+        if requires_makeup_filter in ("0", "1"):
+            where.append("COALESCE(a.requires_makeup,0)=?")
+            params.append(requires_makeup_filter)
+        if makeup_completed_filter in ("0", "1"):
+            where.append("COALESCE(a.makeup_completed,0)=?")
+            params.append(makeup_completed_filter)
+        if is_valid_date(date_from):
+            where.append("a.lesson_date>=?")
+            params.append(date_from)
+        if is_valid_date(date_to):
+            where.append("a.lesson_date<=?")
+            params.append(date_to)
+        if makeup_needed_only:
+            where.append("COALESCE(a.requires_makeup,0)=1 AND COALESCE(a.makeup_completed,0)=0")
+
+        base_sql = """SELECT a.*, c.name AS class_name, st.name_ko AS student_name, st.student_no,
+        COALESCE(c.credit_unit,1) AS class_credit_unit
+        FROM attendance a
+        LEFT JOIN classes c ON c.id=a.class_id
+        LEFT JOIN students st ON st.user_id=a.student_id
+        LEFT JOIN students s ON s.user_id=a.student_id
+        """
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+        rows = conn.execute(base_sql + where_sql + " ORDER BY a.lesson_date DESC, a.id DESC LIMIT 500", tuple(params)).fetchall()
+
+        if query.get("export") == "csv":
+            lines = ["id,date,student_no,student_name,class,status,absence_charge_type,requires_makeup,makeup_completed,credit_delta,note"]
+            for r in rows:
+                safe_note = str(r["note"] or "").replace('"', "'")
+                lines.append(
+                    f'"{r["id"]}","{r["lesson_date"] or ""}","{r["student_no"] or ""}","{r["student_name"] or ""}","{r["class_name"] or ""}","{r["status"] or ""}","{r["absence_charge_type"] or ""}","{r["requires_makeup"] or 0}","{r["makeup_completed"] or 0}","{r["credit_delta"] or 0}","{safe_note}"'
+                )
+            conn.close()
+            start_response("200 OK", [("Content-Type", "text/csv; charset=utf-8"), ("Content-Disposition", "attachment; filename=attendance.csv")])
+            return ["\n".join(lines).encode("utf-8")]
 
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/attendance", CURRENT_LANG,
-                                            {"selected_class_id": selected_class_id, "selected_teacher_id": selected_teacher_id, "class_q": query.get("class_q", ""), "teacher_q": query.get("teacher_q", "")})
+                                            {"selected_class_id": selected_class_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter})
         class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""),
                                           class_candidates, "/attendance", CURRENT_LANG,
-                                          {"selected_student_id": selected_student_id, "selected_teacher_id": selected_teacher_id, "student_q": query.get("student_q", ""), "teacher_q": query.get("teacher_q", "")})
-        teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
-                                            (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
-                                            teacher_candidates, "/attendance", CURRENT_LANG,
-                                            {"selected_student_id": selected_student_id, "selected_class_id": selected_class_id, "student_q": query.get("student_q", ""), "class_q": query.get("class_q", "")})
+                                          {"selected_student_id": selected_student_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter})
 
-        row_html = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['student_id']}</td><td>{r['lesson_date']}</td><td>{r['status']}</td><td>{r['note'] or '-'}</td></tr>" for r in rows])
+        row_html = ""
+        for r in rows:
+            row_html += f"""
+            <tr>
+              <td>{r['lesson_date'] or '-'}</td>
+              <td>{h(r['student_name'] or '-')}</td>
+              <td>{h(r['class_name'] or '-')}</td>
+              <td>{attendance_status_t(r['status']) if r['status'] else '-'}</td>
+              <td>{t('attendance.charge.deduct') if r['absence_charge_type']=='deduct' else (t('attendance.charge.no_deduct') if r['absence_charge_type']=='no_deduct' else '-')}</td>
+              <td>{t('common.yes') if str(r['requires_makeup']) in ('1','True','true') else t('common.no')}</td>
+              <td>{t('common.yes') if str(r['makeup_completed']) in ('1','True','true') else t('common.no')}</td>
+              <td>{r['credit_delta'] if r['credit_delta'] is not None else 0}</td>
+              <td>{h(r['note'] or '-')}</td>
+              <td>
+                <form method='post' class='filter-row'>
+                  <input type='hidden' name='type' value='update_attendance'>
+                  <input type='hidden' name='attendance_id' value='{r['id']}'>
+                  <select name='status'>
+                    <option value='present' {'selected' if r['status']=='present' else ''}>{attendance_status_t('present')}</option>
+                    <option value='late' {'selected' if r['status']=='late' else ''}>{attendance_status_t('late')}</option>
+                    <option value='absent' {'selected' if r['status']=='absent' else ''}>{attendance_status_t('absent')}</option>
+                    <option value='makeup' {'selected' if r['status']=='makeup' else ''}>{attendance_status_t('makeup')}</option>
+                  </select>
+                  <select name='absence_charge_type'>
+                    <option value='deduct' {'selected' if r['absence_charge_type']=='deduct' else ''}>{t('attendance.charge.deduct')}</option>
+                    <option value='no_deduct' {'selected' if r['absence_charge_type']=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option>
+                  </select>
+                  <select name='requires_makeup'>
+                    <option value='0' {'selected' if str(r['requires_makeup']) not in ('1','True','true') else ''}>{t('common.no')}</option>
+                    <option value='1' {'selected' if str(r['requires_makeup']) in ('1','True','true') else ''}>{t('common.yes')}</option>
+                  </select>
+                  <select name='makeup_completed'>
+                    <option value='0' {'selected' if str(r['makeup_completed']) not in ('1','True','true') else ''}>{t('common.no')}</option>
+                    <option value='1' {'selected' if str(r['makeup_completed']) in ('1','True','true') else ''}>{t('common.yes')}</option>
+                  </select>
+                  <input name='note' value='{h(r['note'] or '')}' style='min-width:120px'>
+                  <button>{t('attendance.correction')}</button>
+                </form>
+                <form method='post' style='margin-top:4px'>
+                  <input type='hidden' name='type' value='mark_makeup_completed'>
+                  <input type='hidden' name='attendance_id' value='{r['id']}'>
+                  <button class='btn secondary'>{t('attendance.makeup_completed')}</button>
+                </form>
+              </td>
+            </tr>
+            """
+
         html = render_html(t("attendance.title"), f"""
         {student_picker}
         {class_picker}
-        {teacher_picker}
+        <div class='card'>
+          <h4>{t('attendance.list')}</h4>
+          <div class='muted'>{t('attendance.list_desc')}</div>
+          <form method='get' class='filter-row' style='margin-top:8px'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
+            <input type='hidden' name='selected_class_id' value='{selected_class_id}'>
+            <label>{t('attendance.filter.date_from')} <input type='date' name='date_from' value='{date_from}'></label>
+            <label>{t('attendance.filter.date_to')} <input type='date' name='date_to' value='{date_to}'></label>
+            <label>{t('field.status')} <select name='status'><option value=''>{t('academics.day_all')}</option><option value='present' {'selected' if status_filter=='present' else ''}>{attendance_status_t('present')}</option><option value='late' {'selected' if status_filter=='late' else ''}>{attendance_status_t('late')}</option><option value='absent' {'selected' if status_filter=='absent' else ''}>{attendance_status_t('absent')}</option><option value='makeup' {'selected' if status_filter=='makeup' else ''}>{attendance_status_t('makeup')}</option></select></label>
+            <label>{t('attendance.filter.deductible')} <select name='deductible'><option value=''>{t('academics.day_all')}</option><option value='deduct' {'selected' if deductible_filter=='deduct' else ''}>{t('attendance.charge.deduct')}</option><option value='no_deduct' {'selected' if deductible_filter=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option></select></label>
+            <label>{t('attendance.requires_makeup')} <select name='requires_makeup'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if requires_makeup_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if requires_makeup_filter=='0' else ''}>{t('common.no')}</option></select></label>
+            <label>{t('attendance.makeup_completed')} <select name='makeup_completed'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if makeup_completed_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if makeup_completed_filter=='0' else ''}>{t('common.no')}</option></select></label>
+            <button>{t('common.search')}</button>
+            <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&makeup_needed=1'>{t('attendance.students_needing_makeup')}</a>
+            <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&selected_student_id={selected_student_id}&selected_class_id={selected_class_id}&status={status_filter}&date_from={date_from}&date_to={date_to}&deductible={deductible_filter}&requires_makeup={requires_makeup_filter}&makeup_completed={makeup_completed_filter}&export=csv'>{t('attendance.export_csv')}</a>
+          </form>
+          <table style='margin-top:10px'>
+            <tr><th>{t('field.date')}</th><th>{t('field.student')}</th><th>{t('students.field.class')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th><th>{t('attendance.makeup_completed')}</th><th>{t('attendance.credit_impact')}</th><th>{t('field.note')}</th><th>{t('common.edit')}</th></tr>
+            {row_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+          </table>
+        </div>
         <div class='card'>
           <h4>{t('attendance.manual_input_title')}</h4>
           <form method='post' class='filter-row'>
+            <input type='hidden' name='type' value='manual'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
-            <input type='hidden' name='teacher_id' value='{selected_teacher_id}'>
             <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
             <label>{t('field.class_id')} <input value='{selected_class_id}' readonly></label>
-            <label>{t('field.teacher_id')} <input value='{selected_teacher_id}' readonly></label>
             <label>{t('field.date')} <input name='lesson_date' placeholder='2026-03-06'></label>
             <label>{t('field.status')} <select name='status'><option value='present'>{attendance_status_t('present')}</option><option value='late'>{attendance_status_t('late')}</option><option value='absent'>{attendance_status_t('absent')}</option><option value='makeup'>{attendance_status_t('makeup')}</option></select></label>
+            <label>{t('attendance.absence_charge_type')} <select name='absence_charge_type'><option value='deduct'>{t('attendance.charge.deduct')}</option><option value='no_deduct'>{t('attendance.charge.no_deduct')}</option></select></label>
+            <label>{t('attendance.requires_makeup')} <select name='requires_makeup'><option value='0'>{t('common.no')}</option><option value='1'>{t('common.yes')}</option></select></label>
             <label>{t('field.note')} <input name='note'></label>
             <button>{t("common.save")}</button>
           </form>
-        </div>
-        <div class='card'>
-          <h4>{t("attendance.list")}</h4>
-          <table>
-            <tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.student_id")}</th><th>{t("field.date")}</th><th>{t("field.status")}</th><th>{t("field.note")}</th></tr>
-            {row_html or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-          </table>
         </div>
         """, user, current_menu="attendance", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
