@@ -369,7 +369,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
         <button>{t("common.search")}</button>
       </form>
       <div>{t("common.selected")}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
-      <ul>{cand_rows or '<li>{t("common.no_data")}</li>'}</ul>
+      <ul>{cand_rows or f'<li>{t("common.no_data")}</li>'}</ul>
     </div>
     """
 
@@ -489,7 +489,7 @@ def app(environ, start_response):
         rows = "".join([f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td>{ROLE_LABELS.get(u['role'],u['role'])}</td></tr>" for u in users])
         form = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            form = """
+            form = f"""
             <h3>사용자 추가</h3>
             <form method='post'>
             이름<input name='name'> 아이디<input name='username'> 비밀번호<input name='password'>
@@ -794,15 +794,10 @@ def app(environ, start_response):
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
-            if has_role(user, [ROLE_TEACHER]) and d.get("class_id"):
-                class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
-                if not class_ok and d.get("type") == "exam":
-                    conn.close()
-                    status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
-                    start_response(status, headers)
-                    return [body]
             class_id = d.get("class_id") or selected_class_id
-            student_id = d.get("student_id") or selected_student_id
+            student_input_id = d.get("student_id") or selected_student_id
+            student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+            student_id = student_row["user_id"] if student_row else student_input_id
             if has_role(user, [ROLE_TEACHER]):
                 class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
                 if not class_ok:
@@ -823,7 +818,7 @@ def app(environ, start_response):
         elif has_role(user, [ROLE_STUDENT]):
             rows = conn.execute("SELECT * FROM attendance WHERE student_id=? ORDER BY id DESC LIMIT 200", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_PARENT]):
-            rows = conn.execute("""SELECT a.* FROM attendance a JOIN students s ON s.id=a.student_id WHERE s.guardian_name=? ORDER BY a.id DESC LIMIT 200""", (user["name"],)).fetchall()
+            rows = conn.execute("""SELECT a.* FROM attendance a JOIN students s ON s.user_id=a.student_id WHERE s.guardian_name=? ORDER BY a.id DESC LIMIT 200""", (user["name"],)).fetchall()
         else:
             rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
         picker_keep = {
@@ -906,7 +901,7 @@ def app(environ, start_response):
             sub = conn.execute("SELECT * FROM homework_submissions WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_PARENT]):
             hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
-            sub = conn.execute("""SELECT hs.* FROM homework_submissions hs JOIN students s ON s.id=hs.student_id WHERE s.guardian_name=? ORDER BY hs.id DESC""", (user["name"],)).fetchall()
+            sub = conn.execute("""SELECT hs.* FROM homework_submissions hs JOIN students s ON s.user_id=hs.student_id WHERE s.guardian_name=? ORDER BY hs.id DESC""", (user["name"],)).fetchall()
         else:
             hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
             sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
@@ -939,6 +934,21 @@ def app(environ, start_response):
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
+            if has_role(user, [ROLE_TEACHER]):
+                if typ == "exam":
+                    class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
+                    if not class_ok:
+                        conn.close()
+                        status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
+                        start_response(status, headers)
+                        return [body]
+                elif typ == "score":
+                    exam_ok = conn.execute("""SELECT e.id FROM exams e JOIN classes c ON c.id=e.class_id WHERE e.id=? AND c.teacher_id=?""", (d.get("exam_id"), user["id"])).fetchone()
+                    if not exam_ok:
+                        conn.close()
+                        status, headers, body = forbidden_html(user, "담당 시험만 처리할 수 있습니다 / Teacher exam only / 仅限负责考试")
+                        start_response(status, headers)
+                        return [body]
             if typ == "exam":
                 conn.execute("INSERT INTO exams(class_id, name, exam_date, report, linked_book_id, created_at) VALUES(?,?,?,?,?,?)", (d.get("class_id"), d.get("name"), d.get("exam_date"), d.get("report"), d.get("linked_book_id"), now()))
             elif typ == "score":
@@ -951,8 +961,8 @@ def app(environ, start_response):
             exams = conn.execute("SELECT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id WHERE es.student_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
             scores = conn.execute("SELECT * FROM exam_scores WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_PARENT]):
-            exams = conn.execute("SELECT DISTINCT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id JOIN students s ON s.id=es.student_id WHERE s.guardian_name=? ORDER BY e.id DESC", (user["name"],)).fetchall()
-            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN students s ON s.id=es.student_id WHERE s.guardian_name=? ORDER BY es.id DESC", (user["name"],)).fetchall()
+            exams = conn.execute("SELECT DISTINCT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY e.id DESC", (user["name"],)).fetchall()
+            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY es.id DESC", (user["name"],)).fetchall()
         else:
             exams = conn.execute("SELECT * FROM exams ORDER BY id DESC").fetchall()
             scores = conn.execute("SELECT * FROM exam_scores ORDER BY id DESC").fetchall()
@@ -968,6 +978,11 @@ def app(environ, start_response):
         return [body]
 
     if path == "/counseling":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("parent_id"), d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
@@ -995,7 +1010,7 @@ def app(environ, start_response):
         if has_role(user, [ROLE_STUDENT]):
             rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_PARENT]):
-            rows = conn.execute("SELECT p.* FROM payments p JOIN students s ON s.id=p.student_id WHERE s.guardian_name=? ORDER BY p.id DESC", (user["name"],)).fetchall()
+            rows = conn.execute("SELECT p.* FROM payments p JOIN students s ON s.user_id=p.student_id WHERE s.guardian_name=? ORDER BY p.id DESC", (user["name"],)).fetchall()
         else:
             rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
         html = render_html("수납 기록", f"""
@@ -1046,7 +1061,10 @@ def app(environ, start_response):
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
                     conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
-                    conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], d.get("student_id") or selected_student_id, now(), d.get("teacher_id") or selected_teacher_id or user["id"], now()))
+                    student_input_id = d.get("student_id") or selected_student_id
+                    student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+                    student_user_id = student_row["user_id"] if student_row else student_input_id
+                    conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_user_id, now(), d.get("teacher_id") or selected_teacher_id or user["id"], now()))
             elif typ == "return":
                 book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()
                 if book:
@@ -1099,7 +1117,10 @@ def app(environ, start_response):
             start_response(status, headers)
             return [body]
         conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book["id"],))
-        conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], d.get("student_id"), now(), user["id"], now()))
+        student_input_id = d.get("student_id")
+        student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+        student_user_id = student_row["user_id"] if student_row else student_input_id
+        conn.execute("INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)", (book["id"], student_user_id, now(), user["id"], now()))
         conn.commit()
         conn.close()
         status, headers, body = json_resp({"message": "대여 완료"})
