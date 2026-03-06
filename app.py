@@ -2378,6 +2378,16 @@ def app(environ, start_response):
             ).fetchall()
 
             score_fields = ["participation_score", "fluency_score", "vocabulary_score", "reading_score", "homework_score", "attitude_score"]
+            score_labels = {
+                "participation_score": "수업참여",
+                "fluency_score": "유창성",
+                "vocabulary_score": "어휘",
+                "reading_score": "읽기",
+                "homework_score": "숙제",
+                "attitude_score": "수업태도",
+            }
+
+            target_schedule_id = schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None)
 
             if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
                 d = parse_body(environ)
@@ -2413,25 +2423,24 @@ def app(environ, start_response):
                     log_event(conn, "ERROR", path, "수업기록 저장 검증 실패", "\n".join(errs + row_errors), user["id"])
                 else:
                     for row in parsed:
-                        existing = conn.execute(
-                            "SELECT id FROM attendance WHERE class_id=? AND student_id=? AND lesson_date=?",
-                            (class_id_for_lesson, row["student_user_id"], post_lesson_date),
-                        ).fetchone()
-                        params = (
-                            row["status"],
-                            row["teacher_memo"] or None,
-                            user["id"],
-                            schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
-                            row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"],
-                        )
+                        if target_schedule_id is not None:
+                            existing = conn.execute(
+                                "SELECT id FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
+                                (target_schedule_id, row["student_user_id"], post_lesson_date),
+                            ).fetchone()
+                        else:
+                            existing = conn.execute(
+                                "SELECT id FROM attendance WHERE class_id=? AND schedule_id IS NULL AND student_id=? AND lesson_date=?",
+                                (class_id_for_lesson, row["student_user_id"], post_lesson_date),
+                            ).fetchone()
+
                         if existing:
                             conn.execute(
                                 """UPDATE attendance SET status=?, note=?, created_by=?, schedule_id=?,
                                 participation_score=?, fluency_score=?, vocabulary_score=?, reading_score=?, homework_score=?, attitude_score=?, teacher_memo=?
                                 WHERE id=?""",
                                 (
-                                    row["status"], row["teacher_memo"] or None, user["id"],
-                                    schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
+                                    row["status"], row["teacher_memo"] or None, user["id"], target_schedule_id,
                                     row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
                                     existing["id"],
                                 ),
@@ -2444,7 +2453,7 @@ def app(environ, start_response):
                                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                 (
                                     class_id_for_lesson, row["student_user_id"], post_lesson_date, row["status"], row["teacher_memo"] or None, user["id"], now(),
-                                    schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None),
+                                    target_schedule_id,
                                     row["participation_score"], row["fluency_score"], row["vocabulary_score"], row["reading_score"], row["homework_score"], row["attitude_score"], row["teacher_memo"] or None,
                                 ),
                             )
@@ -2456,10 +2465,16 @@ def app(environ, start_response):
                     lesson_date = post_lesson_date
 
             existing_map = {}
-            ex_rows = conn.execute(
-                "SELECT * FROM attendance WHERE class_id=? AND lesson_date=?",
-                (class_id_for_lesson, lesson_date),
-            ).fetchall()
+            if target_schedule_id is not None:
+                ex_rows = conn.execute(
+                    "SELECT * FROM attendance WHERE schedule_id=? AND lesson_date=?",
+                    (target_schedule_id, lesson_date),
+                ).fetchall()
+            else:
+                ex_rows = conn.execute(
+                    "SELECT * FROM attendance WHERE class_id=? AND schedule_id IS NULL AND lesson_date=?",
+                    (class_id_for_lesson, lesson_date),
+                ).fetchall()
             for r in ex_rows:
                 existing_map[str(r["student_id"])] = r
 
@@ -2495,7 +2510,12 @@ def app(environ, start_response):
             time_info = f"{h(schedule_info['day_of_week'])} {h(schedule_info['start_time'])}~{h(schedule_info['end_time'])}" if schedule_info else "-"
             room_info = h(schedule_info['classroom']) if schedule_info and schedule_info['classroom'] else "-"
 
-            html = render_html("수업기록 입력", f"""
+            empty_student_notice = "<div class='flash error'>이 반에는 등록된 학생이 없어 입력할 수 없습니다. 학생을 반에 배정한 후 다시 시도하세요.</div>" if not students_in_class else ""
+            html = render_html("출결 및 평가 입력", f"""
+            <div class='card'>
+              <h4>학생별 기록 입력</h4>
+              <div class='muted'>시간표에서 선택한 수업의 학생 전체를 한 번에 기록합니다.</div>
+            </div>
             <div class='card'>
               <h4>수업 정보</h4>
               <div><strong>반/코스/레벨/교사:</strong> {lesson_info}</div>
@@ -2508,10 +2528,11 @@ def app(environ, start_response):
               <h4>출결 및 평가 입력</h4>
               <form method='post'>
                 <input type='hidden' name='lesson_date' value='{h(lesson_date)}'>
+                {empty_student_notice}
                 <table>
                   <tr>
                     <th>학생번호</th><th>학생명</th><th>출결</th>
-                    <th>participation</th><th>fluency</th><th>vocabulary</th><th>reading</th><th>homework</th><th>attitude</th><th>teacher_memo</th>
+                    <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>교사 메모</th>
                   </tr>
                   {student_rows_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
                 </table>
@@ -2596,7 +2617,7 @@ def app(environ, start_response):
         {class_picker}
         {teacher_picker}
         <div class='card'>
-          <h4>수동 출결 입력(비상/관리자용)</h4>
+          <h4>수동 출결 입력(비상/관리자용 · 메인 운영동선 아님)</h4>
           <form method='post' class='filter-row'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
