@@ -272,6 +272,19 @@ I18N_TEXTS["zh"].update({
     "homework.status.active": "进行中",
     "homework.status.closed": "已结束"
 })
+I18N_TEXTS["en"].update({
+    "academics.foreign_teacher": "Foreign Teacher",
+    "academics.chinese_teacher": "Chinese Teacher"
+})
+I18N_TEXTS["ko"].update({
+    "academics.foreign_teacher": "외국인 강사",
+    "academics.chinese_teacher": "중국인 강사"
+})
+I18N_TEXTS["zh"].update({
+    "academics.foreign_teacher": "外教",
+    "academics.chinese_teacher": "中文教师"
+})
+
 
 def load_locale_files():
     locales_dir = os.path.join(BASE_DIR, "locales")
@@ -542,6 +555,10 @@ def ensure_extended_columns(conn):
         conn.execute("ALTER TABLE classes ADD COLUMN foreign_teacher_id INTEGER")
     if "chinese_teacher_id" not in ccols:
         conn.execute("ALTER TABLE classes ADD COLUMN chinese_teacher_id INTEGER")
+    if "status" not in ccols:
+        conn.execute("ALTER TABLE classes ADD COLUMN status TEXT DEFAULT 'active'")
+    if "memo" not in ccols:
+        conn.execute("ALTER TABLE classes ADD COLUMN memo TEXT")
 
     scols = {r["name"] for r in conn.execute("PRAGMA table_info(schedules)").fetchall()}
     if "room_id" not in scols:
@@ -1727,21 +1744,25 @@ def app(environ, start_response):
             return ["Not Found".encode("utf-8")]
         if has_role(user, [ROLE_TEACHER]):
             class_row = conn.execute(
-                """SELECT c.*, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                """SELECT c.*, co.name AS course_name, l.name AS level_name,
+                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users u ON u.id=c.teacher_id
-                WHERE c.id=? AND c.teacher_id=?""",
+                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
+                WHERE c.id=? AND COALESCE(c.foreign_teacher_id, c.teacher_id)=?""",
                 (class_id, user["id"]),
             ).fetchone()
         else:
             class_row = conn.execute(
-                """SELECT c.*, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                """SELECT c.*, co.name AS course_name, l.name AS level_name,
+                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users u ON u.id=c.teacher_id
+                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
                 WHERE c.id=?""",
                 (class_id,),
             ).fetchone()
@@ -1749,6 +1770,66 @@ def app(environ, start_response):
             conn.close()
             start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
             return ["Class Not Found".encode("utf-8")]
+
+        flash_msg = ""
+        flash_type = "success"
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+            data = parse_body(environ)
+            if data.get("type") == "class_edit":
+                errs = []
+                class_name = (data.get("name") or "").strip()
+                course_id = (data.get("course_id") or "").strip()
+                level_id = (data.get("level_id") or "").strip()
+                foreign_teacher_id = (data.get("foreign_teacher_id") or "").strip()
+                chinese_teacher_id = (data.get("chinese_teacher_id") or "").strip()
+                class_status = (data.get("status") or "active").strip() or "active"
+                class_memo = (data.get("memo") or "").strip()
+                if not class_name:
+                    add_error(errs, "class.name", "Required")
+                if not ensure_exists(conn, "courses", course_id):
+                    add_error(errs, "class.course_id", "Invalid course")
+                if level_id and not ensure_exists(conn, "levels", level_id):
+                    add_error(errs, "class.level_id", "Invalid level")
+                if foreign_teacher_id and not ensure_exists(conn, "teachers", foreign_teacher_id, field="user_id"):
+                    add_error(errs, "class.foreign_teacher_id", "Invalid foreign teacher")
+                if chinese_teacher_id and not ensure_exists(conn, "teachers", chinese_teacher_id, field="user_id"):
+                    add_error(errs, "class.chinese_teacher_id", "Invalid chinese teacher")
+                if class_status not in ("active", "inactive"):
+                    add_error(errs, "class.status", "Invalid status")
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+                else:
+                    conn.execute(
+                        """UPDATE classes
+                        SET name=?, course_id=?, level_id=?, teacher_id=?, foreign_teacher_id=?, chinese_teacher_id=?, status=?, memo=?
+                        WHERE id=?""",
+                        (
+                            class_name,
+                            course_id,
+                            level_id or None,
+                            foreign_teacher_id or None,
+                            foreign_teacher_id or None,
+                            chinese_teacher_id or None,
+                            class_status,
+                            class_memo or None,
+                            class_id,
+                        ),
+                    )
+                    conn.commit()
+                    flash_msg = t("common.save")
+                class_row = conn.execute(
+                    """SELECT c.*, co.name AS course_name, l.name AS level_name,
+                    uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name
+                    FROM classes c
+                    LEFT JOIN courses co ON co.id=c.course_id
+                    LEFT JOIN levels l ON l.id=c.level_id
+                    LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                    LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
+                    WHERE c.id=?""",
+                    (class_id,),
+                ).fetchone()
+
         student_sort = query.get("student_sort", "name_ko")
         if student_sort not in ("name_ko", "student_no", "status"):
             student_sort = "name_ko"
@@ -1835,9 +1916,26 @@ def app(environ, start_response):
         <table>
           <tr><th>{t('academics.basic_info')}</th><td>{t('academics.class_name')}: {class_row['name']}</td></tr>
           <tr><th>{t('academics.course_level')}</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
-          <tr><th>{t('academics.teacher')}</th><td>{class_row['teacher_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.foreign_teacher')}</th><td>{class_row['foreign_teacher_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.chinese_teacher')}</th><td>{class_row['chinese_teacher_name'] or '-'}</td></tr>
+          <tr><th>{t('academics.status')}</th><td>{status_t(class_row['status']) if class_row['status'] else '-'}</td></tr>
+          <tr><th>{t('field.note')}</th><td>{class_row['memo'] or '-'}</td></tr>
           <tr><th>{t('academics.student_count')}</th><td>{len(students)}</td></tr>
         </table>
+        </div>
+        <div class='card'>
+        <h4>{t('common.edit')}</h4>
+        <form method='post' class='filter-row'>
+          <input type='hidden' name='type' value='class_edit'>
+          <label>{t('academics.class_name')} <input name='name' value='{h(class_row['name'] or '')}'></label>
+          <label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{co['id']}' {'selected' if str(class_row['course_id'] or '')==str(co['id']) else ''}>{co['name']}</option>" for co in conn.execute('SELECT id, name FROM courses ORDER BY name').fetchall()])}</select></label>
+          <label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}' {'selected' if str(class_row['level_id'] or '')==str(lv['id']) else ''}>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in conn.execute('SELECT l.id, l.name, c.name AS course_name FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.name').fetchall()])}</select></label>
+          <label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{''.join([f"<option value='{tr['id']}' {'selected' if str(class_row['foreign_teacher_id'] or class_row['teacher_id'] or '')==str(tr['id']) else ''}>{tr['name']}</option>" for tr in list_teacher_profiles(conn)])}</select></label>
+          <label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{''.join([f"<option value='{tr['id']}' {'selected' if str(class_row['chinese_teacher_id'] or '')==str(tr['id']) else ''}>{tr['name']}</option>" for tr in list_teacher_profiles(conn)])}</select></label>
+          <label>{t('academics.status')} <select name='status'><option value='active' {'selected' if (class_row['status'] or 'active')=='active' else ''}>{status_t('active')}</option><option value='inactive' {'selected' if (class_row['status'] or '')=='inactive' else ''}>{t('status.ended')}</option></select></label>
+          <label>{t('field.note')} <input name='memo' value='{h(class_row['memo'] or '')}'></label>
+          <button>{t('common.save')}</button>
+        </form>
         </div>
         <div class='card'>
         <h4>{t('academics.students')}</h4>
@@ -1921,16 +2019,41 @@ def app(environ, start_response):
                     if not errs:
                         conn.execute("INSERT INTO levels(course_id, name, created_at) VALUES(?,?,?)", (data.get("course_id"), data.get("name").strip(), now()))
                 elif typ == "class":
-                    if not ensure_exists(conn, "courses", data.get("course_id")):
-                        add_error(errs, "class.course_id", "존재하지 않는 코스입니다")
-                    if data.get("level_id") and not ensure_exists(conn, "levels", data.get("level_id")):
-                        add_error(errs, "class.level_id", "존재하지 않는 레벨입니다")
-                    if data.get("teacher_id") and not ensure_exists(conn, "teachers", data.get("teacher_id"), field="user_id"):
-                        add_error(errs, "class.teacher_id", "존재하지 않는 강사입니다")
-                    if not (data.get("name") or "").strip():
-                        add_error(errs, "class.name", "필수값입니다")
+                    class_name = (data.get("name") or "").strip()
+                    course_id = (data.get("course_id") or "").strip()
+                    level_id = (data.get("level_id") or "").strip()
+                    foreign_teacher_id = (data.get("foreign_teacher_id") or data.get("teacher_id") or "").strip()
+                    chinese_teacher_id = (data.get("chinese_teacher_id") or "").strip()
+                    class_status = (data.get("status") or "active").strip() or "active"
+                    class_memo = (data.get("memo") or "").strip()
+                    if not ensure_exists(conn, "courses", course_id):
+                        add_error(errs, "class.course_id", "Invalid course")
+                    if level_id and not ensure_exists(conn, "levels", level_id):
+                        add_error(errs, "class.level_id", "Invalid level")
+                    if foreign_teacher_id and not ensure_exists(conn, "teachers", foreign_teacher_id, field="user_id"):
+                        add_error(errs, "class.foreign_teacher_id", "Invalid foreign teacher")
+                    if chinese_teacher_id and not ensure_exists(conn, "teachers", chinese_teacher_id, field="user_id"):
+                        add_error(errs, "class.chinese_teacher_id", "Invalid chinese teacher")
+                    if class_status not in ("active", "inactive"):
+                        add_error(errs, "class.status", "Invalid status")
+                    if not class_name:
+                        add_error(errs, "class.name", "Required")
                     if not errs:
-                        conn.execute("INSERT INTO classes(course_id, level_id, name, teacher_id, created_at) VALUES(?,?,?,?,?)", (data.get("course_id"), data.get("level_id") or None, data.get("name").strip(), data.get("teacher_id") or None, now()))
+                        conn.execute(
+                            """INSERT INTO classes(course_id, level_id, name, teacher_id, foreign_teacher_id, chinese_teacher_id, status, memo, created_at)
+                            VALUES(?,?,?,?,?,?,?,?,?)""",
+                            (
+                                course_id,
+                                level_id or None,
+                                class_name,
+                                foreign_teacher_id or None,
+                                foreign_teacher_id or None,
+                                chinese_teacher_id or None,
+                                class_status,
+                                class_memo or None,
+                                now(),
+                            ),
+                        )
                 elif typ == "classroom":
                     room_name = (data.get("name") or "").strip()
                     if not room_name:
@@ -1978,12 +2101,16 @@ def app(environ, start_response):
         courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
         levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
                                FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
-        classes = conn.execute("""SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
+        classes = conn.execute("""SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
+                COALESCE(c.status, 'active') AS status, COALESCE(c.memo, '') AS memo,
+                co.name AS course_name, l.name AS level_name,
+                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
                 (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users u ON u.id=c.teacher_id
+                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
                 ORDER BY c.id DESC""").fetchall()
         teachers = list_teacher_profiles(conn)
         classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
@@ -2009,7 +2136,7 @@ def app(environ, start_response):
         """
 
         class_rows_md = "".join([
-            f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['foreign_teacher_name'] or '-'}</td><td>{c['chinese_teacher_name'] or '-'}</td><td>{status_t(c['status']) if c['status'] else '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
             for c in classes
         ])
         course_rows_md = "".join([
@@ -2028,11 +2155,12 @@ def app(environ, start_response):
             f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
             for r in time_slots
         ])
+        empty8 = f"<tr><td colspan='8' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty6 = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty5 = f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty4 = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty3 = f"<tr><td colspan='3' class='empty-msg'>{t('common.no_data')}</td></tr>"
-        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md or empty6}</table></div>"
+        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.status')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md or empty8}</table></div>"
         course_cards = f"<div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows_md or empty5}</table></div>"
         teacher_rows_md = ''.join([f"<tr><td>{op_code('T', r['id'])}</td><td>{r['name']}</td><td>{r['username']}</td></tr>" for r in teachers])
         teacher_card = f"<div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{teacher_rows_md or empty3}</table></div>"
@@ -2045,8 +2173,8 @@ def app(environ, start_response):
         <div class='card'>
           <h4>{t('academics.register')}</h4>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course_id')} <input name='course_id'></label><label>{t('academics.level_id')} <input name='level_id'></label><label>{t('academics.teacher')} <select name='teacher_id'><option value=''>-</option>{teacher_options}</select></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><button>{t('common.add')}</button></form>
+          <form method='post' class='filter-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
           <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
@@ -2069,8 +2197,8 @@ def app(environ, start_response):
         selected_day_query = (query.get("day", "") or "").strip().lower()
         selected_teacher_id = query.get("teacher_id", "")
         selected_room = query.get("classroom", "").strip()
-        selected_course_level = query.get("course_level", "")
-        selected_class_q = query.get("class_q", "").strip()
+        selected_course_level = ""
+        selected_class_q = ""
         selected_schedule_id = query.get("schedule_id", "")
         selected_form_class_id = query.get("selected_form_class_id", "")
         recent_class_ids = query.get("recent_class_ids", "")
@@ -2209,39 +2337,53 @@ def app(environ, start_response):
                                ORDER BY l.id DESC""").fetchall()
         if has_role(user, [ROLE_TEACHER]):
             classes = conn.execute(
-                """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
-                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+                """SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
+                co.name AS course_name, l.name AS level_name,
+                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
+                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count,
+                (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=c.id ORDER BY s2.id) AS student_names
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users u ON u.id=c.teacher_id
-                WHERE c.teacher_id=?
+                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
+                WHERE COALESCE(c.foreign_teacher_id, c.teacher_id)=?
                 ORDER BY c.id DESC""",
                 (user["id"],),
             ).fetchall()
         else:
             classes = conn.execute(
-                """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
-                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+                """SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
+                co.name AS course_name, l.name AS level_name,
+                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
+                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count,
+                (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=c.id ORDER BY s2.id) AS student_names
                 FROM classes c
                 LEFT JOIN courses co ON co.id=c.course_id
                 LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users u ON u.id=c.teacher_id
+                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
                 ORDER BY c.id DESC"""
             ).fetchall()
 
         class_ids = [str(c["id"]) for c in classes]
         if class_ids:
-            schedule_sql = f"""SELECT sc.id, sc.class_id, c.name AS class_name, c.teacher_id AS class_teacher_id, sc.teacher_id,
-            COALESCE(sc.teacher_id, c.teacher_id) AS effective_teacher_id, COALESCE(u2.name,u.name) AS teacher_name,
+            schedule_sql = f"""SELECT sc.id, sc.class_id, c.name AS class_name, c.teacher_id AS class_teacher_id,
+            c.foreign_teacher_id AS class_foreign_teacher_id, c.chinese_teacher_id AS class_chinese_teacher_id,
+            sc.teacher_id, sc.foreign_teacher_id, sc.chinese_teacher_id,
+            COALESCE(sc.teacher_id, sc.foreign_teacher_id, c.foreign_teacher_id, c.teacher_id) AS effective_teacher_id,
+            COALESCE(uf2.name, u2.name, uf.name) AS foreign_teacher_name,
+            uc.name AS chinese_teacher_name,
             co.name AS course_name, l.name AS level_name, sc.day_of_week, sc.start_time, sc.end_time,
             COALESCE(sc.classroom,'') AS classroom, COALESCE(sc.status,'active') AS status, COALESCE(sc.note,'') AS note,
             (SELECT COUNT(*) FROM students s WHERE s.current_class_id=sc.class_id) AS student_count,
-            (SELECT GROUP_CONCAT(name_ko, ', ') FROM (SELECT name_ko FROM students s2 WHERE s2.current_class_id=sc.class_id ORDER BY s2.id LIMIT 2)) AS sample_students
+            (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=sc.class_id ORDER BY s2.id) AS student_names
             FROM schedules sc
             LEFT JOIN classes c ON c.id=sc.class_id
-            LEFT JOIN users u ON u.id=c.teacher_id
+            LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+            LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
             LEFT JOIN users u2 ON u2.id=sc.teacher_id
+            LEFT JOIN users uf2 ON uf2.id=sc.foreign_teacher_id
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
             WHERE sc.class_id IN ({','.join(['?']*len(class_ids))})
@@ -2255,25 +2397,11 @@ def app(environ, start_response):
             schedules = [r for r in schedules if str(r["effective_teacher_id"] or "") == selected_teacher_id]
         if selected_room:
             schedules = [r for r in schedules if selected_room.lower() in (r["classroom"] or "").lower()]
-        if selected_course_level:
-            schedules = [r for r in schedules if selected_course_level in [str(r["course_name"] or ""), str(r["level_name"] or "")]]
-        if selected_class_q:
-            ql = selected_class_q.lower()
-            schedules = [r for r in schedules if ql in (r["class_name"] or "").lower()]
 
-        if has_role(user, [ROLE_TEACHER]):
-            teacher_rows = [user]
-        else:
-            teacher_rows = list_teacher_profiles(conn)
-
-        day_values = [selected_day]
         slot_rows_grid = conn.execute("SELECT start_time, end_time FROM time_slots ORDER BY start_time, end_time").fetchall()
         time_slots = [f"{r['start_time']}~{r['end_time']}" for r in slot_rows_grid if r['start_time'] and r['end_time']]
         if not time_slots:
             time_slots = ["16:25~17:20", "17:25~18:20", "18:30~19:25", "19:35~20:30"]
-
-        if not day_values:
-            day_values = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
         grouped = {}
         for r in schedules:
@@ -2282,11 +2410,16 @@ def app(environ, start_response):
             grouped.setdefault((rowkey, slot), []).append(r)
 
         row_headers = []
-        for trow in teacher_rows:
-            tname = trow["name"]
-            rooms = sorted({(r["classroom"] or "-") for r in schedules if str(r["effective_teacher_id"] or "") == str(trow["id"])}) or ["-"]
-            for room in rooms:
-                row_headers.append((f"{trow['id']}|{room}", tname, room))
+        row_seen = set()
+        for r in schedules:
+            room = r["classroom"] or "-"
+            tname = r["foreign_teacher_name"] or "-"
+            rowkey = f"{r['effective_teacher_id'] or ''}|{room}"
+            if rowkey in row_seen:
+                continue
+            row_seen.add(rowkey)
+            row_headers.append((rowkey, tname, room))
+        row_headers.sort(key=lambda x: (x[1], x[2]))
 
         selected_schedule = None
         if str(selected_schedule_id).isdigit():
@@ -2303,12 +2436,13 @@ def app(environ, start_response):
                   <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td>
                   <td>{c['course_name'] or '-'}</td>
                   <td>{c['level_name'] or '-'}</td>
-                  <td>{c['teacher_name'] or '-'}</td>
-                  <td>{c['student_count'] or 0}</td>
+                  <td>{c['foreign_teacher_name'] or '-'}</td>
+                  <td>{c['chinese_teacher_name'] or '-'}</td>
+                  <td>{(c['student_names'] or '-')}</td>
                 </tr>
                 """
         else:
-            class_rows = f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"
+            class_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
 
         def rows_html(rows, cols):
             if not rows:
@@ -2329,20 +2463,17 @@ def app(environ, start_response):
                 lessons = grouped.get((rowkey, slot), [])
                 blocks = ""
                 for les in lessons:
-                    students_label = f"{t('academics.students_summary')} {les['student_count'] or 0}"
-                    sample = (les['sample_students'] or '').strip()
-                    if sample:
-                        students_label += f" ({sample}{' ' + t('academics.more_students') if (les['student_count'] or 0) > 2 else ''})"
+                    students_label = (les['student_names'] or '-').strip() or '-'
                     blocks += f"""
                     <div class='lesson-block'>
                       <div><strong>{les['class_name'] or '-'}</strong></div>
-                      <div class='muted'>{les['course_name'] or '-'} / {les['level_name'] or '-'} · {les['teacher_name'] or '-'}</div>
+                      <div class='muted'>{les['course_name'] or '-'} / {les['level_name'] or '-'} · {t('academics.foreign_teacher')}: {les['foreign_teacher_name'] or '-'} · {t('academics.chinese_teacher')}: {les['chinese_teacher_name'] or '-'}</div>
                       <div class='muted'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'}</div>
-                      <div class='muted'>{students_label}</div>
+                      <div class='muted'>{t('academics.students')}: {students_label}</div>
                       <div><span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span></div>
                       <div class='lesson-actions'>
                         <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={ref_date_str}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
+                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
                         <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
@@ -2355,6 +2486,7 @@ def app(environ, start_response):
 
         week_label = f"{week_year}-{week_start.month:02d} W{week_no}"
         week_range_label = f"{week_start.isoformat()} ~ {week_end.isoformat()}"
+        teacher_rows = list_teacher_profiles(conn)
         selected_teacher_options = [f"<option value=''>{t('academics.day_all')}</option>"]
         for tr in teacher_rows:
             selected = "selected" if str(tr["id"]) == selected_teacher_id else ""
@@ -2365,29 +2497,27 @@ def app(environ, start_response):
             sel = "selected" if d == selected_day else ""
             day_options.append(f"<option value='{d}' {sel}>{d}</option>")
 
-        course_level_values = sorted({x for r in schedules for x in [r['course_name'] or '', r['level_name'] or ''] if x})
-        cl_options = [f"<option value=''>{t('academics.day_all')}</option>"]
-        for cl in course_level_values:
-            sel = "selected" if cl == selected_course_level else ""
-            cl_options.append(f"<option value='{cl}' {sel}>{cl}</option>")
-
         class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=20, show_all_when_empty=True)
         if selected_schedule and not selected_form_class_id:
             selected_form_class_id = str(selected_schedule['class_id'])
         selected_form_class = conn.execute(
-            """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
-            (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+            """SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
+            co.name AS course_name, l.name AS level_name,
+            uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
+            (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count,
+            (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=c.id ORDER BY s2.id) AS student_names
             FROM classes c
             LEFT JOIN courses co ON co.id=c.course_id
             LEFT JOIN levels l ON l.id=c.level_id
-            LEFT JOIN users u ON u.id=c.teacher_id
+            LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+            LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
             WHERE c.id=?""",
             (selected_form_class_id,),
         ).fetchone() if selected_form_class_id else None
 
         selected_schedule_day = selected_schedule['day_of_week'] if selected_schedule else ''
         selected_schedule_status = selected_schedule['status'] if selected_schedule else 'active'
-        selected_teacher_form = str((selected_schedule['teacher_id'] if selected_schedule and selected_schedule['teacher_id'] else (selected_form_class['teacher_id'] if selected_form_class and selected_form_class['teacher_id'] else '')) or '')
+        selected_teacher_form = str((selected_schedule['teacher_id'] if selected_schedule and selected_schedule['teacher_id'] else ((selected_form_class['foreign_teacher_id'] or selected_form_class['teacher_id']) if selected_form_class else '')) or '')
         teacher_select_options = ["<option value=''>-</option>"]
         for tr in teacher_rows:
             sel = "selected" if str(tr['id']) == selected_teacher_form else ""
@@ -2429,7 +2559,7 @@ def app(environ, start_response):
             CURRENT_LANG,
             {
                 "week": str(week_offset), "ref_date": ref_date_str, "day": selected_day, "teacher_id": selected_teacher_id,
-                "classroom": selected_room, "course_level": selected_course_level, "class_q": selected_class_q,
+                "classroom": selected_room,
                 "schedule_id": selected_schedule_id, "recent_class_ids": recent_class_ids,
             }
         )
@@ -2445,16 +2575,17 @@ def app(environ, start_response):
               <table>
                 <tr><th>{t('academics.class_name')}</th><td>{selected_schedule['class_name'] or '-'}</td></tr>
                 <tr><th>{t('academics.course_level')}</th><td>{selected_schedule['course_name'] or '-'} / {selected_schedule['level_name'] or '-'}</td></tr>
-                <tr><th>{t('academics.teacher')}</th><td>{selected_schedule['teacher_name'] or '-'}</td></tr>
+                <tr><th>{t('academics.foreign_teacher')}</th><td>{selected_schedule['foreign_teacher_name'] or '-'}</td></tr>
+                <tr><th>{t('academics.chinese_teacher')}</th><td>{selected_schedule['chinese_teacher_name'] or '-'}</td></tr>
                 <tr><th>{t('academics.time_slot')}</th><td>{selected_schedule['day_of_week'] or '-'} {selected_schedule['start_time'] or '-'}~{selected_schedule['end_time'] or '-'}</td></tr>
                 <tr><th>{t('academics.classroom')}</th><td>{selected_schedule['classroom'] or '-'}</td></tr>
                 <tr><th>{t('academics.status')}</th><td><span class='badge {selected_schedule['status'] or ''}'>{status_t(selected_schedule['status']) if selected_schedule['status'] else '-'}</span></td></tr>
                 <tr><th>{t('field.note')}</th><td>{selected_schedule['note'] or '-'}</td></tr>
-                <tr><th>{t('students.field.name_ko')}</th><td>{stu_text}</td></tr>
+                <tr><th>{t('academics.students')}</th><td>{stu_text}</td></tr>
               </table>
               <div class='lesson-actions' style='margin-top:10px'>
                 <a class='btn' href='/classes/{selected_schedule['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                <a class='btn' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={selected_schedule['id']}&class_id={selected_schedule['class_id']}&lesson_date={ref_date_str}&teacher_id={selected_schedule['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
+                <a class='btn' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={selected_schedule['id']}&class_id={selected_schedule['class_id']}&lesson_date={selected_view_date}&teacher_id={selected_schedule['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
                 <a class='btn' href='/homework?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_homework')}</a>
                 <a class='btn' href='/exams?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_exams')}</a>
               </div>
@@ -2482,8 +2613,6 @@ def app(environ, start_response):
             <label>{t('academics.day_filter')} <select name='day' onchange='this.form.submit()'>{''.join(day_options)}</select></label>
             <label>{t('academics.teacher_filter')} <select name='teacher_id'>{''.join(selected_teacher_options)}</select></label>
             <label>{t('academics.classroom_filter')} <input name='classroom' value='{selected_room}'></label>
-            <label>{t('academics.course_level_filter')} <select name='course_level'>{''.join(cl_options)}</select></label>
-            <label>{t('academics.class_filter')} <input name='class_q' value='{selected_class_q}'></label>
             <button>{t('academics.search')}</button>
             <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('common.reset')}</a>
             <a class='btn' href='#schedule-form'>{t('academics.add_lesson')}</a>
@@ -2518,8 +2647,9 @@ def app(environ, start_response):
                 <label>{t('academics.schedule_pick_class')} <input value='{selected_form_class['name'] if selected_form_class else '-'}' readonly></label>
                 <label>{t('academics.course')} <input value='{selected_form_class['course_name'] if selected_form_class else '-'}' readonly></label>
                 <label>{t('academics.level')} <input value='{selected_form_class['level_name'] if selected_form_class else '-'}' readonly></label>
-                <label>{t('academics.schedule_pick_teacher')} <select name='teacher_id'>{''.join(teacher_select_options)}</select></label>
-                <label>{t('academics.schedule_pick_student')} <input value='{selected_form_class['student_count'] if selected_form_class else 0}' readonly></label>
+                <label>{t('academics.foreign_teacher')} <select name='teacher_id'>{''.join(teacher_select_options)}</select></label>
+                <label>{t('academics.chinese_teacher')} <input value='{selected_form_class['chinese_teacher_name'] if selected_form_class else '-'}' readonly></label>
+                <label>{t('academics.schedule_pick_student')} <input value='{(selected_form_class['student_names'] if selected_form_class and selected_form_class['student_names'] else '-')}' readonly></label>
                 <label>{t('academics.day_of_week')} <select name='day_of_week'>{''.join(day_select_options)}</select></label>
                 <label>{t('academics.time_slot')} <select name='time_slot'>{''.join(slot_options)}</select></label>
                 <label>{t('academics.classroom')} <select name='classroom'>{''.join(room_options)}</select></label>
@@ -2542,7 +2672,7 @@ def app(environ, start_response):
               <div style='margin-top:8px'>
               <h4>{t('academics.class_list')}</h4>
               <table>
-                <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>
+                <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th></tr>
                 {class_rows}
               </table>
               </div>
