@@ -1966,7 +1966,8 @@ def app(environ, start_response):
 
         class_ids = [str(c["id"]) for c in classes]
         if class_ids:
-            schedule_sql = f"""SELECT sc.id, sc.class_id, c.name AS class_name, c.teacher_id AS class_teacher_id, sc.teacher_id, COALESCE(u2.name,u.name) AS teacher_name,
+            schedule_sql = f"""SELECT sc.id, sc.class_id, c.name AS class_name, c.teacher_id AS class_teacher_id, sc.teacher_id,
+            COALESCE(sc.teacher_id, c.teacher_id) AS effective_teacher_id, COALESCE(u2.name,u.name) AS teacher_name,
             co.name AS course_name, l.name AS level_name, sc.day_of_week, sc.start_time, sc.end_time,
             COALESCE(sc.classroom,'') AS classroom, COALESCE(sc.status,'active') AS status, COALESCE(sc.note,'') AS note,
             (SELECT COUNT(*) FROM students s WHERE s.current_class_id=sc.class_id) AS student_count,
@@ -1985,7 +1986,7 @@ def app(environ, start_response):
         if selected_day:
             schedules = [r for r in schedules if (r["day_of_week"] or "") == selected_day]
         if selected_teacher_id:
-            schedules = [r for r in schedules if str(r["teacher_id"] or "") == selected_teacher_id]
+            schedules = [r for r in schedules if str(r["effective_teacher_id"] or "") == selected_teacher_id]
         if selected_room:
             schedules = [r for r in schedules if selected_room.lower() in (r["classroom"] or "").lower()]
         if selected_course_level:
@@ -2010,13 +2011,13 @@ def app(environ, start_response):
         grouped = {}
         for r in schedules:
             slot = f"{r['start_time']}~{r['end_time']}"
-            rowkey = f"{r['teacher_id'] or ''}|{r['classroom'] or '-'}"
+            rowkey = f"{r['effective_teacher_id'] or ''}|{r['classroom'] or '-'}"
             grouped.setdefault((rowkey, slot), []).append(r)
 
         row_headers = []
         for trow in teacher_rows:
             tname = trow["name"]
-            rooms = sorted({(r["classroom"] or "-") for r in schedules if str(r["teacher_id"] or "") == str(trow["id"])}) or ["-"]
+            rooms = sorted({(r["classroom"] or "-") for r in schedules if str(r["effective_teacher_id"] or "") == str(trow["id"])}) or ["-"]
             for room in rooms:
                 row_headers.append((f"{trow['id']}|{room}", tname, room))
 
