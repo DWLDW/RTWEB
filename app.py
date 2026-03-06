@@ -45,6 +45,29 @@ NAV_LABELS = {
 }
 
 
+NAV_PATHS = {
+    "dashboard": "/dashboard",
+    "users": "/users",
+    "students": "/students",
+    "academics": "/academics",
+    "attendance": "/attendance",
+    "homework": "/homework",
+    "exams": "/exams",
+    "counseling": "/counseling",
+    "payments": "/payments",
+    "announcements": "/announcements",
+    "library": "/library",
+}
+
+ROLE_MENU_KEYS = {
+    ROLE_OWNER: ["dashboard", "users", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
+    ROLE_MANAGER: ["dashboard", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
+    ROLE_TEACHER: ["dashboard", "students", "attendance", "homework", "exams", "counseling", "announcements", "library"],
+    ROLE_PARENT: ["dashboard", "students", "attendance", "homework", "exams", "payments", "announcements"],
+    ROLE_STUDENT: ["dashboard", "students", "attendance", "homework", "exams", "announcements"],
+}
+
+
 def t(key, lang=None):
     lang = lang or CURRENT_LANG
     if key in NAV_LABELS:
@@ -157,20 +180,12 @@ def render_html(title, body, user=None, lang=None):
             f"<option value='{code}' {'selected' if lang == code else ''}>{label}</option>"
             for code, label in LANG_LABELS.items()
         ])
+        keys = ROLE_MENU_KEYS.get(user["role"], ["dashboard"])
+        menu_links = " | ".join([f"<a href='{NAV_PATHS[k]}?lang={lang}'>{t(k, lang)}</a>" for k in keys])
         nav = f"""
         <div style='margin-bottom:16px'>
             {t('login_as', lang)}: {user['name']}({ROLE_LABELS.get(user['role'], user['role'])}) |
-            <a href='/dashboard?lang={lang}'>{t('dashboard', lang)}</a> |
-            <a href='/users?lang={lang}'>{t('users', lang)}</a> |
-            <a href='/students?lang={lang}'>{t('students', lang)}</a> |
-            <a href='/academics?lang={lang}'>{t('academics', lang)}</a> |
-            <a href='/attendance?lang={lang}'>{t('attendance', lang)}</a> |
-            <a href='/homework?lang={lang}'>{t('homework', lang)}</a> |
-            <a href='/exams?lang={lang}'>{t('exams', lang)}</a> |
-            <a href='/counseling?lang={lang}'>{t('counseling', lang)}</a> |
-            <a href='/payments?lang={lang}'>{t('payments', lang)}</a> |
-            <a href='/announcements?lang={lang}'>{t('announcements', lang)}</a> |
-            <a href='/library?lang={lang}'>{t('library', lang)}</a> |
+            {menu_links} |
             <a href='/logout'>{t('logout', lang)}</a>
             <span style='margin-left:10px'>{t('lang', lang)}:</span>
             <select onchange="const u=new URL(window.location.href);u.searchParams.set('lang', this.value);window.location=u.toString();">
@@ -201,6 +216,33 @@ def redirect(path):
 
 def has_role(user, roles):
     return user and user["role"] in roles
+
+
+def route_allowed(user, route_key):
+    if not user:
+        return False
+    return route_key in ROLE_MENU_KEYS.get(user["role"], [])
+
+
+def forbidden_html(user, msg="접근 권한이 없습니다 / Forbidden / 无权限"):
+    html = render_html("403 Forbidden", f"<p style='color:red'>{msg}</p>", user)
+    return "403 Forbidden", [("Content-Type", "text/html; charset=utf-8")], html
+
+
+def forbidden_json(msg="권한 없음"):
+    return json_resp({"error": msg}, "403 Forbidden")
+
+
+def can_view_student_row(user, st):
+    if user["role"] in (ROLE_OWNER, ROLE_MANAGER):
+        return True
+    if user["role"] == ROLE_TEACHER:
+        return st["current_class_teacher_id"] == user["id"]
+    if user["role"] == ROLE_PARENT:
+        return (st["guardian_name"] or "") == user["name"]
+    if user["role"] == ROLE_STUDENT:
+        return st["user_id"] == user["id"]
+    return False
 
 
 def json_resp(data, status="200 OK"):
@@ -375,6 +417,11 @@ def app(environ, start_response):
 
     # 사용자 관리
     if path == "/users":
+        if not has_role(user, [ROLE_OWNER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             conn.execute(
@@ -449,7 +496,7 @@ def app(environ, start_response):
                 return [body]
 
         student = conn.execute(
-            """SELECT s.*, u.username, c.name AS class_name FROM students s
+            """SELECT s.*, u.username, c.name AS class_name, c.teacher_id AS current_class_teacher_id FROM students s
             LEFT JOIN users u ON u.id=s.user_id
             LEFT JOIN classes c ON c.id=s.current_class_id
             WHERE s.id=?""",
@@ -460,6 +507,11 @@ def app(environ, start_response):
             conn.close()
             start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
             return ["Student Not Found".encode("utf-8")]
+        if not can_view_student_row(user, student):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         msg_key = query.get("msg", "")
         msg_map = {
             "saved": "저장되었습니다 / Saved / 已保存",
@@ -577,7 +629,7 @@ def app(environ, start_response):
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
         students = conn.execute(
-            f"""SELECT s.*, c.name AS class_name
+            f"""SELECT s.*, c.name AS class_name, c.teacher_id AS current_class_teacher_id
             FROM students s
             LEFT JOIN classes c ON c.id=s.current_class_id
             {where_sql}
@@ -587,6 +639,8 @@ def app(environ, start_response):
 
         rows = ""
         for st in students:
+            if not can_view_student_row(user, st):
+                continue
             rows += f"""
             <tr>
               <td>{st['student_no'] or '-'}</td>
@@ -624,6 +678,11 @@ def app(environ, start_response):
 
     # 학사 구조
     if path == "/academics":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             typ = data.get("type")
@@ -638,7 +697,10 @@ def app(environ, start_response):
             conn.commit()
         courses = conn.execute("SELECT * FROM courses").fetchall()
         levels = conn.execute("SELECT * FROM levels").fetchall()
-        classes = conn.execute("SELECT c.*,u.name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id=u.id").fetchall()
+        if has_role(user, [ROLE_TEACHER]):
+            classes = conn.execute("SELECT c.*,u.name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id=u.id WHERE c.teacher_id=?", (user["id"],)).fetchall()
+        else:
+            classes = conn.execute("SELECT c.*,u.name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id=u.id").fetchall()
         schedules = conn.execute("SELECT * FROM schedules").fetchall()
         html = render_html("코스/레벨/반/시간표 관리", f"""
         <h3>등록</h3>
@@ -658,6 +720,11 @@ def app(environ, start_response):
 
     # 출결
     if path == "/attendance":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         selected_student_id = query.get("selected_student_id", "")
         selected_class_id = query.get("selected_class_id", "")
         selected_teacher_id = query.get("selected_teacher_id", "")
@@ -671,8 +738,22 @@ def app(environ, start_response):
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
+            if has_role(user, [ROLE_TEACHER]) and d.get("class_id"):
+                class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
+                if not class_ok and d.get("type") == "exam":
+                    conn.close()
+                    status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
+                    start_response(status, headers)
+                    return [body]
             class_id = d.get("class_id") or selected_class_id
             student_id = d.get("student_id") or selected_student_id
+            if has_role(user, [ROLE_TEACHER]):
+                class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
+                if not class_ok:
+                    conn.close()
+                    status, headers, body = forbidden_html(user, "담당 반만 처리할 수 있습니다 / Teacher class only / 仅限负责班级")
+                    start_response(status, headers)
+                    return [body]
             created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
             conn.execute("INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at) VALUES(?,?,?,?,?,?,?)",
                          (class_id, student_id, d.get("lesson_date"), d.get("status"), d.get("note"), created_by, now()))
@@ -681,7 +762,14 @@ def app(environ, start_response):
                              ("absence", student_id, json.dumps({"student_id": student_id, "date": d.get("lesson_date")}, ensure_ascii=False), now()))
             conn.commit()
 
-        rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
+        if has_role(user, [ROLE_TEACHER]):
+            rows = conn.execute("SELECT a.* FROM attendance a JOIN classes c ON c.id=a.class_id WHERE c.teacher_id=? ORDER BY a.id DESC LIMIT 200", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_STUDENT]):
+            rows = conn.execute("SELECT * FROM attendance WHERE student_id=? ORDER BY id DESC LIMIT 200", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_PARENT]):
+            rows = conn.execute("""SELECT a.* FROM attendance a JOIN students s ON s.id=a.student_id WHERE s.guardian_name=? ORDER BY a.id DESC LIMIT 200""", (user["name"],)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 200").fetchall()
         picker_keep = {
             "selected_student_id": selected_student_id,
             "selected_class_id": selected_class_id,
@@ -722,6 +810,11 @@ def app(environ, start_response):
         return [body]
 
     if path == "/homework":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         selected_class_id = query.get("selected_class_id", "")
         selected_teacher_id = query.get("selected_teacher_id", "")
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
@@ -734,6 +827,13 @@ def app(environ, start_response):
             typ = d.get("type")
             if typ == "homework" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
                 class_id = d.get("class_id") or selected_class_id
+                if has_role(user, [ROLE_TEACHER]):
+                    class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_id, user["id"])).fetchone()
+                    if not class_ok:
+                        conn.close()
+                        status, headers, body = forbidden_html(user, "담당 반만 등록 가능 / Teacher class only / 仅限负责班级")
+                        start_response(status, headers)
+                        return [body]
                 created_by = d.get("teacher_id") or selected_teacher_id or user["id"]
                 conn.execute("INSERT INTO homework(class_id, title, due_date, created_by, created_at) VALUES(?,?,?,?,?)", (class_id, d.get("title"), d.get("due_date"), created_by, now()))
                 conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)", ("homework", None, json.dumps({"title": d.get("title")}, ensure_ascii=False), now()))
@@ -742,8 +842,18 @@ def app(environ, start_response):
             elif typ == "feedback" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
                 conn.execute("UPDATE homework_submissions SET feedback=?, feedback_by=?, feedback_at=? WHERE id=?", (d.get("feedback"), user["id"], now(), d.get("submission_id")))
             conn.commit()
-        hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
-        sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
+        if has_role(user, [ROLE_TEACHER]):
+            hw = conn.execute("SELECT h.* FROM homework h JOIN classes c ON c.id=h.class_id WHERE c.teacher_id=? ORDER BY h.id DESC", (user["id"],)).fetchall()
+            sub = conn.execute("SELECT hs.* FROM homework_submissions hs JOIN homework h ON h.id=hs.homework_id JOIN classes c ON c.id=h.class_id WHERE c.teacher_id=? ORDER BY hs.id DESC", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_STUDENT]):
+            hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
+            sub = conn.execute("SELECT * FROM homework_submissions WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_PARENT]):
+            hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
+            sub = conn.execute("""SELECT hs.* FROM homework_submissions hs JOIN students s ON s.id=hs.student_id WHERE s.guardian_name=? ORDER BY hs.id DESC""", (user["name"],)).fetchall()
+        else:
+            hw = conn.execute("SELECT * FROM homework ORDER BY id DESC").fetchall()
+            sub = conn.execute("SELECT * FROM homework_submissions ORDER BY id DESC").fetchall()
         class_picker = render_picker_block("반 검색 선택", "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
                                           {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
@@ -765,6 +875,11 @@ def app(environ, start_response):
         return [body]
 
     if path == "/exams":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
@@ -773,8 +888,18 @@ def app(environ, start_response):
             elif typ == "score":
                 conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (d.get("exam_id"), d.get("student_id"), d.get("score"), now()))
             conn.commit()
-        exams = conn.execute("SELECT * FROM exams ORDER BY id DESC").fetchall()
-        scores = conn.execute("SELECT * FROM exam_scores ORDER BY id DESC").fetchall()
+        if has_role(user, [ROLE_TEACHER]):
+            exams = conn.execute("SELECT e.* FROM exams e JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
+            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN exams e ON e.id=es.exam_id JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY es.id DESC", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_STUDENT]):
+            exams = conn.execute("SELECT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id WHERE es.student_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
+            scores = conn.execute("SELECT * FROM exam_scores WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_PARENT]):
+            exams = conn.execute("SELECT DISTINCT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id JOIN students s ON s.id=es.student_id WHERE s.guardian_name=? ORDER BY e.id DESC", (user["name"],)).fetchall()
+            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN students s ON s.id=es.student_id WHERE s.guardian_name=? ORDER BY es.id DESC", (user["name"],)).fetchall()
+        else:
+            exams = conn.execute("SELECT * FROM exams ORDER BY id DESC").fetchall()
+            scores = conn.execute("SELECT * FROM exam_scores ORDER BY id DESC").fetchall()
         html = render_html("시험/성적 관리", f"""
         <form method='post'><input type='hidden' name='type' value='exam'>반ID<input name='class_id'> 시험명<input name='name'> 날짜<input name='exam_date'> 리포트<input name='report'> 연계도서ID<input name='linked_book_id'><button>시험 등록</button></form>
         <form method='post'><input type='hidden' name='type' value='score'>시험ID<input name='exam_id'> 학생ID<input name='student_id'> 점수<input name='score'><button>점수 등록</button></form>
@@ -802,11 +927,21 @@ def app(environ, start_response):
         return [body]
 
     if path == "/payments":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_PARENT, ROLE_STUDENT]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
             conn.execute("INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("paid_date"), d.get("amount"), d.get("package_hours"), d.get("remaining_classes"), now()))
             conn.commit()
-        rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
+        if has_role(user, [ROLE_STUDENT]):
+            rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+        elif has_role(user, [ROLE_PARENT]):
+            rows = conn.execute("SELECT p.* FROM payments p JOIN students s ON s.id=p.student_id WHERE s.guardian_name=? ORDER BY p.id DESC", (user["name"],)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
         html = render_html("수납 기록", f"""
         <form method='post'>학생ID<input name='student_id'> 결제일<input name='paid_date'> 금액<input name='amount'> 패키지시간<input name='package_hours'> 잔여수업수<input name='remaining_classes'><button>저장</button></form>
         <pre>{[dict(r) for r in rows]}</pre>
@@ -834,6 +969,11 @@ def app(environ, start_response):
         return [body]
 
     if path == "/library":
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
         selected_student_id = query.get("selected_student_id", "")
         selected_teacher_id = query.get("selected_teacher_id", "")
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
@@ -893,7 +1033,7 @@ def app(environ, start_response):
         d = parse_body(environ)
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
-            status, headers, body = json_resp({"error": "권한 없음"}, "403 Forbidden")
+            status, headers, body = forbidden_json("권한 없음")
             start_response(status, headers)
             return [body]
         book = conn.execute("SELECT * FROM books WHERE code=?", (d.get("code"),)).fetchone()

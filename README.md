@@ -141,3 +141,12 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 - 로그인 후 상단 네비게이션의 언어 드롭다운에서 **한국어 / English / 中文** 전환이 가능합니다.
 - 현재 버전은 메뉴/학생관리 화면 중심으로 3개 언어 라벨을 제공합니다.
+
+
+## 8) RBAC(역할 기반 접근 제어) 기본 적용
+
+- owner: 전체 접근
+- manager: 대부분 운영 접근(단, `/users` 차단)
+- teacher: 수업 운영 기능 중심 접근(`payments` 차단)
+- parent/student: 조회 중심 접근, 운영 관리 화면 일부 차단
+- 권한 없는 페이지/API 접근 시 403 응답을 반환합니다.
