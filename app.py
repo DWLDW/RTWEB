@@ -5,16 +5,13 @@ import uuid
 from datetime import datetime
 from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "lms.db")
-
 ROLE_OWNER = "owner"
 ROLE_MANAGER = "manager"
 ROLE_TEACHER = "teacher"
 ROLE_PARENT = "parent"
 ROLE_STUDENT = "student"
-
 ROLE_LABELS = {
     ROLE_OWNER: "원장",
     ROLE_MANAGER: "매니저",
@@ -22,11 +19,8 @@ ROLE_LABELS = {
     ROLE_PARENT: "학부모",
     ROLE_STUDENT: "학생",
 }
-
 CURRENT_LANG = "ko"
-
 LANG_LABELS = {"ko": "한국어", "en": "English", "zh": "中文"}
-
 NAV_LABELS = {
     "dashboard": "menu.dashboard",
     "users": "menu.users",
@@ -43,8 +37,6 @@ NAV_LABELS = {
     "login_as": "common.login_as",
     "lang": "common.language",
 }
-
-
 I18N_TEXTS = {
     "ko": {
         "menu.dashboard": "대시보드", "menu.users": "사용자", "menu.students": "학생관리", "menu.academics": "학사구조",
@@ -113,8 +105,6 @@ I18N_TEXTS = {
         "status.active": "正常", "status.leave": "休学", "status.ended": "结束",
     },
 }
-
-
 NAV_PATHS = {
     "dashboard": "/dashboard",
     "users": "/users",
@@ -128,7 +118,6 @@ NAV_PATHS = {
     "announcements": "/announcements",
     "library": "/library",
 }
-
 ROLE_MENU_KEYS = {
     ROLE_OWNER: ["dashboard", "users", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
     ROLE_MANAGER: ["dashboard", "students", "academics", "attendance", "homework", "exams", "counseling", "payments", "announcements", "library"],
@@ -136,39 +125,25 @@ ROLE_MENU_KEYS = {
     ROLE_PARENT: ["dashboard", "students", "attendance", "homework", "exams", "payments", "announcements"],
     ROLE_STUDENT: ["dashboard", "students", "attendance", "homework", "exams", "announcements"],
 }
-
-
 def t(key, lang=None):
     lang = lang or CURRENT_LANG
     table = I18N_TEXTS.get(lang, I18N_TEXTS["ko"])
     return table.get(key, I18N_TEXTS["ko"].get(key, key))
-
-
 def menu_t(key, lang=None):
     token = NAV_LABELS.get(key, key)
     return t(token, lang)
-
-
 def status_t(status, lang=None):
     return t(f"status.{status}", lang)
-
-
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
-
 def hash_pw(pw: str) -> str:
     # 단순 데모용
     import hashlib
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
-
-
 def now():
     return datetime.utcnow().isoformat()
-
-
 def init_db():
     conn = get_db()
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
@@ -200,12 +175,8 @@ def init_db():
             )
     conn.commit()
     conn.close()
-
-
 def parse_query(environ):
     return {k: v[0] for k, v in parse_qs(environ.get("QUERY_STRING", "")).items()}
-
-
 def get_lang(environ):
     q = parse_query(environ)
     lang = q.get("lang", "").strip().lower()
@@ -216,8 +187,6 @@ def get_lang(environ):
     if cookie_lang in ("ko", "en", "zh"):
         return cookie_lang
     return "ko"
-
-
 def parse_body(environ):
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -228,8 +197,6 @@ def parse_body(environ):
     if "application/json" in ctype:
         return json.loads(body.decode("utf-8") or "{}")
     return {k: v[0] for k, v in parse_qs(body.decode("utf-8")).items()}
-
-
 def parse_cookie(cookie):
     out = {}
     if not cookie:
@@ -239,8 +206,6 @@ def parse_cookie(cookie):
             k, v = part.strip().split("=", 1)
             out[k] = v
     return out
-
-
 def current_user(environ):
     cookies = parse_cookie(environ.get("HTTP_COOKIE", ""))
     token = cookies.get("session")
@@ -252,8 +217,6 @@ def current_user(environ):
     ).fetchone()
     conn.close()
     return row
-
-
 def render_html(title, body, user=None, lang=None):
     lang = lang or CURRENT_LANG
     nav = ""
@@ -283,40 +246,26 @@ def render_html(title, body, user=None, lang=None):
       {body}
     </body></html>
     """.encode("utf-8")
-
-
 def require_login(environ):
     user = current_user(environ)
     if not user:
         return None, redirect('/login')
     return user, None
-
-
 def redirect(path):
     return "302 Found", [("Location", path)], b""
-
-
 def has_role(user, roles):
     return user and user["role"] in roles
-
-
 def route_allowed(user, route_key):
     if not user:
         return False
     return route_key in ROLE_MENU_KEYS.get(user["role"], [])
-
-
 def forbidden_html(user, msg=None):
     if msg is None:
         msg = t("common.forbidden")
     html = render_html("403 Forbidden", f"<p style='color:red'>{msg}</p>", user)
     return "403 Forbidden", [("Content-Type", "text/html; charset=utf-8")], html
-
-
 def forbidden_json(msg="권한 없음"):
     return json_resp({"error": msg}, "403 Forbidden")
-
-
 def can_view_student_row(user, st):
     if user["role"] in (ROLE_OWNER, ROLE_MANAGER):
         return True
@@ -327,16 +276,10 @@ def can_view_student_row(user, st):
     if user["role"] == ROLE_STUDENT:
         return st["user_id"] == user["id"]
     return False
-
-
 def json_resp(data, status="200 OK"):
     return status, [("Content-Type", "application/json; charset=utf-8")], json.dumps(data, ensure_ascii=False).encode("utf-8")
-
-
 def text_resp(text, status="200 OK"):
     return status, [("Content-Type", "text/html; charset=utf-8")], text
-
-
 def fetch_student_candidates(conn, keyword, limit=10):
     kw = (keyword or "").strip()
     if not kw:
@@ -348,8 +291,6 @@ def fetch_student_candidates(conn, keyword, limit=10):
         ORDER BY id DESC LIMIT ?""",
         (like, like, like, limit),
     ).fetchall()
-
-
 def fetch_class_candidates(conn, keyword, limit=10):
     kw = (keyword or "").strip()
     if not kw:
@@ -363,8 +304,6 @@ def fetch_class_candidates(conn, keyword, limit=10):
         ORDER BY c.id DESC LIMIT ?""",
         (like, like, limit),
     ).fetchall()
-
-
 def fetch_teacher_candidates(conn, keyword, limit=10):
     kw = (keyword or "").strip()
     if not kw:
@@ -376,8 +315,6 @@ def fetch_teacher_candidates(conn, keyword, limit=10):
         ORDER BY id DESC LIMIT ?""",
         (like, like, limit),
     ).fetchall()
-
-
 def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None):
     query_keep = query_keep or {}
     hidden = "".join([f"<input type='hidden' name='{k}' value='{v}'>" for k, v in query_keep.items() if v not in (None, "")])
@@ -408,23 +345,17 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
       <ul>{cand_rows or f'<li>{t("common.no_data")}</li>'}</ul>
     </div>
     """
-
-
 def app(environ, start_response):
     global CURRENT_LANG
     query = parse_query(environ)
     CURRENT_LANG = get_lang(environ)
-
     _orig_start_response = start_response
-
     def start_response(status, headers, exc_info=None):
         if query.get("lang", "").strip().lower() in ("ko", "en", "zh"):
             headers.append(("Set-Cookie", f"lang={CURRENT_LANG}; Path=/; Max-Age=31536000"))
         return _orig_start_response(status, headers, exc_info)
-
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
-
     # 인증 API
     if path == "/api/auth/login" and method == "POST":
         data = parse_body(environ)
@@ -446,7 +377,6 @@ def app(environ, start_response):
         headers.append(("Set-Cookie", f"session={token}; Path=/; HttpOnly"))
         start_response(status, headers)
         return [body]
-
     if path == "/login":
         if method == "GET":
             html = render_html(t("login.title"), f"""
@@ -480,33 +410,27 @@ def app(environ, start_response):
         headers.append(("Set-Cookie", f"session={token}; Path=/; HttpOnly"))
         start_response(status, headers)
         return [body]
-
     if path == "/logout":
         status, headers, body = redirect('/login')
         headers.append(("Set-Cookie", "session=; Path=/; Max-Age=0"))
         start_response(status, headers)
         return [body]
-
     if path == "/":
         status, headers, body = redirect('/dashboard')
         start_response(status, headers)
         return [body]
-
     user, resp = require_login(environ)
     if resp:
         status, headers, body = resp
         start_response(status, headers)
         return [body]
-
     # Dashboard
     if path == "/dashboard":
         html = render_html("영어학원 LMS 대시보드", "<p>MVP 관리 화면입니다.</p>", user)
         status, headers, body = text_resp(html)
         start_response(status, headers)
         return [body]
-
     conn = get_db()
-
     # 사용자 관리
     if path == "/users":
         if not has_role(user, [ROLE_OWNER]):
@@ -539,14 +463,12 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path.startswith("/students/"):
         student_id = path.split("/")[-1]
         if not student_id.isdigit():
             conn.close()
             start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
             return ["Not Found".encode("utf-8")]
-
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
             action = d.get("action")
@@ -586,7 +508,6 @@ def app(environ, start_response):
                 conn.close()
                 start_response(status, headers)
                 return [body]
-
         student = conn.execute(
             """SELECT s.*, u.username, c.name AS class_name, c.teacher_id AS current_class_teacher_id FROM students s
             LEFT JOIN users u ON u.id=s.user_id
@@ -612,21 +533,16 @@ def app(environ, start_response):
             "empty_pw": t("students.msg.empty_pw"),
         }
         message = msg_map.get(msg_key, "")
-
         detail_page_size = 10
-
         def parse_page_param(name):
             raw = query.get(name, "1")
             return int(raw) if raw.isdigit() and int(raw) > 0 else 1
-
         def fetch_paged(sql, params, page):
             offset = (page - 1) * detail_page_size
             rows = conn.execute(sql + " LIMIT ? OFFSET ?", (*params, detail_page_size + 1, offset)).fetchall()
             has_next = len(rows) > detail_page_size
             return rows[:detail_page_size], has_next
-
         student_user_id = student["user_id"]
-
         att_page = parse_page_param("att_page")
         attendance_rows, attendance_has_next = fetch_paged(
             """SELECT a.lesson_date, a.status, a.note, c.name AS class_name
@@ -635,7 +551,6 @@ def app(environ, start_response):
             (student_user_id,),
             att_page,
         )
-
         hw_page = parse_page_param("hw_page")
         submission_rows, submission_has_next = fetch_paged(
             """SELECT hs.id, h.title, hs.submitted, hs.submitted_at, hs.feedback
@@ -644,7 +559,6 @@ def app(environ, start_response):
             (student_user_id,),
             hw_page,
         )
-
         exam_page = parse_page_param("exam_page")
         exam_rows, exam_has_next = fetch_paged(
             """SELECT e.name AS exam_name, es.score, e.exam_date
@@ -653,7 +567,6 @@ def app(environ, start_response):
             (student_user_id,),
             exam_page,
         )
-
         counseling_page = parse_page_param("counseling_page")
         counseling_rows, counseling_has_next = fetch_paged(
             """SELECT c.created_at AS recorded_at, c.memo, c.is_special_note
@@ -661,7 +574,6 @@ def app(environ, start_response):
             (student_user_id,),
             counseling_page,
         )
-
         payment_page = parse_page_param("payment_page")
         payment_rows, payment_has_next = fetch_paged(
             """SELECT paid_date, amount, package_hours, remaining_classes
@@ -669,7 +581,6 @@ def app(environ, start_response):
             (student_user_id,),
             payment_page,
         )
-
         loan_page = parse_page_param("loan_page")
         loan_rows, loan_has_next = fetch_paged(
             """SELECT b.code, b.title, bl.loaned_at, bl.returned_at
@@ -678,7 +589,6 @@ def app(environ, start_response):
             (student_user_id,),
             loan_page,
         )
-
         def rows_html(rows, cols, empty_colspan):
             if not rows:
                 return f"<tr><td colspan='{empty_colspan}'>{t('common.no_data')}</td></tr>"
@@ -698,24 +608,20 @@ def app(environ, start_response):
                     values.append(f"<td>{v}</td>")
                 out += "<tr>" + "".join(values) + "</tr>"
             return out
-
         def section_pager(param_name, page, has_next):
             page_keys = ["att_page", "hw_page", "exam_page", "counseling_page", "payment_page", "loan_page"]
-
             def mk_link(target_page):
                 qp = {k: query.get(k, "1") for k in page_keys}
                 qp[param_name] = str(target_page)
                 qp["lang"] = CURRENT_LANG
                 qstr = "&".join([f"{k}={v}" for k, v in qp.items()])
                 return f"?{qstr}"
-
             prev_link = f"<a href='{mk_link(page-1)}'>{t('common.prev')}</a>" if page > 1 else ""
             next_link = f"<a href='{mk_link(page+1)}'>{t('common.next')}</a>" if has_next else ""
             if not prev_link and not next_link:
                 return ""
             sep = " | " if prev_link and next_link else ""
             return f"<div style='margin:4px 0 12px 0'>{prev_link}{sep}{next_link}</div>"
-
         class_opts = ["<option value=''>-</option>"]
         for c in classes:
             selected = "selected" if student["current_class_id"] == c["id"] else ""
@@ -756,11 +662,9 @@ def app(environ, start_response):
               <button>{t('common.edit')}</button>
             </form>
             """
-
         edit_button_html = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             edit_button_html = f'<div style="margin:8px 0"><button type="button" onclick="location.hash=\'student-edit\'">{t("students.detail.edit")}</button></div>'
-
         body_html = f"""
         <div><a href='/students?lang={CURRENT_LANG}'>← {t("students.detail.back")}</a></div>
         {f"<p style='color:green'>{message}</p>" if message else ''}
@@ -780,59 +684,50 @@ def app(environ, start_response):
           <tr><th>{t('students.field.leave_period')}</th><td>{student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
           <tr><th>{t('students.field.memo')}</th><td>{student['memo'] or '-'}</td></tr>
         </table>
-
         <h4>{t('students.detail.section.attendance')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('students.field.note')}</th></tr>
           {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
         </table>
         {section_pager('att_page', att_page, attendance_has_next)}
-
         <h4>{t('students.detail.section.homework')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.homework')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
           {rows_html(submission_rows, ['title', 'submitted', 'submitted_at', 'feedback'], 4)}
         </table>
         {section_pager('hw_page', hw_page, submission_has_next)}
-
         <h4>{t('students.detail.section.exams')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.exam_name')}</th><th>{t('students.field.score')}</th><th>{t('students.field.exam_date')}</th></tr>
           {rows_html(exam_rows, ['exam_name', 'score', 'exam_date'], 3)}
         </table>
         {section_pager('exam_page', exam_page, exam_has_next)}
-
         <h4>{t('students.detail.section.counseling')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.recorded_at')}</th><th>{t('students.field.memo')}</th><th>{t('students.field.special_note')}</th></tr>
           {rows_html(counseling_rows, ['recorded_at', 'memo', 'is_special_note'], 3)}
         </table>
         {section_pager('counseling_page', counseling_page, counseling_has_next)}
-
         <h4>{t('students.detail.section.payments')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.paid_date')}</th><th>{t('students.field.amount')}</th><th>{t('students.field.package_hours')}</th><th>{t('students.field.remaining_classes')}</th></tr>
           {rows_html(payment_rows, ['paid_date', 'amount', 'package_hours', 'remaining_classes'], 4)}
         </table>
         {section_pager('payment_page', payment_page, payment_has_next)}
-
         <h4>{t('students.detail.section.loans')}</h4>
         <table border='1' cellpadding='6' cellspacing='0'>
           <tr><th>{t('students.field.code')}</th><th>{t('students.field.title')}</th><th>{t('students.field.loaned_at')}</th><th>{t('students.field.returned_at')}</th></tr>
           {rows_html(loan_rows, ['code', 'title', 'loaned_at', 'returned_at'], 4)}
         </table>
         {section_pager('loan_page', loan_page, loan_has_next)}
-
         {edit_form}
         {pw_form}
         """
         html = render_html(t("students.detail.title"), body_html, user)
-
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/students":
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
@@ -861,7 +756,6 @@ def app(environ, start_response):
                     ),
                 )
             conn.commit()
-
         where = []
         params = []
         q_name = query.get("name", "").strip()
@@ -877,7 +771,6 @@ def app(environ, start_response):
             where.append("s.phone LIKE ?")
             params.append(f"%{q_phone}%")
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
-
         students = conn.execute(
             f"""SELECT s.*, c.name AS class_name, c.teacher_id AS current_class_teacher_id
             FROM students s
@@ -886,7 +779,6 @@ def app(environ, start_response):
             ORDER BY s.id DESC""",
             params,
         ).fetchall()
-
         rows = ""
         for st in students:
             if not can_view_student_row(user, st):
@@ -904,7 +796,6 @@ def app(environ, start_response):
               <td>{status_t(st['status']) if st['status'] else '-'}</td>
             </tr>
             """
-
         html = render_html("학생 관리 / Student Management / 学生管理", f"""
         <form method='get' style='margin-bottom:10px'>
           <input type='hidden' name='lang' value='{CURRENT_LANG}'>
@@ -925,8 +816,164 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     # 학사 구조
+    if path.startswith("/classes/"):
+        if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
+            conn.close()
+            status, headers, body = forbidden_html(user)
+            start_response(status, headers)
+            return [body]
+        class_id = path.split("/")[-1]
+        if not class_id.isdigit():
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Not Found".encode("utf-8")]
+        if has_role(user, [ROLE_TEACHER]):
+            class_row = conn.execute(
+                """SELECT c.*, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                WHERE c.id=? AND c.teacher_id=?""",
+                (class_id, user["id"]),
+            ).fetchone()
+        else:
+            class_row = conn.execute(
+                """SELECT c.*, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                WHERE c.id=?""",
+                (class_id,),
+            ).fetchone()
+        if not class_row:
+            conn.close()
+            start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
+            return ["Class Not Found".encode("utf-8")]
+        student_sort = query.get("student_sort", "name_ko")
+        if student_sort not in ("name_ko", "student_no", "status"):
+            student_sort = "name_ko"
+        student_order = query.get("student_order", "asc").lower()
+        if student_order not in ("asc", "desc"):
+            student_order = "asc"
+        students = conn.execute(
+            f"""SELECT id, student_no, name_ko, phone, status
+            FROM students WHERE current_class_id=?
+            ORDER BY {student_sort} {student_order}, id DESC""",
+            (class_id,),
+        ).fetchall()
+        schedules = conn.execute(
+            "SELECT day_of_week, start_time, end_time FROM schedules WHERE class_id=? ORDER BY id DESC",
+            (class_id,),
+        ).fetchall()
+        attendance_rows = conn.execute(
+            """SELECT a.lesson_date, s.name_ko AS student_name, a.status, a.note
+            FROM attendance a LEFT JOIN students s ON s.user_id=a.student_id
+            WHERE a.class_id=? ORDER BY a.id DESC LIMIT 20""",
+            (class_id,),
+        ).fetchall()
+        homework_rows = conn.execute(
+            """SELECT h.title, h.due_date,
+            COUNT(hs.id) AS total_submissions,
+            SUM(CASE WHEN hs.submitted=1 THEN 1 ELSE 0 END) AS submitted_count
+            FROM homework h
+            LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
+            WHERE h.class_id=?
+            GROUP BY h.id
+            ORDER BY h.id DESC LIMIT 20""",
+            (class_id,),
+        ).fetchall()
+        exam_rows = conn.execute(
+            """SELECT e.name AS exam_name, e.exam_date, ROUND(AVG(es.score),2) AS avg_score, COUNT(es.id) AS score_count
+            FROM exams e
+            LEFT JOIN exam_scores es ON es.exam_id=e.id
+            WHERE e.class_id=?
+            GROUP BY e.id
+            ORDER BY e.id DESC LIMIT 20""",
+            (class_id,),
+        ).fetchall()
+        export = query.get("export", "")
+        if export in ("students_csv", "attendance_csv"):
+            if export == "students_csv":
+                lines = ["student_no,name_ko,phone,status"]
+                for r in students:
+                    lines.append(f'"{r["student_no"] or ""}","{r["name_ko"] or ""}","{r["phone"] or ""}","{r["status"] or ""}"')
+                filename = f"class_{class_id}_students.csv"
+            else:
+                lines = ["lesson_date,student_name,status,note"]
+                for r in attendance_rows:
+                    lines.append(f'"{r["lesson_date"] or ""}","{r["student_name"] or ""}","{r["status"] or ""}","{r["note"] or ""}"')
+                filename = f"class_{class_id}_attendance.csv"
+            conn.close()
+            start_response("200 OK", [
+                ("Content-Type", "text/csv; charset=utf-8"),
+                ("Content-Disposition", f"attachment; filename={filename}"),
+            ])
+            return ["\n".join(lines).encode("utf-8")]
+        def rows_html(rows, cols):
+            if not rows:
+                return f"<tr><td colspan='{len(cols)}'>{t('common.no_data')}</td></tr>"
+            out = ""
+            for r in rows:
+                out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
+            return out
+        student_rows = rows_html(students, ["student_no", "name_ko", "phone", "status"])
+        schedule_rows = rows_html(schedules, ["day_of_week", "start_time", "end_time"])
+        attendance_html = rows_html(attendance_rows, ["lesson_date", "student_name", "status", "note"])
+        homework_html = rows_html(homework_rows, ["title", "due_date", "submitted_count", "total_submissions"])
+        exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
+        next_order = "desc" if student_order == "asc" else "asc"
+        html = render_html("반 상세 / Class Detail / 班级详情", f"""
+        <div><a href='/academics?lang={CURRENT_LANG}'>← 학사구조 목록</a></div>
+        <h3>{class_row['name']}</h3>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>기본정보</th><td>반명: {class_row['name']}</td></tr>
+          <tr><th>코스/레벨</th><td>{class_row['course_name'] or '-'} / {class_row['level_name'] or '-'}</td></tr>
+          <tr><th>담당 강사</th><td>{class_row['teacher_name'] or '-'}</td></tr>
+          <tr><th>학생 수</th><td>{len(students)}</td></tr>
+        </table>
+        <h4>소속 학생</h4>
+        <div style='margin-bottom:8px'>
+          정렬: {student_sort} ({student_order}) |
+          <a href='?lang={CURRENT_LANG}&student_sort=name_ko&student_order={next_order}'>이름 정렬</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort=student_no&student_order={next_order}'>학생번호 정렬</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort=status&student_order={next_order}'>상태 정렬</a> |
+          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=students_csv'>학생 CSV 내보내기</a>
+        </div>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>학생번호</th><th>이름</th><th>연락처</th><th>상태</th></tr>
+          {student_rows}
+        </table>
+        <h4>시간표</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>요일</th><th>시작</th><th>종료</th></tr>
+          {schedule_rows}
+        </table>
+        <h4>최근 출결</h4>
+        <div style='margin-bottom:8px'>
+          <a href='?lang={CURRENT_LANG}&student_sort={student_sort}&student_order={student_order}&export=attendance_csv'>출결 CSV 내보내기</a>
+        </div>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>날짜</th><th>학생</th><th>상태</th><th>메모</th></tr>
+          {attendance_html}
+        </table>
+        <h4>최근 숙제</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>숙제명</th><th>마감일</th><th>제출수</th><th>총대상(등록수)</th></tr>
+          {homework_html}
+        </table>
+        <h4>최근 시험/성적</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>시험명</th><th>시험일</th><th>평균점수</th><th>입력건수</th></tr>
+          {exam_html}
+        </table>
+        """, user)
+        status, headers, body = text_resp(html)
+        conn.close()
+        start_response(status, headers)
+        return [body]
     if path == "/academics":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
@@ -945,29 +992,92 @@ def app(environ, start_response):
             elif typ == "schedule":
                 conn.execute("INSERT INTO schedules(class_id, day_of_week, start_time, end_time, created_at) VALUES(?,?,?,?,?)", (data.get("class_id"), data.get("day_of_week"), data.get("start_time"), data.get("end_time"), now()))
             conn.commit()
-        courses = conn.execute("SELECT * FROM courses").fetchall()
-        levels = conn.execute("SELECT * FROM levels").fetchall()
+        courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
+        levels = conn.execute("""SELECT l.id, l.name, l.course_id, c.name AS course_name, l.created_at
+                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id
+                               ORDER BY l.id DESC""").fetchall()
         if has_role(user, [ROLE_TEACHER]):
-            classes = conn.execute("SELECT c.*,u.name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id=u.id WHERE c.teacher_id=?", (user["id"],)).fetchall()
+            classes = conn.execute(
+                """SELECT c.id, c.name, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
+                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                WHERE c.teacher_id=?
+                ORDER BY c.id DESC""",
+                (user["id"],),
+            ).fetchall()
         else:
-            classes = conn.execute("SELECT c.*,u.name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id=u.id").fetchall()
-        schedules = conn.execute("SELECT * FROM schedules").fetchall()
+            classes = conn.execute(
+                """SELECT c.id, c.name, co.name AS course_name, l.name AS level_name, u.name AS teacher_name,
+                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+                FROM classes c
+                LEFT JOIN courses co ON co.id=c.course_id
+                LEFT JOIN levels l ON l.id=c.level_id
+                LEFT JOIN users u ON u.id=c.teacher_id
+                ORDER BY c.id DESC"""
+            ).fetchall()
+        schedules = conn.execute(
+            """SELECT sc.id, sc.class_id, c.name AS class_name, sc.day_of_week, sc.start_time, sc.end_time
+            FROM schedules sc LEFT JOIN classes c ON c.id=sc.class_id
+            ORDER BY sc.id DESC"""
+        ).fetchall()
+        def rows_html(rows, cols):
+            if not rows:
+                return f"<tr><td colspan='{len(cols)}'>{t('common.no_data')}</td></tr>"
+            out = ""
+            for r in rows:
+                out += "<tr>" + "".join([f"<td>{r[c] if r[c] not in (None, '') else '-'}</td>" for c in cols]) + "</tr>"
+            return out
+        course_rows = rows_html(courses, ["id", "name", "created_at"])
+        level_rows = rows_html(levels, ["id", "name", "course_name", "created_at"])
+        class_rows = ""
+        if not classes:
+            class_rows = "<tr><td colspan='6'>데이터 없음</td></tr>"
+        else:
+            for c in classes:
+                class_rows += f"""
+                <tr>
+                  <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{c['name']}</a></td>
+                  <td>{c['course_name'] or '-'}</td>
+                  <td>{c['level_name'] or '-'}</td>
+                  <td>{c['teacher_name'] or '-'}</td>
+                  <td>{c['student_count'] or 0}</td>
+                </tr>
+                """
+        schedule_rows = rows_html(schedules, ["id", "class_name", "day_of_week", "start_time", "end_time"])
         html = render_html("코스/레벨/반/시간표 관리", f"""
         <h3>등록</h3>
         <form method='post'>코스 <input name='name'><input type='hidden' name='type' value='course'><button>추가</button></form>
         <form method='post'>레벨명 <input name='name'> 코스ID <input name='course_id'><input type='hidden' name='type' value='level'><button>추가</button></form>
         <form method='post'>반명 <input name='name'> 코스ID <input name='course_id'> 레벨ID <input name='level_id'> 강사ID <input name='teacher_id'><input type='hidden' name='type' value='class'><button>추가</button></form>
         <form method='post'>시간표 반ID <input name='class_id'> 요일 <input name='day_of_week'> 시작 <input name='start_time'> 종료 <input name='end_time'><input type='hidden' name='type' value='schedule'><button>추가</button></form>
-        <h4>코스</h4><pre>{[dict(r) for r in courses]}</pre>
-        <h4>레벨</h4><pre>{[dict(r) for r in levels]}</pre>
-        <h4>반</h4><pre>{[dict(r) for r in classes]}</pre>
-        <h4>시간표</h4><pre>{[dict(r) for r in schedules]}</pre>
+        <h4>코스</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>ID</th><th>코스명</th><th>생성일</th></tr>
+          {course_rows}
+        </table>
+        <h4>레벨</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>ID</th><th>레벨명</th><th>코스</th><th>생성일</th></tr>
+          {level_rows}
+        </table>
+        <h4>반 목록</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>반명</th><th>코스</th><th>레벨</th><th>담당 강사</th><th>학생 수</th></tr>
+          {class_rows}
+        </table>
+        <h4>시간표</h4>
+        <table border='1' cellpadding='6' cellspacing='0'>
+          <tr><th>ID</th><th>반</th><th>요일</th><th>시작</th><th>종료</th></tr>
+          {schedule_rows}
+        </table>
         """, user)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
         return [body]
-
     # 출결
     if path == "/attendance":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
@@ -981,11 +1091,9 @@ def app(environ, start_response):
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
         class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10)
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
-
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
         selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
-
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             class_id = d.get("class_id") or selected_class_id
@@ -1006,7 +1114,6 @@ def app(environ, start_response):
                 conn.execute("INSERT INTO notifications(type, target_user_id, payload, created_at) VALUES(?,?,?,?)",
                              ("absence", student_id, json.dumps({"student_id": student_id, "date": d.get("lesson_date")}, ensure_ascii=False), now()))
             conn.commit()
-
         if has_role(user, [ROLE_TEACHER]):
             rows = conn.execute("SELECT a.* FROM attendance a JOIN classes c ON c.id=a.class_id WHERE c.teacher_id=? ORDER BY a.id DESC LIMIT 200", (user["id"],)).fetchall()
         elif has_role(user, [ROLE_STUDENT]):
@@ -1053,7 +1160,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/homework":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
             conn.close()
@@ -1066,7 +1172,6 @@ def app(environ, start_response):
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
         selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
-
         if method == "POST":
             d = parse_body(environ)
             typ = d.get("type")
@@ -1118,7 +1223,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/exams":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT]):
             conn.close()
@@ -1170,7 +1274,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/counseling":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
@@ -1190,7 +1293,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/payments":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_PARENT, ROLE_STUDENT]):
             conn.close()
@@ -1215,7 +1317,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/announcements":
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
@@ -1232,7 +1333,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     if path == "/library":
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
@@ -1245,7 +1345,6 @@ def app(environ, start_response):
         teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_teacher = conn.execute("SELECT id, name, username FROM users WHERE id=? AND role='teacher'", (selected_teacher_id,)).fetchone() if selected_teacher_id else None
-
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
@@ -1288,7 +1387,6 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-
     # 기본 API 샘플
     if path == "/api/announcements" and method == "GET":
         rows = conn.execute("SELECT * FROM announcements ORDER BY id DESC").fetchall()
@@ -1296,7 +1394,6 @@ def app(environ, start_response):
         status, headers, body = json_resp([dict(r) for r in rows])
         start_response(status, headers)
         return [body]
-
     if path == "/api/books/loan-by-code" and method == "POST":
         d = parse_body(environ)
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
@@ -1320,12 +1417,9 @@ def app(environ, start_response):
         status, headers, body = json_resp({"message": "대여 완료"})
         start_response(status, headers)
         return [body]
-
     conn.close()
     start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
     return ["Not Found".encode("utf-8")]
-
-
 if __name__ == "__main__":
     init_db()
     with make_server("0.0.0.0", 8000, app) as httpd:
