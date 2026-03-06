@@ -108,7 +108,7 @@ def parse_query(environ):
 def get_lang(environ):
     q = parse_query(environ)
     lang = q.get("lang", "").strip().lower()
-    if lang in ("ko", "en", "zh"):
+    if lang in ("ko", "en", "zh"): 
         return lang
     return "ko"
 
