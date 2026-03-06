@@ -211,3 +211,16 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 반 선택 리스트는 `반명/코스/레벨/담당강사/학생수` 컬럼으로 표시됩니다.
 - 시간표 등록은 시작/종료 직접 선택 대신 `시간 슬롯` 선택(`start|end`) 중심으로 동작합니다.
 - 마스터데이터는 `반 / 코스·레벨 / 교사 / 교실·시간대` 섹션 버튼으로 분리되어 기본 진입 시 과다 노출을 줄였습니다.
+
+## 12) DB 구조 진단/사전 점검
+
+- 설계 기준 문서: `docs/db_design.md`
+- 개발 전 점검 스크립트:
+  ```bash
+  python3 scripts/db_preflight.py --db lms.db
+  ```
+- 점검 항목:
+  - 테이블/컬럼/FK 현황
+  - 주요 필수 컬럼 누락
+  - 역할-프로필 불일치(`role=student`인데 `students` 없음, `role=teacher`인데 `teacher_type` 없음)
+  - 참조 무결성 이상(클래스/학생/교실/시험/도서 참조 깨짐)
