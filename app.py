@@ -1782,6 +1782,12 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .print-student-entry { display:block; }
       .score-input { width:88px; min-width:88px; }
       .memo-input { min-width:220px; }
+      .btn.small { min-height:32px; padding:7px 10px; font-size:13px; }
+      .attendance-edit details { min-width:220px; width:240px; }
+      .attendance-edit summary { font-weight:600; }
+      .attendance-edit .filter-grid { grid-template-columns:1fr; gap:8px; }
+      .attendance-edit input, .attendance-edit select { min-height:38px; padding:8px 10px; }
+      .attendance-edit .btn-row { margin-top:4px; }
       .sticky-head thead th { position:sticky; top:0; z-index:2; background:#f9fafb; }
       .student-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:10px; }
       .student-summary-item { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
@@ -5240,7 +5246,7 @@ def app(environ, start_response):
               <td>{t('common.yes') if str(r['makeup_completed']) in ('1','True','true') else t('common.no')}</td>
               <td>{r['credit_delta'] if r['credit_delta'] is not None else 0}</td>
               <td>{h(r['note'] or '-')}</td>
-              <td>
+              <td class='attendance-edit'>
                 <details>
                   <summary style='cursor:pointer'>{t('common.edit')}</summary>
                   <form method='post' class='mobile-stack preserve-scroll-form' data-preserve-scroll='1' style='margin-top:8px'>
@@ -5276,7 +5282,7 @@ def app(environ, start_response):
                       <label>{t('field.note')} <input name='note' value='{h(r['note'] or '')}'></label>
                     </div>
                     <div class='btn-row'>
-                      <button>{t('attendance.correction')}</button>
+                      <button class='btn small'>{t('attendance.correction')}</button>
                     </div>
                   </form>
                 </details>
