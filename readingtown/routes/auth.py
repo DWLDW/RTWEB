@@ -34,8 +34,15 @@ def handle_auth_routes(path, method, environ, ctx):
         return status, headers, body
 
     if path == "/logout":
+        if method != "POST":
+            return ctx["redirect"]('/dashboard')
         cookies = ctx["parse_cookie"](environ.get("HTTP_COOKIE", ""))
         token = cookies.get("session")
+        expected = ctx["make_csrf_token"](token)
+        provided = ctx["request_csrf_token"](environ)
+        if not expected or not ctx["compare_digest"](provided, expected):
+            html = ctx["render_html"]("403 Forbidden", "<div class='flash error'>Invalid CSRF token. Refresh the page and try again.</div>")
+            return ctx["text_resp"](html, "403 Forbidden")
         conn = ctx["get_db"]()
         ctx["invalidate_session"](conn, token)
         conn.commit()

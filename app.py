@@ -1677,6 +1677,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .btn-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .filter-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .filter-row label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+      .inline-form { display:inline-flex; margin:0; }
       input, select, textarea { max-width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; min-height:44px; line-height:1.4; }
       textarea { width:100%; }
       button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:11px 14px; min-height:44px; line-height:1.3; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
@@ -1732,6 +1733,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .print-class-name { font-weight:700; font-size:11px; line-height:1.15; }
       .print-class-meta { font-size:10px; color:#475569; line-height:1.15; }
       .print-students { font-size:10px; color:#334155; line-height:1.15; margin-top:2px; }
+      .print-student-entry { display:block; }
       .score-input { width:88px; min-width:88px; }
       .memo-input { min-width:220px; }
       .sticky-head thead th { position:sticky; top:0; z-index:2; background:#f9fafb; }
@@ -1846,7 +1848,9 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
               <div>
                 <span>{menu_t('lang', lang)}:</span>
                 <select onchange="window.location.href=window.location.pathname+'?lang='+this.value">{lang_options}</select>
-                <a class='btn secondary' href='/logout'>{menu_t('logout', lang)}</a>
+                <form method='post' action='/logout' class='inline-form'>
+                  <button class='btn secondary' type='submit'>{menu_t('logout', lang)}</button>
+                </form>
               </div>
             </div>
             <h2 class='page-title'>{title}</h2>
@@ -2345,10 +2349,18 @@ def app(environ, start_response):
         "create_session": create_session,
         "build_session_cookie": build_session_cookie,
         "clear_session_cookie": clear_session_cookie,
+        "make_csrf_token": make_csrf_token,
+        "request_csrf_token": request_csrf_token,
+        "compare_digest": hmac.compare_digest,
         "uuid": uuid,
         "now": now,
         "json_resp": json_resp,
         "t": t,
+        "redirect": redirect,
+        "render_html": render_html,
+        "text_resp": text_resp,
+        "parse_cookie": parse_cookie,
+        "invalidate_session": invalidate_session,
     })
     if api_result is not None:
         status, headers, body = api_result
@@ -4030,42 +4042,53 @@ def app(environ, start_response):
         course_rows = rows_html(courses, ["id", "name", "created_at"])
         level_rows = rows_html(levels, ["id", "name", "course_name", "created_at"])
 
-        def compact_student_names(raw_names, limit=3):
-            names = [n.strip() for n in (raw_names or "").split(",") if n.strip()]
-            if not names:
-                return "-"
-            if len(names) <= limit:
-                return ", ".join(names)
-            return ", ".join(names[:limit]) + f" +{len(names) - limit}"
+        class_student_details = {}
+        if class_ids:
+            student_rows = conn.execute(
+                f"""SELECT s.current_class_id, s.name_ko, ht.name AS homeroom_teacher_name
+                FROM students s
+                LEFT JOIN users ht ON ht.id=s.homeroom_teacher_id
+                WHERE s.current_class_id IN ({','.join(['?'] * len(class_ids))})
+                ORDER BY s.current_class_id, s.id""",
+                class_ids,
+            ).fetchall()
+            for sr in student_rows:
+                class_student_details.setdefault(str(sr["current_class_id"]), []).append(
+                    f"{sr['name_ko'] or '-'} ({homeroom_display_name(sr['homeroom_teacher_name'])})"
+                )
 
-        room_grouped = {}
-        room_names = []
+        print_teacher_grouped = {}
+        print_teacher_rooms = {}
+        print_teacher_headers = []
+        print_teacher_seen = set()
         for r in schedules:
-            room_name = (r["classroom"] or "-").strip() or "-"
-            if room_name not in room_grouped:
-                room_grouped[room_name] = {}
-                room_names.append(room_name)
+            teacher_key = str(r["effective_teacher_id"] or "")
             slot = f"{r['start_time']}~{r['end_time']}"
-            room_grouped[room_name][slot] = r
-        room_names.sort()
+            print_teacher_grouped.setdefault(teacher_key, {})[slot] = r
+            print_teacher_rooms.setdefault(teacher_key, set())
+            if (r["classroom"] or "").strip():
+                print_teacher_rooms[teacher_key].add((r["classroom"] or "").strip())
+            if teacher_key not in print_teacher_seen:
+                print_teacher_seen.add(teacher_key)
+                print_teacher_headers.append((teacher_key, r["foreign_teacher_name"] or "-"))
+        print_teacher_headers.sort(key=lambda x: x[1])
 
         print_room_sections = ""
-        for room_name in room_names:
+        for teacher_key, teacher_name in print_teacher_headers:
+            room_name = ", ".join(sorted(print_teacher_rooms.get(teacher_key) or [])) or "-"
             slot_cells = ""
             for slot in time_slots:
-                les = room_grouped.get(room_name, {}).get(slot)
+                les = print_teacher_grouped.get(teacher_key, {}).get(slot)
                 if les:
-                    students_compact = compact_student_names(les["student_names"], limit=2)
-                    teacher_meta = f"{les['foreign_teacher_name'] or '-'}"
-                    if les["chinese_teacher_name"]:
-                        teacher_meta += f" / {les['chinese_teacher_name']}"
+                    student_entries = class_student_details.get(str(les["class_id"]), [])
+                    student_html = "".join([f"<span class='print-student-entry'>{h(name)}</span>" for name in student_entries]) or "-"
                     slot_cells += f"""
                     <td>
                       <div class='print-lesson-cell'>
                         <div class='print-class-name'>{les['class_name'] or '-'}</div>
                         <div class='print-class-meta'>{les['course_name'] or '-'} / {les['level_name'] or '-'}</div>
-                        <div class='print-class-meta'>{teacher_meta}</div>
-                        <div class='print-students'>{students_compact}</div>
+                        <div class='print-class-meta'>{t('academics.classroom')}: {les['classroom'] or '-'} / {t('academics.chinese_teacher')}: {les['chinese_teacher_name'] or '-'}</div>
+                        <div class='print-students'>{student_html}</div>
                       </div>
                     </td>
                     """
@@ -4073,7 +4096,7 @@ def app(environ, start_response):
                     slot_cells += "<td><div class='print-lesson-cell'></div></td>"
             print_room_sections += f"""
             <section class='print-room-card'>
-              <div class='print-room-title'>{t('academics.classroom')}: {room_name}</div>
+              <div class='print-room-title'>{teacher_name} / {t('academics.classroom')}: {room_name or '-'}</div>
               <table class='print-room-table'>
                 <tr>{''.join([f"<th>{slot}</th>" for slot in time_slots])}</tr>
                 <tr>{slot_cells}</tr>
