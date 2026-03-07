@@ -74,6 +74,7 @@ Behavior added or fixed:
 - the schedule card `Attendance & Evaluation` button was reduced so its visual weight is closer to the `More` control and the card layout stays denser
 - `/users`, `/attendance`, `/payments`, and `/library` large tables now show total result counts and numeric page links instead of only prev/next-style paging
 - schedule makeup-student search now shows total candidate count and numeric page links as well, not just a truncated first page
+- `/counseling`, `/homework`, `/students`, and `/masterdata` class list now also use page-sized result views with total counts and numeric page links
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
@@ -86,6 +87,7 @@ Known issues:
 - schedule `More` dropdown behavior was validated by compile only; browser layout verification is still needed for overlap/z-index edge cases
 - the makeup search pager range text is currently English-only (`Showing x-y`) and should be moved to translations in the next i18n pass
 - library sort headers now reset the correct page key for each table (`book_page`, `loan_page`); browser verification is still pending
+- masterdata pagination currently covers the class list first; course/level/room/package tables can be paged later if they become large enough
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
@@ -97,6 +99,7 @@ Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the schedule action/menu cleanup
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after makeup-search pagination and schedule button-size adjustments
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after total-count/numeric-pagination updates
+- `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after counseling/homework/students/masterdata pagination updates
 
 Next recommended task:
-- browser-verify total-count and numeric page links on `/users`, `/attendance`, `/payments`, `/library`, and schedule makeup search, then clean up remaining table i18n/raw-key leaks
+- browser-verify total-count and numeric page links on `/users`, `/students`, `/attendance`, `/counseling`, `/homework`, `/payments`, `/library`, `/masterdata`, and schedule makeup search, then clean up remaining table i18n/raw-key leaks

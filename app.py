@@ -3731,7 +3731,12 @@ def app(environ, start_response):
             start_response("200 OK", [("Content-Type", "text/csv; charset=utf-8"), ("Content-Disposition", f"attachment; filename=students_upload_template_{file_date}.csv")])
             return [csv_bytes]
 
+        student_page = max(1, as_int(query.get("page", "1")) or 1)
+        student_page_size = 20
         students = []
+        students_all = []
+        students_total_count = 0
+        students_has_more = False
         if load_students:
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
             students_all = conn.execute(
@@ -3744,7 +3749,12 @@ def app(environ, start_response):
                 ORDER BY s.id DESC""",
                 params,
             ).fetchall()
-            students = [st for st in students_all if can_view_student_row(user, st)]
+            students_all = [st for st in students_all if can_view_student_row(user, st)]
+            students_total_count = len(students_all)
+            start_idx = (student_page - 1) * student_page_size
+            end_idx = start_idx + student_page_size
+            students = students_all[start_idx:end_idx]
+            students_has_more = end_idx < students_total_count
 
         if query.get("export") in ("xlsx", "csv"):
             if not load_students:
@@ -3752,7 +3762,7 @@ def app(environ, start_response):
                 flash_type = "error"
             else:
                 file_date = datetime.utcnow().date().isoformat()
-                as_dict = [dict(r) for r in students]
+                as_dict = [dict(r) for r in students_all]
                 if query.get("export") == "xlsx":
                     xlsx_bytes = build_students_xlsx(as_dict)
                     if xlsx_bytes:
@@ -3787,6 +3797,7 @@ def app(environ, start_response):
           <form method='get' class='mobile-stack query-form'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
+            <input type='hidden' name='page' value='{student_page}'>
             <div class='filter-grid'>
               <label>{t('field.name')} <input name='name' value='{h(q_name)}'></label>
               <label>{t('students.field.student_no')} <input name='student_no' value='{h(q_student_no)}'></label>
@@ -3824,6 +3835,7 @@ def app(environ, start_response):
             {rows if load_students else ''}
             {("<tr><td colspan='10' class='empty-msg'>" + t('common.no_data') + "</td></tr>") if (load_students and not rows) else ""}
           </table></div>
+          {render_pagination('/students', CURRENT_LANG, student_page, student_page_size, len(students), students_has_more, {'load': '1', 'name': q_name, 'student_no': q_student_no, 'phone': q_phone, 'status': q_status, 'homeroom_teacher_id': q_homeroom_teacher_id}, total_count=students_total_count) if load_students else ''}
         </div>
         """, user, current_menu="students", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
@@ -4266,9 +4278,13 @@ def app(environ, start_response):
         courses = []
         levels = []
         classes = []
+        classes_total_count = 0
+        classes_has_more = False
         classrooms = []
         time_slots = []
         payment_packages = []
+        master_page = max(1, as_int(query.get("page", "1")) or 1)
+        master_page_size = 20
         if load_master:
             courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
             levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
@@ -4285,6 +4301,11 @@ def app(environ, start_response):
                     LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
                     LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
                     ORDER BY c.id DESC""").fetchall()
+            classes_total_count = len(classes)
+            class_start_idx = (master_page - 1) * master_page_size
+            class_end_idx = class_start_idx + master_page_size
+            classes_has_more = class_end_idx < classes_total_count
+            classes = classes[class_start_idx:class_end_idx]
             classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
             time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
             payment_packages = conn.execute("SELECT id, code, name, lesson_credits, list_price, status, created_at FROM payment_packages ORDER BY id DESC").fetchall()
@@ -4333,7 +4354,7 @@ def app(environ, start_response):
         empty4 = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty3 = f"<tr><td colspan='3' class='empty-msg'>{t('common.no_data')}</td></tr>"
         helper_html = "" if load_master else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")
-        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4>{helper_html}<div class='table-wrap'><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.status')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md if load_master else ''}{empty9 if (load_master and not class_rows_md) else ''}</table></div></div>"
+        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4>{helper_html}<div class='table-wrap'><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.status')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md if load_master else ''}{empty9 if (load_master and not class_rows_md) else ''}</table></div>{render_pagination('/masterdata', CURRENT_LANG, master_page, master_page_size, len(classes), classes_has_more, {'md_view': md_view, 'load': '1'}, total_count=classes_total_count) if (load_master and md_view == 'classes') else ''}</div>"
         course_cards = f"<div class='card'><h4>{t('academics.course')}</h4>{helper_html}<div class='table-wrap'><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows_md if load_master else ''}{empty4 if (load_master and not course_rows_md) else ''}</table></div></div><div class='card'><h4>{t('academics.level')}</h4><div class='table-wrap'><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows_md if load_master else ''}{empty5 if (load_master and not level_rows_md) else ''}</table></div></div>"
         room_cards = f"<div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{room_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{slot_rows_md or empty6}</table></div>"
         package_rows_md = "".join([
@@ -6178,6 +6199,8 @@ def app(environ, start_response):
             load_homework = True
 
         # access scoped homework list
+        homework_page = max(1, as_int(query.get("page", "1")) or 1)
+        homework_page_size = 20
         hw_params = []
         hw_where = []
         if selected_class_id and selected_class_id.isdigit():
@@ -6194,7 +6217,17 @@ def app(environ, start_response):
             hw_params.append(user["name"])
         where_sql = ("WHERE " + " AND ".join(hw_where)) if hw_where else ""
         homework_rows = []
+        homework_has_more = False
+        homework_total_count = 0
         if load_homework:
+            homework_total_count = conn.execute(
+                f"""SELECT COUNT(DISTINCT h.id)
+                FROM homework h
+                LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
+                LEFT JOIN students s ON s.user_id=hs.student_id
+                {where_sql}""",
+                tuple(hw_params),
+            ).fetchone()[0]
             homework_rows = conn.execute(
                 f"""SELECT DISTINCT h.id, h.class_id, h.teacher_id, h.title, h.description, h.due_date, h.status, h.created_at,
                 c.name AS class_name, u.name AS teacher_name,
@@ -6206,9 +6239,12 @@ def app(environ, start_response):
                 LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
                 LEFT JOIN students s ON s.user_id=hs.student_id
                 {where_sql}
-                ORDER BY h.id DESC LIMIT 200""",
-                tuple(hw_params),
+                ORDER BY h.id DESC
+                LIMIT ? OFFSET ?""",
+                tuple(hw_params + [homework_page_size + 1, (homework_page - 1) * homework_page_size]),
             ).fetchall()
+            homework_has_more = len(homework_rows) > homework_page_size
+            homework_rows = homework_rows[:homework_page_size]
 
         selected_homework = None
         if selected_homework_id.isdigit():
@@ -6288,6 +6324,7 @@ def app(environ, start_response):
             {hw_list_html if load_homework else ''}
             {(f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_homework and not hw_list_html) else ''}
           </table>
+          {render_pagination('/homework', CURRENT_LANG, homework_page, homework_page_size, len(homework_rows), homework_has_more, {'load': '1', 'selected_class_id': selected_class_id, 'selected_homework_id': selected_homework_id}, total_count=homework_total_count) if load_homework else ''}
         </div>
         <div class='card'>
           <h4>{t('homework.submission_panel')}</h4>
@@ -6492,6 +6529,8 @@ def app(environ, start_response):
         q_c_selected_student_id = (query.get("selected_student_id", "") or "").strip()
         q_c_student_q = (query.get("student_q", "") or "").strip()
         q_c_parent_q = (query.get("parent_q", "") or "").strip()
+        counseling_page = max(1, as_int(query.get("page", "1")) or 1)
+        counseling_page_size = 20
         counseling_picker_query_enabled = query.get("do_search", "") == "1" or bool(q_c_student_q) or bool(q_c_parent_q) or bool(q_c_selected_student_id)
         student_candidates = fetch_student_candidates(conn, q_c_student_q, limit=10) if counseling_picker_query_enabled else []
         selected_student = conn.execute("SELECT id, user_id, student_no, name_ko FROM students WHERE id=?", (q_c_selected_student_id,)).fetchone() if q_c_selected_student_id.isdigit() else None
@@ -6522,6 +6561,8 @@ def app(environ, start_response):
             load_counseling = True
 
         rows = []
+        counseling_has_more = False
+        counseling_total_count = 0
         if load_counseling:
             where = []
             params = []
@@ -6535,6 +6576,10 @@ def app(environ, start_response):
                 where.append("is_special_note=?")
                 params.append(q_c_special)
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+            counseling_total_count = conn.execute(
+                f"SELECT COUNT(*) FROM counseling c{where_sql}",
+                tuple(params),
+            ).fetchone()[0]
             rows = conn.execute(f"""SELECT c.*, su.name AS student_user_name, st.name_ko AS student_name, st.student_no,
             pu.name AS parent_name, cu.name AS created_by_name
             FROM counseling c
@@ -6543,7 +6588,10 @@ def app(environ, start_response):
             LEFT JOIN users pu ON pu.id=c.parent_id
             LEFT JOIN users cu ON cu.id=c.created_by
             {where_sql}
-            ORDER BY c.id DESC""", tuple(params)).fetchall()
+            ORDER BY c.id DESC
+            LIMIT ? OFFSET ?""", tuple(params + [counseling_page_size + 1, (counseling_page - 1) * counseling_page_size])).fetchall()
+            counseling_has_more = len(rows) > counseling_page_size
+            rows = rows[:counseling_page_size]
 
         student_picker = render_picker_block(t("picker.student"), "student_q", q_c_student_q, "selected_student_id", q_c_selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
@@ -6565,6 +6613,8 @@ def app(environ, start_response):
           <form method='get' class='mobile-stack query-form'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
+            <input type='hidden' name='selected_student_id' value='{q_c_selected_student_id}'>
+            <input type='hidden' name='parent_id' value='{q_c_parent_id}'>
             <div class='filter-grid'>
               <label>학생 <input value='{(f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else "-")}' readonly></label>
               <label>학부모 <input value='{(f"{selected_parent['name']} ({selected_parent['username']})" if selected_parent else "-")}' readonly></label>
@@ -6601,6 +6651,7 @@ def app(environ, start_response):
             {table_rows if load_counseling else ''}
             {(f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_counseling and not table_rows) else ''}
           </table>
+          {render_pagination('/counseling', CURRENT_LANG, counseling_page, counseling_page_size, len(rows), counseling_has_more, {'load': '1', 'selected_student_id': q_c_selected_student_id, 'parent_id': q_c_parent_id, 'is_special_note': q_c_special}, total_count=counseling_total_count) if load_counseling else ''}
         </div>
         """, user, current_menu="counseling", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
