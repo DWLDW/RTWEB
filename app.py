@@ -4758,6 +4758,7 @@ def app(environ, start_response):
         schedule_id = query.get("schedule_id", "")
         class_id_for_lesson = query.get("class_id", "") or selected_class_id
         lesson_date = (query.get("lesson_date", "") or datetime.utcnow().date().isoformat()).strip()
+        load_attendance = query.get("load", "") == "1" or query.get("export", "") == "csv"
         flash_msg = ""
         flash_type = "success"
 
