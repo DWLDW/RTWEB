@@ -1,4 +1,4 @@
-import html as html_lib
+﻿import html as html_lib
 import json
 import os
 import sqlite3
@@ -6,8 +6,7 @@ import traceback
 import uuid
 import io
 import csv
-from email import policy
-from email.parser import BytesParser
+import cgi
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -1284,37 +1283,19 @@ def parse_body(environ):
     return {k: v[0] for k, v in parse_qs(body.decode("utf-8")).items()}
 
 def parse_multipart_form(environ):
+    fs = cgi.FieldStorage(fp=environ.get("wsgi.input"), environ=environ, keep_blank_values=True)
     data = {}
     files = {}
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-    except ValueError:
-        length = 0
-    body = environ["wsgi.input"].read(length) if length > 0 else b""
-    ctype = environ.get("CONTENT_TYPE", "")
-    if not body or "multipart/form-data" not in ctype:
+    if not fs:
         return data, files
-
-    header_bytes = (
-        f"Content-Type: {ctype}\r\n"
-        "MIME-Version: 1.0\r\n"
-        "\r\n"
-    ).encode("utf-8")
-    message = BytesParser(policy=policy.default).parsebytes(header_bytes + body)
-    if not message.is_multipart():
-        return data, files
-
-    for part in message.iter_parts():
-        name = part.get_param("name", header="content-disposition")
-        if not name:
+    fields = fs.list if getattr(fs, "list", None) else [fs]
+    for f in fields:
+        if not getattr(f, "name", None):
             continue
-        filename = part.get_filename()
-        content = part.get_payload(decode=True) or b""
-        if filename:
-            files[name] = {"filename": filename, "content": content}
+        if getattr(f, "filename", None):
+            files[f.name] = {"filename": f.filename, "content": (f.file.read() if f.file else b"")}
         else:
-            charset = part.get_content_charset() or "utf-8"
-            data[name] = content.decode(charset, errors="replace")
+            data[f.name] = f.value
     return data, files
 def parse_cookie(cookie):
     out = {}
