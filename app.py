@@ -3800,6 +3800,7 @@ def app(environ, start_response):
         selected_day_query = (query.get("day", "") or "").strip().lower()
         selected_teacher_id = query.get("teacher_id", "")
         selected_room = query.get("classroom", "").strip()
+        load_schedule_classes = query.get("class_list_load", "") == "1"
         selected_course_level = ""
         selected_class_q = ""
         selected_schedule_id = query.get("schedule_id", "")
@@ -3931,6 +3932,23 @@ def app(environ, start_response):
                     else:
                         flash_msg = "schedule_id: not found"
                         flash_type = "error"
+            elif typ == "delete_class":
+                class_id = (data.get("id") or "").strip()
+                if not str(class_id).isdigit():
+                    flash_msg = "class_id: invalid class"
+                    flash_type = "error"
+                elif not ensure_exists(conn, "classes", class_id):
+                    flash_msg = "class_id: not found"
+                    flash_type = "error"
+                elif conn.execute("SELECT 1 FROM schedules WHERE class_id=? LIMIT 1", (class_id,)).fetchone():
+                    flash_msg = "????? ?? ?? ?? ??? ? ????"
+                    flash_type = "error"
+                else:
+                    conn.execute("DELETE FROM classes WHERE id=?", (class_id,))
+                    conn.commit()
+                    flash_msg = t("common.delete")
+                    if selected_form_class_id == class_id:
+                        selected_form_class_id = ""
             if flash_type == "error" and flash_msg:
                 log_event(conn, "ERROR", path, "시간표 저장 실패", flash_msg, user["id"])
 
@@ -4035,20 +4053,24 @@ def app(environ, start_response):
                     break
 
         class_rows = ""
-        if classes:
+        if load_schedule_classes and classes:
             for c in classes:
+                delete_cell = ""
+                if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+                    delete_cell = f"<td><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' onsubmit='return confirm(`Delete this class?`);'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary' type='submit'>{t('common.delete')}</button></form></td>"
                 class_rows += f"""
                 <tr>
-                  <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td>
+                  <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} ? {c['name']}</a></td>
                   <td>{c['course_name'] or '-'}</td>
                   <td>{c['level_name'] or '-'}</td>
                   <td>{c['foreign_teacher_name'] or '-'}</td>
                   <td>{c['chinese_teacher_name'] or '-'}</td>
                   <td>{(c['student_names'] or '-')}</td>
+                  {delete_cell}
                 </tr>
                 """
-        else:
-            class_rows = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
+        elif load_schedule_classes:
+            class_rows = f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>"
 
         def rows_html(rows, cols):
             if not rows:
@@ -4413,13 +4435,18 @@ def app(environ, start_response):
           <div>
             {detail_html}
             {register_forms}
-            <details class='card' open>
+            <details class='card' {'open' if load_schedule_classes else ''}>
               <summary><strong>{t('academics.class_list')}</strong></summary>
               <div style='margin-top:8px'>
               <h4>{t('academics.class_list')}</h4>
+              <div class='btn-row' style='margin-bottom:8px'>
+                <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&class_list_load=1'>{t('academics.search')}</a>
+                <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}'>{t('common.reset')}</a>
+              </div>
+              {'' if load_schedule_classes else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
               <div class='table-wrap'><table>
-                <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th></tr>
-                {class_rows}
+                <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th>{("<th>" + t('common.delete') + "</th>") if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ""}</tr>
+                {class_rows if load_schedule_classes else ''}
               </table></div>
               </div>
             </details>
@@ -4718,8 +4745,9 @@ def app(environ, start_response):
         date_to = (query.get("date_to", "") or "").strip()
         makeup_needed_only = query.get("makeup_needed", "") == "1"
 
+        attendance_class_query_enabled = query.get("class_load", "") == "1" or bool((query.get("class_q", "") or "").strip()) or bool(selected_class_id)
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
-        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10, show_all_when_empty=True)
+        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=10, show_all_when_empty=attendance_class_query_enabled)
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (selected_class_id,)).fetchone() if selected_class_id else None
 
@@ -4909,7 +4937,8 @@ def app(environ, start_response):
         class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""),
                                           class_candidates, "/attendance", CURRENT_LANG,
-                                          {"selected_student_id": selected_student_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter})
+                                          {"selected_student_id": selected_student_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter},
+                                          query_flag_name="class_load", query_enabled=attendance_class_query_enabled)
 
         row_html = ""
         for r in rows:
