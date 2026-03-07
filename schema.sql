@@ -210,15 +210,30 @@ CREATE TABLE IF NOT EXISTS counseling (
   FOREIGN KEY(created_by) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS payment_packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  lesson_credits REAL NOT NULL DEFAULT 0,
+  list_price REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,
+  package_id INTEGER,
   paid_date TEXT NOT NULL,
   amount REAL NOT NULL,
+  list_price REAL DEFAULT 0,
+  discount_rate REAL DEFAULT 0,
   package_hours REAL DEFAULT 0,
   remaining_classes INTEGER DEFAULT 0,
   created_at TEXT NOT NULL,
-  FOREIGN KEY(student_id) REFERENCES users(id)
+  FOREIGN KEY(student_id) REFERENCES users(id),
+  FOREIGN KEY(package_id) REFERENCES payment_packages(id)
 );
 
 CREATE TABLE IF NOT EXISTS announcements (

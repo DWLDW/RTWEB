@@ -763,6 +763,45 @@ def ensure_master_tables(conn):
       end_time TEXT NOT NULL,
       created_at TEXT NOT NULL
     )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS payment_packages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      lesson_credits REAL NOT NULL DEFAULT 0,
+      list_price REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )""")
+    pcols = {r["name"] for r in conn.execute("PRAGMA table_info(payment_packages)").fetchall()}
+    if "lesson_credits" not in pcols:
+        conn.execute("ALTER TABLE payment_packages ADD COLUMN lesson_credits REAL NOT NULL DEFAULT 0")
+    if "list_price" not in pcols:
+        conn.execute("ALTER TABLE payment_packages ADD COLUMN list_price REAL NOT NULL DEFAULT 0")
+    if "status" not in pcols:
+        conn.execute("ALTER TABLE payment_packages ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+    if "updated_at" not in pcols:
+        conn.execute("ALTER TABLE payment_packages ADD COLUMN updated_at TEXT")
+
+    pay_cols = {r["name"] for r in conn.execute("PRAGMA table_info(payments)").fetchall()}
+    if "package_id" not in pay_cols:
+        conn.execute("ALTER TABLE payments ADD COLUMN package_id INTEGER")
+    if "list_price" not in pay_cols:
+        conn.execute("ALTER TABLE payments ADD COLUMN list_price REAL DEFAULT 0")
+    if "discount_rate" not in pay_cols:
+        conn.execute("ALTER TABLE payments ADD COLUMN discount_rate REAL DEFAULT 0")
+
+    sample_packages = [
+        ("RT30", "RT30", 30, 9900),
+        ("RT60", "RT60", 60, 18600),
+        ("WK24", "Weekend 24", 24, 8200),
+        ("VIP12", "VIP 12", 12, 5200),
+    ]
+    for code, name, credits, price in sample_packages:
+        conn.execute(
+            "INSERT OR IGNORE INTO payment_packages(code, name, lesson_credits, list_price, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+            (code, name, credits, price, "active", now(), now()),
+        )
 
 
 def repair_profile_integrity(conn):
@@ -3653,9 +3692,31 @@ def app(environ, start_response):
                     else:
                         label = f"{st}~{et}"
                         conn.execute("INSERT OR IGNORE INTO time_slots(label, start_time, end_time, created_at) VALUES(?,?,?,?)", (label, st, et, now()))
-                elif typ in ("delete_course", "delete_level", "delete_class", "delete_classroom", "delete_time_slot"):
+                elif typ == "payment_package":
+                    code = (data.get("code") or "").strip()
+                    name = (data.get("name") or "").strip()
+                    lesson_credits = as_float(data.get("lesson_credits"))
+                    list_price = as_float(data.get("list_price"))
+                    package_status = (data.get("status") or "active").strip() or "active"
+                    if not code:
+                        add_error(errs, "payment_package.code", "패키지 코드를 입력하세요")
+                    if not name:
+                        add_error(errs, "payment_package.name", "패키지명을 입력하세요")
+                    if lesson_credits is None or lesson_credits <= 0:
+                        add_error(errs, "payment_package.lesson_credits", "크레딧은 0보다 커야 합니다")
+                    if list_price is None or list_price < 0:
+                        add_error(errs, "payment_package.list_price", "정가를 확인하세요")
+                    if package_status not in ("active", "inactive"):
+                        add_error(errs, "payment_package.status", "상태를 확인하세요")
+                    if not errs:
+                        conn.execute(
+                            """INSERT INTO payment_packages(code, name, lesson_credits, list_price, status, created_at, updated_at)
+                            VALUES(?,?,?,?,?,?,?)""",
+                            (code, name, lesson_credits, list_price, package_status, now(), now()),
+                        )
+                elif typ in ("delete_course", "delete_level", "delete_class", "delete_classroom", "delete_time_slot", "delete_payment_package"):
                     del_id = data.get("id")
-                    table_map = {"delete_course": "courses", "delete_level": "levels", "delete_class": "classes", "delete_classroom": "classrooms", "delete_time_slot": "time_slots"}
+                    table_map = {"delete_course": "courses", "delete_level": "levels", "delete_class": "classes", "delete_classroom": "classrooms", "delete_time_slot": "time_slots", "delete_payment_package": "payment_packages"}
                     table = table_map[typ]
                     if not ensure_exists(conn, table, del_id):
                         add_error(errs, "delete.id", "삭제할 데이터가 없습니다")
@@ -3692,6 +3753,7 @@ def app(environ, start_response):
         classes = []
         classrooms = []
         time_slots = []
+        payment_packages = []
         if load_master:
             courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
             levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
@@ -3710,6 +3772,7 @@ def app(environ, start_response):
                     ORDER BY c.id DESC""").fetchall()
             classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
             time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
+            payment_packages = conn.execute("SELECT id, code, name, lesson_credits, list_price, status, created_at FROM payment_packages ORDER BY id DESC").fetchall()
         teacher_options = "".join([f"<option value='{tr['id']}'>{tr['name']} [{op_code('T', tr['id'])}] ({tr['username']}, {tr['teacher_type'] or '-'})</option>" for tr in teachers])
 
         def rows_html(rows, cols):
@@ -3726,6 +3789,7 @@ def app(environ, start_response):
           <a class='btn {'secondary' if md_view!='courses' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=courses'>{t('academics.course_level')}</a>
           <a class='btn {'secondary' if md_view!='teachers' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=teachers'>{t('academics.teacher')}</a>
           <a class='btn {'secondary' if md_view!='rooms' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=rooms'>{t('academics.classroom')} / {t('academics.time_slot')}</a>
+          <a class='btn {'secondary' if md_view!='packages' else ''}' href='/masterdata?lang={CURRENT_LANG}&md_view=packages'>수납 패키지</a>
         </div></div>
         """
 
@@ -3760,7 +3824,12 @@ def app(environ, start_response):
         teacher_rows_md = ''.join([f"<tr><td>{op_code('T', r['id'])}</td><td>{r['name']}</td><td>{r['username']}</td></tr>" for r in teachers])
         teacher_card = f"<div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{teacher_rows_md or empty3}</table></div>"
         room_cards = f"<div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{room_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{slot_rows_md or empty6}</table></div>"
-        section_body = classes_card if md_view == 'classes' else course_cards if md_view == 'courses' else teacher_card if md_view == 'teachers' else room_cards
+        package_rows_md = "".join([
+            f"<tr><td>{r['code']}</td><td>{r['name']}</td><td>{r['lesson_credits']}</td><td>{r['list_price']}</td><td>{status_t(r['status']) if r['status'] in ('active','inactive') else r['status']}</td><td><form method='post'><input type='hidden' name='type' value='delete_payment_package'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            for r in payment_packages
+        ])
+        package_card = f"<div class='card'><h4>수납 패키지</h4>{helper_html}<form method='post' class='form-row'><input type='hidden' name='type' value='payment_package'><label>코드 <input name='code' placeholder='RT30'></label><label>패키지명 <input name='name' placeholder='RT30 30크레딧'></label><label>수업 크레딧 <input name='lesson_credits' type='number' step='0.5' placeholder='30'></label><label>정가(CNY) <input name='list_price' type='number' step='0.01' placeholder='9900'></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><button>{t('common.add')}</button></form><div class='table-wrap'><table><tr><th>코드</th><th>패키지명</th><th>크레딧</th><th>정가</th><th>{t('academics.status')}</th><th>{t('common.delete')}</th></tr>{package_rows_md if load_master else ''}{(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_master and not package_rows_md) else ''}</table></div></div>"
+        section_body = classes_card if md_view == 'classes' else course_cards if md_view == 'courses' else teacher_card if md_view == 'teachers' else room_cards if md_view == 'rooms' else package_card
 
         html = render_html(t('menu.masterdata'), f"""
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
@@ -5538,10 +5607,18 @@ def app(environ, start_response):
                 where.append("is_special_note=?")
                 params.append(q_c_special)
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-            rows = conn.execute(f"SELECT * FROM counseling{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
+            rows = conn.execute(f"""SELECT c.*, su.name AS student_user_name, st.name_ko AS student_name, st.student_no,
+            pu.name AS parent_name, cu.name AS created_by_name
+            FROM counseling c
+            LEFT JOIN users su ON su.id=c.student_id
+            LEFT JOIN students st ON st.user_id=c.student_id
+            LEFT JOIN users pu ON pu.id=c.parent_id
+            LEFT JOIN users cu ON cu.id=c.created_by
+            {where_sql}
+            ORDER BY c.id DESC""", tuple(params)).fetchall()
 
         student_picker = render_picker_block(t("picker.student"), "student_q", q_c_student_q, "selected_student_id", q_c_selected_student_id,
-                                            (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'} / U:{selected_student['user_id']})" if selected_student else ""),
+                                            (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/counseling", CURRENT_LANG,
                                             {"parent_id": q_c_parent_id, "parent_q": q_c_parent_q, "load": "1", "is_special_note": q_c_special}, query_enabled=counseling_picker_query_enabled)
         parent_picker = render_picker_block(t("picker.parent"), "parent_q", q_c_parent_q, "parent_id", q_c_parent_id,
@@ -5549,7 +5626,7 @@ def app(environ, start_response):
                                            parent_candidates, "/counseling", CURRENT_LANG,
                                            {"selected_student_id": q_c_selected_student_id, "student_q": q_c_student_q, "load": "1", "is_special_note": q_c_special}, query_enabled=counseling_picker_query_enabled)
         table_rows = "".join([
-            f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['parent_id'] or '-'}</td><td>{r['memo'] or '-'}</td><td>{'Y' if r['is_special_note'] else '-'}</td><td>{r['created_at'] or '-'}</td></tr>"
+            f"<tr><td>{h(r['student_name'] or r['student_user_name'] or '-')}</td><td>{h((r['student_no'] or '-'))}</td><td>{h(r['parent_name'] or '-')}</td><td>{h(r['memo'] or '-')}</td><td>{'Y' if r['is_special_note'] else '-'}</td><td>{h(r['created_by_name'] or '-')}</td><td>{r['created_at'] or '-'}</td></tr>"
             for r in rows
         ])
         html = render_html(t("counseling.title"), f"""
@@ -5561,8 +5638,8 @@ def app(environ, start_response):
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
             <div class='filter-grid'>
-              <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_user_id)}'></label>
-              <label>{t('counseling.parent_id')} <input name='parent_id' value='{h(q_c_parent_id)}'></label>
+              <label>학생 <input value='{(f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else "-")}' readonly></label>
+              <label>학부모 <input value='{(f"{selected_parent['name']} ({selected_parent['username']})" if selected_parent else "-")}' readonly></label>
               <label>{t('counseling.special')}
                 <select name='is_special_note'>
                   <option value=''>{t('academics.day_all')}</option>
@@ -5579,8 +5656,10 @@ def app(environ, start_response):
         </div>
         <div class='card'>
           <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
-            <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_user_id)}' placeholder='User ID'></label>
-            <label>{t('counseling.parent_id')} <input name='parent_id' value='{h(q_c_parent_id)}'></label>
+            <input type='hidden' name='student_id' value='{h(q_c_student_user_id)}'>
+            <input type='hidden' name='parent_id' value='{h(q_c_parent_id)}'>
+            <label>학생 <input value='{(f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else "-")}' readonly></label>
+            <label>학부모 <input value='{(f"{selected_parent['name']} ({selected_parent['username']})" if selected_parent else "-")}' readonly></label>
             <label>{t('counseling.memo')} <input name='memo'></label>
             <label>{t('counseling.special')} <input type='checkbox' name='is_special_note' value='1'></label>
             <button>{t("common.save")}</button>
@@ -5590,9 +5669,9 @@ def app(environ, start_response):
           <h4>{t('counseling.list')}</h4>
           {'' if load_counseling else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <table>
-            <tr><th>ID</th><th>{t('counseling.student_id')}</th><th>{t('counseling.parent_id')}</th><th>{t('counseling.memo')}</th><th>{t('counseling.special')}</th><th>created_at</th></tr>
+            <tr><th>학생</th><th>{t('students.field.student_no')}</th><th>학부모</th><th>{t('counseling.memo')}</th><th>{t('counseling.special')}</th><th>{t('field.writer')}</th><th>{t('field.created_at')}</th></tr>
             {table_rows if load_counseling else ''}
-            {(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_counseling and not table_rows) else ''}
+            {(f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_counseling and not table_rows) else ''}
           </table>
         </div>
         """, user, current_menu="counseling", flash_msg=flash_msg, flash_type=flash_type)
@@ -5610,56 +5689,77 @@ def app(environ, start_response):
         student_query_enabled = query.get("do_search", "") == "1" or bool((query.get("student_q", "") or "").strip()) or bool(selected_student_id)
         load_payments = query.get("load", "") == "1" or bool(selected_student_id)
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10) if student_query_enabled else []
-        selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
+        selected_student = conn.execute("SELECT id, name_ko, student_no, remaining_credits FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
+        package_rows = conn.execute("SELECT id, code, name, lesson_credits, list_price FROM payment_packages WHERE COALESCE(status,'active')='active' ORDER BY id DESC, code ASC").fetchall()
         flash_msg = ""
         flash_type = "success"
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             d = parse_body(environ)
             student_input_id = d.get("student_id") or selected_student_id
-            student_row = conn.execute("SELECT user_id FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
+            package_id = (d.get("package_id") or "").strip()
+            student_row = conn.execute("SELECT user_id, remaining_credits FROM students WHERE id=?", (student_input_id,)).fetchone() if str(student_input_id).isdigit() else None
             student_user_id = student_row["user_id"] if student_row else student_input_id
+            package_row = conn.execute("SELECT id, code, name, lesson_credits, list_price FROM payment_packages WHERE id=?", (package_id,)).fetchone() if package_id.isdigit() else None
             errs = []
             amount_v = as_float(d.get("amount"))
-            hours_v = as_float(d.get("package_hours") or 0)
-            remain_v = as_int(d.get("remaining_classes") or 0)
+            hours_v = float(package_row["lesson_credits"] or 0) if package_row else 0
+            current_remaining = float(student_row["remaining_credits"] or 0) if student_row else 0
+            remain_v = current_remaining + hours_v if package_row else 0
+            list_price_v = float(package_row["list_price"] or 0) if package_row else 0
+            discount_rate_v = round(((list_price_v - amount_v) / list_price_v) * 100, 2) if package_row and list_price_v > 0 and amount_v is not None else 0
             if not ensure_exists(conn, "users", student_user_id, extra_where="role='student'"):
                 add_error(errs, "student_id", "존재하지 않는 학생입니다")
+            if not package_row:
+                add_error(errs, "package_id", "패키지를 선택하세요")
             if not is_valid_date(d.get("paid_date") or ""):
                 add_error(errs, "paid_date", "YYYY-MM-DD 형식이어야 합니다")
             if amount_v is None or amount_v < 0:
                 add_error(errs, "amount", "0 이상의 숫자여야 합니다")
-            if hours_v is None or hours_v < 0:
-                add_error(errs, "package_hours", "0 이상의 숫자여야 합니다")
-            if remain_v is None or remain_v < 0:
-                add_error(errs, "remaining_classes", "0 이상의 정수여야 합니다")
+            if hours_v <= 0:
+                add_error(errs, "package_hours", "패키지 크레딧을 확인하세요")
+            if remain_v < 0:
+                add_error(errs, "remaining_classes", "잔여 크레딧을 확인하세요")
             if errs:
                 flash_msg = format_errors(errs)
                 flash_type = "error"
                 log_event(conn, "ERROR", path, "수납 저장 검증 실패", "\n".join(errs), user["id"])
             else:
-                conn.execute("INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)", (student_user_id, d.get("paid_date"), amount_v, hours_v, remain_v, now()))
+                conn.execute(
+                    """INSERT INTO payments(student_id, package_id, paid_date, amount, list_price, discount_rate, package_hours, remaining_classes, created_at)
+                    VALUES(?,?,?,?,?,?,?,?,?)""",
+                    (student_user_id, package_row["id"], d.get("paid_date"), amount_v, list_price_v, discount_rate_v, hours_v, remain_v, now()),
+                )
+                conn.execute(
+                    "UPDATE students SET remaining_credits=?, updated_at=? WHERE id=?",
+                    (remain_v, now(), student_input_id),
+                )
                 conn.commit()
                 flash_msg = "저장되었습니다"
+                selected_student = conn.execute("SELECT id, name_ko, student_no, remaining_credits FROM students WHERE id=?", (student_input_id,)).fetchone()
             load_payments = True
 
         rows = []
         if load_payments:
             if has_role(user, [ROLE_STUDENT]):
                 rows = conn.execute(
-                    """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name
+                    """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
+                    pp.code AS package_code, pp.name AS package_name
                     FROM payments p
                     LEFT JOIN students st ON st.user_id=p.student_id
                     LEFT JOIN classes c ON c.id=st.current_class_id
+                    LEFT JOIN payment_packages pp ON pp.id=p.package_id
                     WHERE p.student_id=?
                     ORDER BY p.id DESC""",
                     (user["id"],),
                 ).fetchall()
             elif has_role(user, [ROLE_PARENT]):
                 rows = conn.execute(
-                    """SELECT p.*, s.id AS student_row_id, s.name_ko AS student_name, s.student_no, c.name AS class_name
+                    """SELECT p.*, s.id AS student_row_id, s.name_ko AS student_name, s.student_no, c.name AS class_name,
+                    pp.code AS package_code, pp.name AS package_name
                     FROM payments p
                     JOIN students s ON s.user_id=p.student_id
                     LEFT JOIN classes c ON c.id=s.current_class_id
+                    LEFT JOIN payment_packages pp ON pp.id=p.package_id
                     WHERE s.guardian_name=?
                     ORDER BY p.id DESC""",
                     (user["name"],),
@@ -5669,10 +5769,12 @@ def app(environ, start_response):
                     selected_user = conn.execute("SELECT user_id FROM students WHERE id=?", (selected_student_id,)).fetchone()
                     if selected_user:
                         rows = conn.execute(
-                            """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name
+                            """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
+                            pp.code AS package_code, pp.name AS package_name
                             FROM payments p
                             LEFT JOIN students st ON st.user_id=p.student_id
                             LEFT JOIN classes c ON c.id=st.current_class_id
+                            LEFT JOIN payment_packages pp ON pp.id=p.package_id
                             WHERE p.student_id=?
                             ORDER BY p.id DESC""",
                             (selected_user["user_id"],),
@@ -5681,10 +5783,12 @@ def app(environ, start_response):
                         rows = []
                 else:
                     rows = conn.execute(
-                        """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name
+                        """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
+                        pp.code AS package_code, pp.name AS package_name
                         FROM payments p
                         LEFT JOIN students st ON st.user_id=p.student_id
                         LEFT JOIN classes c ON c.id=st.current_class_id
+                        LEFT JOIN payment_packages pp ON pp.id=p.package_id
                         ORDER BY p.id DESC"""
                     ).fetchall()
 
@@ -5692,7 +5796,7 @@ def app(environ, start_response):
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/payments", CURRENT_LANG, {"load": "1"}, query_enabled=student_query_enabled)
         row_html = "".join([
-            f"<tr><td>{h(r['student_name'] or '-')}</td><td>{h(r['student_no'] or '-')}</td><td>{h(r['class_name'] or '-')}</td><td>{r['paid_date'] or '-'}</td><td>{r['amount']}</td><td>{r['package_hours']}</td><td>{r['remaining_classes']}</td></tr>"
+            f"<tr><td>{h(r['student_name'] or '-')}</td><td>{h(r['student_no'] or '-')}</td><td>{h(r['class_name'] or '-')}</td><td>{h((r['package_code'] or '-') + ' / ' + (r['package_name'] or '-'))}</td><td>{r['paid_date'] or '-'}</td><td>{r['amount']}</td><td>{r['list_price'] if r['list_price'] is not None else '-'}</td><td>{(str(r['discount_rate']) + '%') if r['discount_rate'] is not None else '-'}</td><td>{r['package_hours']}</td><td>{r['remaining_classes']}</td></tr>"
             for r in rows
         ])
         html = render_html(t("payments.title"), f"""
@@ -5712,14 +5816,14 @@ def app(environ, start_response):
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <label>{t('common.selected')} <input value='{(selected_student['name_ko'] if selected_student else '-')}' readonly></label>
             <label>{t('students.field.student_no')} <input value='{(selected_student["student_no"] if selected_student else "-")}' readonly></label>
+            <label>현재 크레딧 <input value='{(selected_student["remaining_credits"] if selected_student else 0)}' readonly></label>
+            <label>패키지 <select name='package_id'><option value=''>-</option>{''.join([f"<option value='{r['id']}'>{r['code']} / {r['name']} / {r['lesson_credits']}크레딧 / {r['list_price']} CNY</option>" for r in package_rows])}</select></label>
             <label>{t("students.field.paid_date")} <input name='paid_date' placeholder='2026-03-06'></label>
-            <label>{t("students.field.amount")} <input name='amount'></label>
-            <label>{t("students.field.package_hours")} <input name='package_hours'></label>
-            <label>{t("students.field.remaining_classes")} <input name='remaining_classes'></label>
+            <label>실결제금액 <input name='amount' type='number' step='0.01'></label>
             <button>{t('common.save')}</button>
           </form>
         </div>
-        <div class='card'><h4>{t("payments.list")}</h4>{'' if load_payments else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.name")}</th><th>{t("students.field.student_no")}</th><th>{t("students.field.class")}</th><th>{t("students.field.paid_date")}</th><th>{t("students.field.amount")}</th><th>{t("students.field.package_hours")}</th><th>{t("students.field.remaining_classes")}</th></tr>{row_html if load_payments else ''}{(f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_payments and not row_html) else ''}</table></div>
+        <div class='card'><h4>{t("payments.list")}</h4>{'' if load_payments else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.name")}</th><th>{t("students.field.student_no")}</th><th>{t("students.field.class")}</th><th>패키지</th><th>{t("students.field.paid_date")}</th><th>실결제금액</th><th>정가</th><th>할인율</th><th>{t("students.field.package_hours")}</th><th>{t("students.field.remaining_classes")}</th></tr>{row_html if load_payments else ''}{(f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_payments and not row_html) else ''}</table></div>
         """, user, current_menu="payments", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
