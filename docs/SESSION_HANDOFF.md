@@ -24,12 +24,13 @@ Behavior added or fixed:
 - schedule seed generation now avoids teacher/room slot conflicts for the same week
 - schedule save flow now blocks class/teacher/classroom conflicts before insert or update
 - timetable rows are now grouped by foreign teacher, empty cells are blank, and lesson cards are compacted for denser weekly viewing
+- /schedule now includes a print button and a dedicated `print=1` classroom-based print view; print mode prioritizes fitting one page first with tighter row/column widths, then flows to extra pages only when needed
 
 Known issues:
 - CSRF protection is still not implemented across POST routes
 - session cookie Secure flag is only enabled when HTTPS or SESSION_COOKIE_SECURE=1 is used
 - timezone cleanup outside auth/session is still pending
-- timetable compaction was compile/seed verified only; browser visual pass is still pending
+- timetable compaction/print layout were compile verified only; browser visual pass is still pending
 
 Quick verification done:
 - python -m py_compile app.py readingtown/routes/auth.py readingtown/routes/api.py scripts/seed_demo_data.py
@@ -40,6 +41,7 @@ Quick verification done:
 - verified legacy owner password was upgraded to pbkdf2 on successful login
 - python -m py_compile app.py scripts/seed_demo_data.py
 - verified seeded schedule conflict groups are 0 for both teacher and classroom slots
+- python -m py_compile app.py
 
 Next recommended task:
 - run one browser pass on /schedule for density/readability, then implement CSRF protection starting with admin write flows

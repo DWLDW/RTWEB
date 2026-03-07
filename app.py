@@ -10,7 +10,7 @@ from email import policy
 from email.parser import BytesParser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 from wsgiref.simple_server import make_server
 from readingtown.routes.auth import handle_auth_routes
 from readingtown.routes.notifications import handle_notifications_routes
@@ -1628,6 +1628,8 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .page-title { margin:0 0 14px 0; font-size:24px; overflow-wrap:anywhere; }
       .card { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:14px; margin-bottom:14px; overflow:hidden; }
       .card h3, .card h4 { margin:0 0 10px 0; overflow-wrap:anywhere; }
+      .card-header-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+      .card-header-row h4 { margin:0; }
       .mobile-stack { display:flex; flex-direction:column; gap:10px; }
       .form-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .form-row label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
@@ -1663,7 +1665,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .flash.success { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
       .flash.error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
       .timetable-wrap { overflow:auto; border:1px solid #e5e7eb; border-radius:12px; background:white; }
-      .timetable-grid { min-width:860px; display:grid; gap:0; }
+      .timetable-grid { --schedule-row-width:150px; --schedule-col-min:170px; min-width:860px; display:grid; gap:0; }
       .tt-head { background:#f3f4f6; font-weight:600; padding:8px 10px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; font-size:13px; }
       .tt-cell { min-height:92px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:4px; background:#fff; }
       .tt-rowhead { background:#f9fafb; padding:8px 10px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; min-width:150px; font-size:13px; }
@@ -1677,6 +1679,20 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:28px; padding:5px 8px; border-radius:6px; font-size:11px; }
       .mini-link { font-size:11px; padding:5px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
       .schedule-editor-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr); gap:14px; }
+      .print-only { display:none; }
+      .schedule-print-head { margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #cbd5e1; }
+      .schedule-print-title { font-size:18px; font-weight:700; margin-bottom:4px; }
+      .schedule-print-meta { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:#475569; }
+      .print-room-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+      .print-room-card { border:1px solid #94a3b8; border-radius:8px; overflow:hidden; background:#fff; break-inside:avoid; page-break-inside:avoid; }
+      .print-room-title { background:#d9f99d; font-size:13px; font-weight:700; padding:5px 8px; border-bottom:1px solid #94a3b8; }
+      .print-room-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+      .print-room-table th, .print-room-table td { border:1px solid #cbd5e1; padding:4px; vertical-align:top; font-size:11px; }
+      .print-room-table th { background:#e0f2fe; text-align:center; }
+      .print-lesson-cell { min-height:42px; }
+      .print-class-name { font-weight:700; font-size:11px; line-height:1.15; }
+      .print-class-meta { font-size:10px; color:#475569; line-height:1.15; }
+      .print-students { font-size:10px; color:#334155; line-height:1.15; margin-top:2px; }
       .score-input { width:88px; min-width:88px; }
       .memo-input { min-width:220px; }
       .sticky-head thead th { position:sticky; top:0; z-index:2; background:#f9fafb; }
@@ -1730,6 +1746,38 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         .flash { font-size:15px; line-height:1.45; }
         .timetable-wrap { overflow-x:auto; }
         .student-summary-grid { grid-template-columns:1fr; }
+        .print-room-grid { grid-template-columns:1fr; }
+      }
+      @page { size:A4 landscape; margin:6mm; }
+      @media print {
+        body { background:#fff; color:#111827; font-size:9px; }
+        .app, .main, .page-container { display:block; padding:0; margin:0; max-width:none; }
+        .sidebar, .topbar, .page-title, .filter-print-hide, .schedule-editor-grid, .flash, .screen-only, details.card, .lesson-main-actions, .lesson-sub-actions, .lesson-actions, button, .btn { display:none !important; }
+        .card { border:none; border-radius:0; padding:0; margin:0 0 5px 0; background:#fff; }
+        .card-header-row { margin-bottom:4px; }
+        .print-only { display:block !important; }
+        .timetable-wrap, .table-wrap { overflow:visible; border:none; border-radius:0; }
+        .timetable-grid { --schedule-row-width:64px; --schedule-col-min:54px; min-width:0; width:100%; page-break-inside:auto; }
+        .schedule-print-head { margin-bottom:6px; padding-bottom:4px; }
+        .schedule-print-title { font-size:13px; margin-bottom:2px; }
+        .schedule-print-meta { gap:8px; font-size:9px; }
+        .print-room-grid { grid-template-columns:repeat(2, minmax(0,1fr)); gap:5px; }
+        .print-room-card { border:1px solid #94a3b8; border-radius:0; }
+        .print-room-title { font-size:9px; padding:3px 4px; }
+        .print-room-table th, .print-room-table td { padding:2px; font-size:7px; }
+        .print-lesson-cell { min-height:28px; }
+        .print-class-name { font-size:7px; }
+        .print-class-meta, .print-students { font-size:6px; line-height:1.05; }
+        .tt-head { padding:4px 5px; font-size:9px; }
+        .tt-cell { min-height:52px; padding:2px; page-break-inside:auto; }
+        .tt-rowhead { min-width:78px; padding:4px 5px; font-size:9px; page-break-inside:avoid; }
+        .tt-rowhead strong { font-size:10px; }
+        .muted { font-size:8px; }
+        .lesson-block { background:#fff; border:1px solid #cbd5e1; padding:3px 4px; margin-bottom:2px; break-inside:avoid; page-break-inside:avoid; }
+        .lesson-title { font-size:9px; margin-bottom:1px; }
+        .lesson-meta, .student-line { font-size:7px; line-height:1.1; }
+        .student-line { margin-top:2px; }
+        .badge { padding:1px 4px; font-size:7px; }
       }
     </style>
     """
@@ -3707,6 +3755,7 @@ def app(environ, start_response):
             ref_date_str = datetime.utcnow().date().isoformat()
         selected_weekday, selected_view_date = weekday_from_ref(ref_date_str, week_offset)
         selected_day = selected_day_query.capitalize() if selected_day_query.capitalize() in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") else selected_weekday
+        print_mode = query.get("print", "") == "1"
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
@@ -3935,6 +3984,57 @@ def app(environ, start_response):
         course_rows = rows_html(courses, ["id", "name", "created_at"])
         level_rows = rows_html(levels, ["id", "name", "course_name", "created_at"])
 
+        def compact_student_names(raw_names, limit=3):
+            names = [n.strip() for n in (raw_names or "").split(",") if n.strip()]
+            if not names:
+                return "-"
+            if len(names) <= limit:
+                return ", ".join(names)
+            return ", ".join(names[:limit]) + f" +{len(names) - limit}"
+
+        room_grouped = {}
+        room_names = []
+        for r in schedules:
+            room_name = (r["classroom"] or "-").strip() or "-"
+            if room_name not in room_grouped:
+                room_grouped[room_name] = {}
+                room_names.append(room_name)
+            slot = f"{r['start_time']}~{r['end_time']}"
+            room_grouped[room_name][slot] = r
+        room_names.sort()
+
+        print_room_sections = ""
+        for room_name in room_names:
+            slot_cells = ""
+            for slot in time_slots:
+                les = room_grouped.get(room_name, {}).get(slot)
+                if les:
+                    students_compact = compact_student_names(les["student_names"], limit=2)
+                    teacher_meta = f"{les['foreign_teacher_name'] or '-'}"
+                    if les["chinese_teacher_name"]:
+                        teacher_meta += f" / {les['chinese_teacher_name']}"
+                    slot_cells += f"""
+                    <td>
+                      <div class='print-lesson-cell'>
+                        <div class='print-class-name'>{les['class_name'] or '-'}</div>
+                        <div class='print-class-meta'>{les['course_name'] or '-'} / {les['level_name'] or '-'}</div>
+                        <div class='print-class-meta'>{teacher_meta}</div>
+                        <div class='print-students'>{students_compact}</div>
+                      </div>
+                    </td>
+                    """
+                else:
+                    slot_cells += "<td><div class='print-lesson-cell'></div></td>"
+            print_room_sections += f"""
+            <section class='print-room-card'>
+              <div class='print-room-title'>{t('academics.classroom')}: {room_name}</div>
+              <table class='print-room-table'>
+                <tr>{''.join([f"<th>{slot}</th>" for slot in time_slots])}</tr>
+                <tr>{slot_cells}</tr>
+              </table>
+            </section>
+            """
+
         timetable_cols = ["<div class='tt-head'>" + t("academics.teacher_room") + "</div>"] + [f"<div class='tt-head'>{slot}</div>" for slot in time_slots]
         timetable_cells = ""
         for rowkey, tname, room in row_headers:
@@ -3972,6 +4072,11 @@ def app(environ, start_response):
 
         week_label = f"{week_year}-{week_start.month:02d} W{week_no}"
         week_range_label = f"{week_start.isoformat()} ~ {week_end.isoformat()}"
+        print_button_label = {"ko": "출력", "en": "Print", "zh": "打印"}.get(CURRENT_LANG, "Print")
+        print_title_label = {"ko": "주간 시간표", "en": "Weekly Timetable", "zh": "周课表"}.get(CURRENT_LANG, "Weekly Timetable")
+        print_day_label = t("academics.selected_day")
+        print_date_label = t("academics.selected_date")
+        print_week_label = t("academics.week_label")
         teacher_rows = list_teacher_profiles(conn)
         selected_teacher_options = [f"<option value=''>{t('academics.day_all')}</option>"]
         for tr in teacher_rows:
@@ -4054,6 +4159,10 @@ def app(environ, start_response):
             query_enabled=class_query_enabled,
         )
 
+        room_param = quote(selected_room) if selected_room else ""
+        print_query = f"/schedule?lang={CURRENT_LANG}&print=1&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={room_param}"
+        schedule_query = f"/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={room_param}"
+
         detail_html = f"<div class='card'><h4>{t('academics.lesson_detail')}</h4><p class='empty-msg'>{t('common.no_data')}</p></div>"
         register_forms = f"<div class='card'><a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>{t('academics.go_structure')}</a></div>"
         if selected_schedule:
@@ -4082,11 +4191,35 @@ def app(environ, start_response):
             </div>
             """
 
-        html = render_html(t('academics.timetable_title'), f"""
+        if print_mode:
+            html = render_html(t('academics.timetable_title'), f"""
+            <div class='card filter-print-hide'>
+              <div class='btn-row'>
+                <a class='btn secondary' href='{schedule_query}'>Back</a>
+                <button type='button' onclick='window.print()'>{print_button_label}</button>
+              </div>
+            </div>
+            <div class='card schedule-print-card'>
+              <div class='schedule-print-head'>
+                <div class='schedule-print-title'>{print_title_label}</div>
+                <div class='schedule-print-meta'>
+                  <span>{print_week_label}: {week_label}</span>
+                  <span>{print_day_label}: {selected_day}</span>
+                  <span>{print_date_label}: {selected_view_date}</span>
+                  <span>{t('academics.week_range')}: {week_range_label}</span>
+                </div>
+              </div>
+              <div class='print-room-grid'>
+                {print_room_sections or f"<div class='empty-msg'>{t('common.no_data')}</div>"}
+              </div>
+            </div>
+            """, user, current_menu="schedule", flash_msg=flash_msg, flash_type=flash_type)
+        else:
+            html = render_html(t('academics.timetable_title'), f"""
         <div class='card'>
           <div class='muted'>{t('academics.timetable_desc')}</div>
         </div>
-        <div class='card'>
+        <div class='card filter-print-hide'>
           <h4>{t('academics.filter')}</h4>
           <form method='get' class='filter-row'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
@@ -4120,10 +4253,22 @@ def app(environ, start_response):
           </form>
         </div>
 
-        <div class='card'>
-          <h4>{t('academics.timetable')}</h4>
+        <div class='card schedule-print-card'>
+          <div class='card-header-row'>
+            <h4>{t('academics.timetable')}</h4>
+            <a class='btn secondary screen-only' href='{print_query}' target='_blank'>{print_button_label}</a>
+          </div>
+          <div class='schedule-print-head print-only'>
+            <div class='schedule-print-title'>{print_title_label}</div>
+            <div class='schedule-print-meta'>
+              <span>{print_week_label}: {week_label}</span>
+              <span>{print_day_label}: {selected_day}</span>
+              <span>{print_date_label}: {selected_view_date}</span>
+              <span>{t('academics.week_range')}: {week_range_label}</span>
+            </div>
+          </div>
           <div class='table-wrap timetable-wrap'>
-            <div class='timetable-grid' style='grid-template-columns: 160px repeat({len(time_slots)}, minmax(170px,1fr));'>
+            <div class='timetable-grid' style='grid-template-columns: var(--schedule-row-width, 150px) repeat({len(time_slots)}, minmax(var(--schedule-col-min, 170px),1fr));'>
               {''.join(timetable_cols)}
               {timetable_cells}
             </div>
