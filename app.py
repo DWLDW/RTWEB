@@ -829,6 +829,359 @@ def copy_week_schedules(conn, source_week_start, target_week_start, class_ids=No
     return {"copied": copied, "skipped": skipped, "source_count": len(src_rows)}
 
 
+
+def ensure_user_account(conn, name, username, role, password="1234", teacher_type=None):
+    row = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if row:
+        uid = row["id"]
+        conn.execute("UPDATE users SET name=?, role=?, teacher_type=COALESCE(?, teacher_type) WHERE id=?", (name, role, teacher_type, uid))
+    else:
+        conn.execute(
+            "INSERT INTO users(name, username, password_hash, role, teacher_type, created_at) VALUES(?,?,?,?,?,?)",
+            (name, username, hash_pw(password), role, teacher_type, now()),
+        )
+        uid = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()["id"]
+    return uid
+
+
+def ensure_teacher_profile(conn, user_id, teacher_type):
+    row = conn.execute("SELECT id FROM teachers WHERE user_id=?", (user_id,)).fetchone()
+    if row:
+        conn.execute("UPDATE teachers SET teacher_type=?, updated_at=? WHERE user_id=?", (teacher_type, now(), user_id))
+    else:
+        conn.execute(
+            "INSERT INTO teachers(user_id, teacher_type, created_at, updated_at) VALUES(?,?,?,?)",
+            (user_id, teacher_type, now(), now()),
+        )
+
+
+def ensure_course(conn, name):
+    row = conn.execute("SELECT id FROM courses WHERE name=?", (name,)).fetchone()
+    if row:
+        return row["id"]
+    conn.execute("INSERT INTO courses(name, created_at) VALUES(?,?)", (name, now()))
+    return conn.execute("SELECT id FROM courses WHERE name=?", (name,)).fetchone()["id"]
+
+
+def ensure_level(conn, course_id, name):
+    row = conn.execute("SELECT id FROM levels WHERE course_id=? AND name=?", (course_id, name)).fetchone()
+    if row:
+        return row["id"]
+    conn.execute("INSERT INTO levels(course_id, name, created_at) VALUES(?,?,?)", (course_id, name, now()))
+    return conn.execute("SELECT id FROM levels WHERE course_id=? AND name=?", (course_id, name)).fetchone()["id"]
+
+
+def ensure_classroom(conn, name):
+    row = conn.execute("SELECT id FROM classrooms WHERE name=?", (name,)).fetchone()
+    if row:
+        return row["id"]
+    conn.execute("INSERT INTO classrooms(name, created_at) VALUES(?,?)", (name, now()))
+    return conn.execute("SELECT id FROM classrooms WHERE name=?", (name,)).fetchone()["id"]
+
+
+def ensure_time_slot(conn, label, start_time, end_time):
+    row = conn.execute("SELECT id FROM time_slots WHERE label=?", (label,)).fetchone()
+    if row:
+        conn.execute("UPDATE time_slots SET start_time=?, end_time=? WHERE id=?", (start_time, end_time, row["id"]))
+        return row["id"]
+    conn.execute("INSERT INTO time_slots(label, start_time, end_time, created_at) VALUES(?,?,?,?)", (label, start_time, end_time, now()))
+    return conn.execute("SELECT id FROM time_slots WHERE label=?", (label,)).fetchone()["id"]
+
+
+def ensure_class(conn, name, course_id, level_id, foreign_teacher_id, chinese_teacher_id, credit_unit, status="active", memo=""):
+    row = conn.execute("SELECT id FROM classes WHERE name=?", (name,)).fetchone()
+    teacher_id = foreign_teacher_id
+    if row:
+        conn.execute(
+            """UPDATE classes SET course_id=?, level_id=?, teacher_id=?, foreign_teacher_id=?, chinese_teacher_id=?,
+            credit_unit=?, status=?, memo=? WHERE id=?""",
+            (course_id, level_id, teacher_id, foreign_teacher_id, chinese_teacher_id, credit_unit, status, memo, row["id"]),
+        )
+        return row["id"]
+    conn.execute(
+        """INSERT INTO classes(course_id, level_id, name, teacher_id, foreign_teacher_id, chinese_teacher_id, credit_unit, status, memo, created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (course_id, level_id, name, teacher_id, foreign_teacher_id, chinese_teacher_id, credit_unit, status, memo, now()),
+    )
+    return conn.execute("SELECT id FROM classes WHERE name=?", (name,)).fetchone()["id"]
+
+
+def ensure_schedule_row(conn, class_id, day_of_week, start_time, end_time, classroom, teacher_id, week_start_date):
+    row = conn.execute(
+        """SELECT id FROM schedules WHERE class_id=? AND day_of_week=? AND start_time=? AND end_time=?
+        AND COALESCE(classroom,'')=COALESCE(?, '') AND COALESCE(week_start_date,'') IN ('', ?)""",
+        (class_id, day_of_week, start_time, end_time, classroom, week_start_date),
+    ).fetchone()
+    if row:
+        conn.execute("UPDATE schedules SET teacher_id=?, status='active', classroom=?, week_start_date=? WHERE id=?", (teacher_id, classroom, week_start_date, row["id"]))
+        return row["id"]
+    conn.execute(
+        """INSERT INTO schedules(class_id, day_of_week, start_time, end_time, classroom, status, note, teacher_id, created_at, week_start_date)
+        VALUES(?,?,?,?,?,'active',NULL,?,?,?)""",
+        (class_id, day_of_week, start_time, end_time, classroom, teacher_id, now(), week_start_date),
+    )
+    return conn.execute("SELECT id FROM schedules WHERE class_id=? AND day_of_week=? AND start_time=? AND end_time=? AND week_start_date=? ORDER BY id DESC LIMIT 1",
+                        (class_id, day_of_week, start_time, end_time, week_start_date)).fetchone()["id"]
+
+
+def seed_demo_data(conn, force=False):
+    app_env = (os.getenv("APP_ENV") or "").strip().lower()
+    allow = force or app_env in ("staging", "demo") or os.getenv("SEED_DEMO_DATA") == "1"
+    if not allow:
+        return {"seeded": False, "reason": "disabled"}
+
+    base_users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+    if not force and base_users > 300:
+        return {"seeded": False, "reason": "existing_data"}
+
+    owner_id = ensure_user_account(conn, "Demo Owner", "demo_owner", ROLE_OWNER)
+    ensure_user_account(conn, "Demo Manager A", "demo_manager_a", ROLE_MANAGER)
+    ensure_user_account(conn, "Demo Manager B", "demo_manager_b", ROLE_MANAGER)
+
+    foreign_names = ["Alex Carter", "Emma Stone", "Liam Foster", "Noah Reed"]
+    chinese_names = ["Wang Li", "Chen Yu", "Zhao Min", "Liu Fang"]
+    foreign_ids = []
+    chinese_ids = []
+    for i, nm in enumerate(foreign_names, 1):
+        uid = ensure_user_account(conn, nm, f"demo_ft_{i}", ROLE_TEACHER, teacher_type="foreign")
+        ensure_teacher_profile(conn, uid, "foreign")
+        foreign_ids.append(uid)
+    for i, nm in enumerate(chinese_names, 1):
+        uid = ensure_user_account(conn, nm, f"demo_ct_{i}", ROLE_TEACHER, teacher_type="chinese")
+        ensure_teacher_profile(conn, uid, "chinese")
+        chinese_ids.append(uid)
+
+    parent_ids = []
+    for i in range(1, 13):
+        pid = ensure_user_account(conn, f"Parent {i:02d}", f"demo_parent_{i:02d}", ROLE_PARENT)
+        parent_ids.append(pid)
+
+    course_ids = {}
+    for cn in ["Phonics", "Reading", "Writing", "Speaking"]:
+        course_ids[cn] = ensure_course(conn, cn)
+
+    level_ids = {}
+    for cname, cid in course_ids.items():
+        level_ids[(cname, "Starter")] = ensure_level(conn, cid, "Starter")
+        level_ids[(cname, "Basic")] = ensure_level(conn, cid, "Basic")
+        level_ids[(cname, "Advanced")] = ensure_level(conn, cid, "Advanced")
+
+    for room in ["R101", "R102", "R103", "R201", "R202", "R301"]:
+        ensure_classroom(conn, room)
+
+    slots = [
+        ("16:25-17:20", "16:25", "17:20"),
+        ("17:25-18:20", "17:25", "18:20"),
+        ("18:30-19:25", "18:30", "19:25"),
+        ("19:35-20:30", "19:35", "20:30"),
+    ]
+    for label, st, et in slots:
+        ensure_time_slot(conn, label, st, et)
+
+    class_specs = [
+        ("Phonics Starter A", "Phonics", "Starter", 0, 0, 1.0, "active", "Beginner sounds focus"),
+        ("Phonics Basic B", "Phonics", "Basic", 1, 1, 1.0, "active", "Blend practice"),
+        ("Reading Starter A", "Reading", "Starter", 2, 2, 1.5, "active", "Short stories"),
+        ("Reading Advanced", "Reading", "Advanced", 3, 3, 1.5, "active", "Comprehension intensive"),
+        ("Writing Basic", "Writing", "Basic", 0, 2, 1.0, "active", "Sentence building"),
+        ("Writing Advanced", "Writing", "Advanced", 1, 3, 1.5, "inactive", "Essay drills"),
+        ("Speaking Basic", "Speaking", "Basic", 2, 0, 1.0, "active", "Conversation core"),
+        ("Speaking Advanced", "Speaking", "Advanced", 3, 1, 1.5, "active", "Debate and presentation"),
+    ]
+
+    class_ids = []
+    for name, c, lv, fi, ci, unit, status, memo in class_specs:
+        class_ids.append(ensure_class(conn, name, course_ids[c], level_ids[(c, lv)], foreign_ids[fi], chinese_ids[ci], unit, status, memo))
+
+    student_name_pairs = [
+        ("Li Wei", "Leo"), ("Zhang Hao", "Hank"), ("Wang Xin", "Shawn"), ("Liu Yue", "Luna"), ("Chen Mo", "Momo"),
+        ("Yang Fan", "Finn"), ("Zhao Lin", "Lynn"), ("Sun Rui", "Ray"), ("He Jing", "Jane"), ("Guo Min", "Mina"),
+        ("Xu Tao", "Tom"), ("Deng Yu", "Yuri"), ("Qin Han", "Hans"), ("Zhou Yi", "Ethan"), ("Ma Ke", "Mark"),
+        ("Fang Xin", "Cindy"), ("Hu Lei", "Liam"), ("Xie An", "Ann"), ("Cao Yu", "Yuna"), ("Peng Jie", "Jay"),
+        ("Tang Wei", "Wade"), ("Lu Na", "Nora"), ("Shen Qi", "Kiki"), ("Song Yu", "Yoyo"), ("Yuan Bo", "Bobby"),
+        ("Jiang Nan", "Nina"), ("Ren Hao", "Howard"), ("Dong Li", "Lily"), ("Pan Yu", "Ruby"), ("Wei Chen", "Chris"),
+    ]
+
+    student_user_ids = []
+    statuses = ["active"] * 22 + ["leave"] * 4 + ["ended"] * 4
+    for i, (name_ko, name_en) in enumerate(student_name_pairs, 1):
+        uid = ensure_user_account(conn, name_ko, f"demo_student_{i:02d}", ROLE_STUDENT)
+        student_user_ids.append(uid)
+        guardian_idx = (i - 1) % len(parent_ids)
+        guardian_user = conn.execute("SELECT name FROM users WHERE id=?", (parent_ids[guardian_idx],)).fetchone()
+        class_id = class_ids[(i - 1) % len(class_ids)]
+        status_v = statuses[i - 1]
+        credits = float(6 + (i % 10))
+        row = conn.execute("SELECT id FROM students WHERE user_id=?", (uid,)).fetchone()
+        if row:
+            conn.execute(
+                """UPDATE students SET student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
+                current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                WHERE user_id=?""",
+                (
+                    f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
+                    class_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
+                    "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), uid,
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO students(user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone, current_class_id,
+                remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    uid, f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
+                    class_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
+                    "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), now(),
+                ),
+            )
+
+    week_start = iso_monday_str(datetime.utcnow().date().isoformat(), 0)
+    rooms = ["R101", "R102", "R103", "R201", "R202", "R301"]
+    weekday_cycle = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    slot_cycle = [("16:25", "17:20"), ("17:25", "18:20"), ("18:30", "19:25")]
+
+    schedule_rows = []
+    for idx, cls_id in enumerate(class_ids):
+        lesson_count = 2 if idx % 3 == 0 else 3
+        for j in range(lesson_count):
+            day = weekday_cycle[(idx + j) % len(weekday_cycle)]
+            st, et = slot_cycle[(idx + j) % len(slot_cycle)]
+            room = rooms[(idx + j) % len(rooms)]
+            teacher_id = foreign_ids[idx % len(foreign_ids)]
+            sc_id = ensure_schedule_row(conn, cls_id, day, st, et, room, teacher_id, week_start)
+            schedule_rows.append((sc_id, cls_id, day, st, et, room))
+
+    class_students = {}
+    for r in conn.execute("SELECT user_id, current_class_id FROM students WHERE current_class_id IS NOT NULL").fetchall():
+        class_students.setdefault(r["current_class_id"], []).append(r["user_id"])
+
+    recent_days = [0, 1, 2]
+    for sc_id, cls_id, day, st, et, room in schedule_rows[:18]:
+        students = class_students.get(cls_id, [])[:8]
+        class_credit = conn.execute("SELECT COALESCE(credit_unit,1) AS credit_unit FROM classes WHERE id=?", (cls_id,)).fetchone()["credit_unit"]
+        for sid_idx, sid in enumerate(students):
+            for back in recent_days:
+                lesson_date = (datetime.utcnow().date() - timedelta(days=back + (sid_idx % 2))).isoformat()
+                status_v = "present"
+                charge = None
+                requires = 0
+                makeup_done = 0
+                if (sid_idx + back) % 7 == 0:
+                    status_v = "absent"
+                    charge = "deduct" if (sid_idx % 2 == 0) else "no_deduct"
+                    requires = 1
+                    makeup_done = 1 if (sid_idx % 4 == 0) else 0
+                elif (sid_idx + back) % 5 == 0:
+                    status_v = "late"
+                elif (sid_idx + back) % 11 == 0:
+                    status_v = "makeup"
+                delta = calc_credit_delta(status_v, charge, class_credit)
+
+                exists = conn.execute(
+                    "SELECT id FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
+                    (sc_id, sid, lesson_date),
+                ).fetchone()
+                if exists:
+                    conn.execute(
+                        """UPDATE attendance SET status=?, class_id=?, note=?, created_by=?, participation_score=?, fluency_score=?,
+                        vocabulary_score=?, reading_score=?, homework_score=?, attitude_score=?, teacher_memo=?, absence_charge_type=?,
+                        requires_makeup=?, makeup_completed=?, credit_delta=? WHERE id=?""",
+                        (
+                            status_v, cls_id, "demo attendance", owner_id,
+                            3 + ((sid_idx + 1) % 3), 2 + ((sid_idx + back) % 4), 3 + (sid_idx % 3), 2 + ((sid_idx + 2) % 4),
+                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo",
+                            charge, requires, makeup_done, delta, exists["id"],
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at, schedule_id,
+                        participation_score, fluency_score, vocabulary_score, reading_score, homework_score, attitude_score, teacher_memo,
+                        absence_charge_type, requires_makeup, makeup_completed, credit_delta)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (
+                            cls_id, sid, lesson_date, status_v, "demo attendance", owner_id, now(), sc_id,
+                            3 + ((sid_idx + 1) % 3), 2 + ((sid_idx + back) % 4), 3 + (sid_idx % 3), 2 + ((sid_idx + 2) % 4),
+                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo",
+                            charge, requires, makeup_done, delta,
+                        ),
+                    )
+
+    for cls_id in class_ids[:8]:
+        teacher_id = conn.execute("SELECT COALESCE(foreign_teacher_id, teacher_id) AS tid FROM classes WHERE id=?", (cls_id,)).fetchone()["tid"]
+        for hidx in range(1, 3):
+            title = f"Week Task {hidx} - Class {cls_id}"
+            due_date = (datetime.utcnow().date() + timedelta(days=3 + hidx)).isoformat()
+            hrow = conn.execute("SELECT id FROM homework WHERE class_id=? AND title=?", (cls_id, title)).fetchone()
+            if hrow:
+                hw_id = hrow["id"]
+                conn.execute("UPDATE homework SET description=?, due_date=?, teacher_id=?, updated_at=? WHERE id=?", ("Demo homework content", due_date, teacher_id, now(), hw_id))
+            else:
+                conn.execute(
+                    "INSERT INTO homework(class_id, teacher_id, title, description, due_date, status, created_by, created_at, updated_at) VALUES(?,?,?,?,?,'active',?,?,?)",
+                    (cls_id, teacher_id, title, "Demo homework content", due_date, owner_id, now(), now()),
+                )
+                hw_id = conn.execute("SELECT id FROM homework WHERE class_id=? AND title=?", (cls_id, title)).fetchone()["id"]
+
+            students = class_students.get(cls_id, [])[:10]
+            for sidx, sid in enumerate(students):
+                sub = conn.execute("SELECT id FROM homework_submissions WHERE homework_id=? AND student_id=?", (hw_id, sid)).fetchone()
+                submitted = 1 if (sidx + hidx) % 3 != 0 else 0
+                feedback = "Good progress" if submitted else "Please submit by next class"
+                submitted_at = now() if submitted else None
+                if sub:
+                    conn.execute(
+                        "UPDATE homework_submissions SET submitted=?, submitted_at=?, feedback=?, feedback_teacher_id=?, updated_at=? WHERE id=?",
+                        (submitted, submitted_at, feedback, teacher_id, now(), sub["id"]),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at, feedback, feedback_teacher_id, updated_at) VALUES(?,?,?,?,?,?,?)",
+                        (hw_id, sid, submitted, submitted_at, feedback, teacher_id, now()),
+                    )
+
+    for cls_id in class_ids[:6]:
+        exam_name = f"Monthly Check {cls_id}"
+        exam_date = (datetime.utcnow().date() - timedelta(days=7)).isoformat()
+        ex = conn.execute("SELECT id FROM exams WHERE class_id=? AND name=?", (cls_id, exam_name)).fetchone()
+        if ex:
+            exam_id = ex["id"]
+            conn.execute("UPDATE exams SET exam_date=? WHERE id=?", (exam_date, exam_id))
+        else:
+            conn.execute("INSERT INTO exams(class_id, name, exam_date, report, created_at) VALUES(?,?,?,?,?)", (cls_id, exam_name, exam_date, "Demo exam", now()))
+            exam_id = conn.execute("SELECT id FROM exams WHERE class_id=? AND name=?", (cls_id, exam_name)).fetchone()["id"]
+
+        students = class_students.get(cls_id, [])[:10]
+        for sidx, sid in enumerate(students):
+            score = float(65 + ((sidx * 7 + cls_id) % 31))
+            erow = conn.execute("SELECT id FROM exam_scores WHERE exam_id=? AND student_id=?", (exam_id, sid)).fetchone()
+            if erow:
+                conn.execute("UPDATE exam_scores SET score=? WHERE id=?", (score, erow["id"]))
+            else:
+                conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (exam_id, sid, score, now()))
+
+    for idx, sid in enumerate(student_user_ids[:24]):
+        for pidx in range(2):
+            paid_date = (datetime.utcnow().date() - timedelta(days=20 - (idx % 10) - pidx * 14)).isoformat()
+            amount = 1200 + (idx % 6) * 150 + pidx * 80
+            row = conn.execute("SELECT id FROM payments WHERE student_id=? AND paid_date=? AND amount=?", (sid, paid_date, amount)).fetchone()
+            if not row:
+                conn.execute(
+                    "INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)",
+                    (sid, paid_date, amount, 24, 8 + (idx % 6), now()),
+                )
+
+    return {
+        "seeded": True,
+        "teachers_foreign": len(foreign_ids),
+        "teachers_chinese": len(chinese_ids),
+        "parents": len(parent_ids),
+        "students": len(student_user_ids),
+        "classes": len(class_ids),
+        "schedules": len(schedule_rows),
+    }
+
 def init_db():
     conn = get_db()
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
@@ -856,6 +1209,7 @@ def init_db():
                 (name, username, hash_pw(pw), role, now()),
             )
     repair_profile_integrity(conn)
+    seed_demo_data(conn, force=False)
     conn.commit()
     conn.close()
 
@@ -905,8 +1259,9 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
     lang = lang or CURRENT_LANG
     css = """
     <style>
+      html { -webkit-text-size-adjust: 100%; }
       * { box-sizing: border-box; }
-      body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; line-height:1.45; }
+      body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; line-height:1.5; font-size:16px; }
       .app { display:flex; min-height:100vh; }
       .sidebar { width:240px; background:#111827; color:#e5e7eb; padding:18px 14px; flex-shrink:0; }
       .brand { font-size:18px; font-weight:700; margin-bottom:18px; }
@@ -914,18 +1269,26 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .nav-link:hover { background:#1f2937; color:white; }
       .nav-link.active { background:#2563eb; color:white; }
       .main { flex:1; min-width:0; padding:18px 22px; }
+      .page-container { max-width:1400px; margin:0 auto; }
       .topbar { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; }
       .page-title { margin:0 0 14px 0; font-size:24px; overflow-wrap:anywhere; }
       .card { background:white; border:1px solid #e5e7eb; border-radius:12px; padding:14px; margin-bottom:14px; overflow:hidden; }
       .card h3, .card h4 { margin:0 0 10px 0; overflow-wrap:anywhere; }
+      .mobile-stack { display:flex; flex-direction:column; gap:10px; }
+      .form-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+      .form-row label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+      .filter-grid { display:grid; grid-template-columns:repeat(4,minmax(180px,1fr)); gap:10px; }
+      .filter-grid > label, .filter-grid > div { display:flex; flex-direction:column; gap:6px; }
+      .btn-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .filter-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .filter-row label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-      input, select, textarea { max-width:100%; border:1px solid #d1d5db; border-radius:8px; padding:9px 10px; }
+      input, select, textarea { max-width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; min-height:44px; line-height:1.4; }
       textarea { width:100%; }
-      button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:9px 12px; text-decoration:none; display:inline-block; }
+      button, .btn { background:#2563eb; color:white; border:none; border-radius:8px; padding:11px 14px; min-height:44px; line-height:1.3; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
       .btn.secondary { background:#6b7280; }
+      .table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e5e7eb; border-radius:12px; background:white; }
       table { width:100%; border-collapse:collapse; background:white; }
-      th, td { border:1px solid #e5e7eb; padding:8px; text-align:left; vertical-align:top; word-break:break-word; }
+      th, td { border:1px solid #e5e7eb; padding:10px; text-align:left; vertical-align:top; word-break:break-word; }
       th { background:#f9fafb; }
       .badge { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#e5e7eb; }
       .badge.active { background:#dcfce7; color:#166534; }
@@ -940,9 +1303,18 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .tt-head { background:#f3f4f6; font-weight:600; padding:10px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; }
       .tt-cell { min-height:140px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:8px; background:#fff; }
       .tt-rowhead { background:#f9fafb; padding:10px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; min-width:220px; }
-      .lesson-block { border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px; padding:8px; margin-bottom:8px; font-size:12px; }
+      .lesson-block { border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px; padding:10px; margin-bottom:8px; font-size:14px; line-height:1.4; }
       .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
-      .mini-link { font-size:11px; padding:4px 6px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; }
+      .lesson-main-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+      .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+      .mini-link { font-size:12px; padding:6px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .score-input { width:88px; min-width:88px; }
+      .memo-input { min-width:220px; }
+      .sticky-head thead th { position:sticky; top:0; z-index:2; background:#f9fafb; }
+      .student-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:10px; }
+      .student-summary-item { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
+      .student-summary-label { font-size:12px; color:#6b7280; margin-bottom:4px; }
+      .student-summary-value { font-size:16px; font-weight:600; overflow-wrap:anywhere; }
       .two-col { display:grid; grid-template-columns:2fr 1fr; gap:14px; }
       .muted { color:#6b7280; font-size:12px; overflow-wrap:anywhere; }
       @media (max-width: 1100px) {
@@ -962,24 +1334,35 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         th, td { font-size:14px; line-height:1.45; }
         button, .btn, input, select, textarea { font-size:15px; }
       }
-      @media (max-width: 720px) {
+      @media (max-width: 768px) {
         body { font-size:16px; line-height:1.55; }
         .page-title { font-size:24px; line-height:1.3; margin-bottom:16px; }
+        h1, h2, h3 { line-height:1.3; }
+        h1 { font-size:30px; }
+        h2 { font-size:26px; }
+        h3 { font-size:22px; }
+        .card { padding:16px; margin-bottom:16px; }
         .card h3, .card h4 { font-size:20px; line-height:1.35; margin-bottom:12px; }
         .muted { font-size:14px; line-height:1.5; }
-        .filter-row { flex-direction:column; align-items:stretch; gap:12px; }
-        .filter-row > * { width:100%; }
-        .filter-row label { width:100%; display:block; font-size:15px; line-height:1.45; margin-bottom:2px; }
-        .filter-row input, .filter-row select, .filter-row textarea, .filter-row button, .filter-row .btn { width:100%; min-height:42px; font-size:16px; line-height:1.35; }
-        table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        th, td { white-space:nowrap; font-size:14px; line-height:1.45; padding:10px 8px; }
-        .lesson-block { font-size:14px; line-height:1.45; padding:10px; }
-        .mini-link { font-size:13px; padding:6px 8px; }
+        .filter-row, .form-row { flex-direction:column; align-items:stretch; gap:12px; }
+        .filter-row > *, .form-row > * { width:100%; }
+        .filter-row label, .form-row label { width:100%; display:flex; flex-direction:column; align-items:stretch; gap:6px; font-size:15px; line-height:1.45; margin-bottom:2px; }
+        .filter-grid { grid-template-columns:1fr; }
+        .btn-row { flex-wrap:wrap; }
+        .btn-row .btn, .btn-row button { flex:1 1 180px; }
+        .filter-row input, .filter-row select, .filter-row textarea, .filter-row button, .filter-row .btn,
+        .form-row input, .form-row select, .form-row textarea, .form-row button, .form-row .btn { width:100%; min-height:44px; font-size:16px; line-height:1.35; }
+        th, td { white-space:nowrap; font-size:15px; line-height:1.5; padding:11px 9px; }
+        .lesson-block { font-size:15px; line-height:1.5; padding:12px; }
+        .lesson-main-actions .btn { min-width:140px; }
+        .mini-link { font-size:13px; padding:7px 9px; }
         .flash { font-size:15px; line-height:1.45; }
         .timetable-wrap { overflow-x:auto; }
+        .student-summary-grid { grid-template-columns:1fr; }
       }
     </style>
     """
+
     layout = body
     if user:
         lang_options = "".join([
@@ -999,6 +1382,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
             {menu_links}
           </aside>
           <main class='main'>
+            <div class='page-container'>
             <div class='topbar'>
               <div>{menu_t('login_as', lang)}: <strong>{user['name']}</strong> ({role_label(user['role'], lang)})</div>
               <div>
@@ -1010,6 +1394,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
             <h2 class='page-title'>{title}</h2>
             {flash_html}
             {body}
+            </div>
           </main>
         </div>
         """
@@ -1190,7 +1575,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
     return f"""
     <div class='card'>
       <h4>{title}</h4>
-      <form method='get' class='filter-row'>
+      <form method='get' class='mobile-stack'>
         <input type='hidden' name='lang' value='{lang}'>
         {hidden}
         <input name='{search_name}' value='{search_value or ''}' placeholder='search'>
@@ -1383,7 +1768,7 @@ def app(environ, start_response):
             form = f"""
             <div class='card'>
               <h3>{t("users.add")}</h3>
-              <form method='post' class='filter-row'>
+              <form method='post' class='form-row'>
                 <label>{t('field.name')} <input name='name' required></label>
                 <label>{t('login.username')} <input name='username' required></label>
                 <label>{t('login.password')} <input name='password' type='password'></label>
@@ -1681,25 +2066,27 @@ def app(environ, start_response):
         <div><a href='/students?lang={CURRENT_LANG}'>← {t("students.detail.back")}</a></div>
         <h3>{student['name_ko']} ({student['student_no'] or '-'})</h3>{edit_button_html}
         <h4>{t('students.detail.section.basic')}</h4>
-        <table>
-          <tr><th>{t('students.field.student_no')}</th><td>{student['student_no'] or '-'}</td></tr>
-          <tr><th>{t('students.field.name_ko')}</th><td>{student['name_ko'] or '-'}</td></tr>
-          <tr><th>{t('students.field.name_en')}</th><td>{student['name_en'] or '-'}</td></tr>
-          <tr><th>{t('students.field.phone')}</th><td>{student['phone'] or '-'}</td></tr>
-          <tr><th>{t('students.field.guardian_name')}</th><td>{student['guardian_name'] or '-'}</td></tr>
-          <tr><th>{t('students.field.guardian_phone')}</th><td>{student['guardian_phone'] or '-'}</td></tr>
-          <tr><th>{t('students.field.class')}</th><td>{student['class_name'] or '-'}</td></tr>
-          <tr><th>{t('students.field.credits')}</th><td>{student['remaining_credits'] or 0}</td></tr>
-          <tr><th>{t('students.field.status')}</th><td>{status_t(student['status']) if student['status'] else '-'}</td></tr>
-          <tr><th>{t('students.field.enrolled_at')}</th><td>{student['enrolled_at'] or '-'}</td></tr>
-          <tr><th>{t('students.field.leave_period')}</th><td>{student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</td></tr>
-          <tr><th>{t('students.field.memo')}</th><td>{student['memo'] or '-'}</td></tr>
-        </table>
+        <div class='card'>
+          <div class='student-summary-grid'>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.student_no')}</div><div class='student-summary-value'>{student['student_no'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.name_ko')}</div><div class='student-summary-value'>{student['name_ko'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.name_en')}</div><div class='student-summary-value'>{student['name_en'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.class')}</div><div class='student-summary-value'>{student['class_name'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.credits')}</div><div class='student-summary-value'>{student['remaining_credits'] or 0}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.status')}</div><div class='student-summary-value'>{status_t(student['status']) if student['status'] else '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.phone')}</div><div class='student-summary-value'>{student['phone'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.guardian_name')}</div><div class='student-summary-value'>{student['guardian_name'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.guardian_phone')}</div><div class='student-summary-value'>{student['guardian_phone'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.enrolled_at')}</div><div class='student-summary-value'>{student['enrolled_at'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.leave_period')}</div><div class='student-summary-value'>{student['leave_start_date'] or '-'} ~ {student['leave_end_date'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.memo')}</div><div class='student-summary-value'>{student['memo'] or '-'}</div></div>
+          </div>
+        </div>
         <h4>{t('students.detail.section.attendance')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('students.field.note')}</th></tr>
           {rows_html(attendance_rows, ['lesson_date', 'class_name', 'status', 'note'], 4)}
-        </table>
+        </table></div>
         {section_pager('att_page', att_page, attendance_has_next)}
         <h4>{t('students.detail.section.evaluations')}</h4>
         <div class='muted'>
@@ -1714,37 +2101,37 @@ def app(environ, start_response):
         <table>
           <tr><th>{t('students.field.lesson_date')}</th><th>{t('students.field.class')}</th><th>{t('students.field.status')}</th><th>{t('lesson.score.participation')}</th><th>{t('lesson.score.fluency')}</th><th>{t('lesson.score.vocabulary')}</th><th>{t('lesson.score.reading')}</th><th>{t('lesson.score.homework')}</th><th>{t('lesson.score.attitude')}</th><th>{t('lesson.score.teacher_memo')}</th></tr>
           {rows_html(evaluation_rows, ['lesson_date', 'class_name', 'status', 'participation_score', 'fluency_score', 'vocabulary_score', 'reading_score', 'homework_score', 'attitude_score', 'teacher_memo'], 10)}
-        </table>
+        </table></div>
         {section_pager('eval_page', eval_page, evaluation_has_next)}
         <h4>{t('students.detail.section.homework')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.homework')}</th><th>{t('students.field.submitted')}</th><th>{t('students.field.submitted_at')}</th><th>{t('students.field.feedback')}</th></tr>
           {rows_html(submission_rows, ['title', 'submitted', 'submitted_at', 'feedback'], 4)}
-        </table>
+        </table></div>
         {section_pager('hw_page', hw_page, submission_has_next)}
         <h4>{t('students.detail.section.exams')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.exam_name')}</th><th>{t('students.field.score')}</th><th>{t('students.field.exam_date')}</th></tr>
           {rows_html(exam_rows, ['exam_name', 'score', 'exam_date'], 3)}
-        </table>
+        </table></div>
         {section_pager('exam_page', exam_page, exam_has_next)}
         <h4>{t('students.detail.section.counseling')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.recorded_at')}</th><th>{t('students.field.memo')}</th><th>{t('students.field.special_note')}</th></tr>
           {rows_html(counseling_rows, ['recorded_at', 'memo', 'is_special_note'], 3)}
-        </table>
+        </table></div>
         {section_pager('counseling_page', counseling_page, counseling_has_next)}
         <h4>{t('students.detail.section.payments')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.paid_date')}</th><th>{t('students.field.amount')}</th><th>{t('students.field.package_hours')}</th><th>{t('students.field.remaining_classes')}</th></tr>
           {rows_html(payment_rows, ['paid_date', 'amount', 'package_hours', 'remaining_classes'], 4)}
-        </table>
+        </table></div>
         {section_pager('payment_page', payment_page, payment_has_next)}
         <h4>{t('students.detail.section.loans')}</h4>
-        <table>
+        <div class='table-wrap'><table>
           <tr><th>{t('students.field.code')}</th><th>{t('students.field.title')}</th><th>{t('students.field.loaned_at')}</th><th>{t('students.field.returned_at')}</th></tr>
           {rows_html(loan_rows, ['code', 'title', 'loaned_at', 'returned_at'], 4)}
-        </table>
+        </table></div>
         {section_pager('loan_page', loan_page, loan_has_next)}
         {edit_form}
         {pw_form}
@@ -2076,7 +2463,7 @@ def app(environ, start_response):
         </div>
         <div class='card'>
         <h4>{t('common.edit')}</h4>
-        <form method='post' class='filter-row'>
+        <form method='post' class='form-row'>
           <input type='hidden' name='type' value='class_edit'>
           <label>{t('academics.class_name')} <input name='name' value='{h(class_row['name'] or '')}'></label>
           <label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{co['id']}' {'selected' if str(class_row['course_id'] or '')==str(co['id']) else ''}>{co['name']}</option>" for co in conn.execute('SELECT id, name FROM courses ORDER BY name').fetchall()])}</select></label>
@@ -2323,11 +2710,11 @@ def app(environ, start_response):
         {section_nav}
         <div class='card'>
           <h4>{t('academics.register')}</h4>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='filter-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
         {section_body}
         """, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
@@ -2622,9 +3009,11 @@ def app(environ, start_response):
                       <div class='muted'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'}</div>
                       <div class='muted'>{t('academics.students')}: {students_label}</div>
                       <div><span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span></div>
-                      <div class='lesson-actions'>
-                        <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        <a class='mini-link' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
+                      <div class='lesson-main-actions'>
+                        <a class='btn' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
+                        <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
+                      </div>
+                      <div class='lesson-sub-actions'>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
                         <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
@@ -2754,21 +3143,25 @@ def app(environ, start_response):
             <input type='hidden' name='week' value='{week_offset}'>
             <input type='hidden' name='ref_date' value='{ref_date_str}'>
             <input type='hidden' name='recent_class_ids' value='{recent_class_ids}'>
+            <div class='filter-grid'>
             <label>{t('academics.week_label')} <strong>{week_label}</strong></label>
             <label>{t('academics.week_range')} <strong>{week_range_label}</strong></label>
             <label>{t('academics.selected_day')} <strong>{selected_day}</strong></label>
             <label>{t('academics.selected_date')} <strong>{selected_view_date}</strong></label>
-                        <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset-1}&day={selected_day}'>{t('academics.week_prev')}</a>
-            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={datetime.utcnow().date().isoformat()}&week=0&day={selected_day}'>{t('academics.week_current')}</a>
-            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset+1}&day={selected_day}'>{t('academics.week_next')}</a>
             <label>{t('academics.day_filter')} <select name='day' onchange='this.form.submit()'>{''.join(day_options)}</select></label>
             <label>{t('academics.teacher_filter')} <select name='teacher_id'>{''.join(selected_teacher_options)}</select></label>
             <label>{t('academics.classroom_filter')} <input name='classroom' value='{selected_room}'></label>
+          </div>
+          <div class='btn-row'>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset-1}&day={selected_day}'>{t('academics.week_prev')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={datetime.utcnow().date().isoformat()}&week=0&day={selected_day}'>{t('academics.week_current')}</a>
+            <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}&ref_date={ref_date_str}&week={week_offset+1}&day={selected_day}'>{t('academics.week_next')}</a>
             <button>{t('academics.search')}</button>
             <a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('common.reset')}</a>
             <a class='btn' href='#schedule-form'>{t('academics.add_lesson')}</a>
+          </div>
           </form>
-          <form method='post' class='filter-row' style='margin-top:10px'>
+          <form method='post' class='mobile-stack' style='margin-top:10px'>
             <input type='hidden' name='type' value='copy_week'>
             <div class='muted'>{t('academics.copy_week.desc')}</div>
             <div>{t('academics.copy_week.source')}: <strong>{week_range_label}</strong></div>
@@ -2781,8 +3174,8 @@ def app(environ, start_response):
           <div>
             <div class='card'>
               <h4>{t('academics.timetable')}</h4>
-              <div class='timetable-wrap'>
-                <div class='timetable-grid' style='grid-template-columns: 220px repeat({len(time_slots)}, minmax(180px,1fr));'>
+              <div class='table-wrap timetable-wrap'>
+                <div class='timetable-grid' style='grid-template-columns: 240px repeat({len(time_slots)}, minmax(220px,1fr));'>
                   {''.join(timetable_cols)}
                   {timetable_cells}
                 </div>
@@ -2791,7 +3184,7 @@ def app(environ, start_response):
             <div class='card' id='schedule-form'>
               <h4>{t('academics.schedule_form')}</h4>
               {form_class_picker}
-              <form method='post' class='filter-row'>
+              <form method='post' class='form-row'>
                 <input type='hidden' name='type' value='schedule'>
                 <input type='hidden' name='schedule_id' value='{selected_schedule['id'] if selected_schedule else ''}'>
                 <input type='hidden' name='selected_form_class_id' value='{selected_form_class_id}'>
@@ -2822,10 +3215,10 @@ def app(environ, start_response):
               <summary><strong>{t('academics.class_list')}</strong></summary>
               <div style='margin-top:8px'>
               <h4>{t('academics.class_list')}</h4>
-              <table>
+              <div class='table-wrap'><table>
                 <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th></tr>
                 {class_rows}
-              </table>
+              </table></div>
               </div>
             </details>
           </div>
@@ -3041,7 +3434,7 @@ def app(environ, start_response):
                 ex = existing_map.get(sid)
                 def score_cell(field):
                     val = ex[field] if ex and field in ex.keys() else None
-                    return f"<input name='{field}_{sid}' value='{h(val if val is not None else '')}' style='width:70px'>"
+                    return f"<input class='score-input' name='{field}_{sid}' value='{h(val if val is not None else '')}'>"
                 status_val = (ex["status"] if ex else "present")
                 charge_val = (ex["absence_charge_type"] if ex and 'absence_charge_type' in ex.keys() and ex["absence_charge_type"] else 'deduct')
                 requires_makeup_val = 1 if ex and 'requires_makeup' in ex.keys() and str(ex['requires_makeup']) in ('1','true','True') else 0
@@ -3069,7 +3462,7 @@ def app(environ, start_response):
                   <td>{score_cell('reading_score')}</td>
                   <td>{score_cell('homework_score')}</td>
                   <td>{score_cell('attitude_score')}</td>
-                  <td><input name='teacher_memo_{sid}' value='{h((ex['teacher_memo'] if ex and 'teacher_memo' in ex.keys() else (ex['note'] if ex else '')) or '')}' style='min-width:180px'></td>
+                  <td><input class='memo-input' name='teacher_memo_{sid}' value='{h((ex['teacher_memo'] if ex and 'teacher_memo' in ex.keys() else (ex['note'] if ex else '')) or '')}'></td>
                 </tr>
                 """
 
@@ -3089,21 +3482,21 @@ def app(environ, start_response):
               <div><strong>{t('field.date')}:</strong> {h(lesson_date)}</div>
               <div><strong>{t('academics.time_slot')}:</strong> {time_info}</div>
               <div><strong>{t('academics.classroom')}:</strong> {room_info}</div>
-              <div style='margin-top:8px'><a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('lesson.record.back_schedule')}</a></div>
+              <div class='btn-row' style='margin-top:8px'><a class='btn secondary' href='/schedule?lang={CURRENT_LANG}'>{t('lesson.record.back_schedule')}</a></div>
             </div>
             <div class='card'>
               <h4>{t('lesson.record.input_title')}</h4>
               <form method='post'>
                 <input type='hidden' name='lesson_date' value='{h(lesson_date)}'>
                 {empty_student_notice}
-                <table>
-                  <tr>
+                <div class='table-wrap'><table class='sticky-head'>
+                  <thead><tr>
                     <th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th>
                     <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>{t('lesson.score.teacher_memo')}</th>
-                  </tr>
-                  {student_rows_html or f"<tr><td colspan='12' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-                </table>
-                <div style='margin-top:10px'><button>{t('common.save')}</button></div>
+                  </tr></thead>
+                  <tbody>{student_rows_html or f"<tr><td colspan='12' class='empty-msg'>{t('common.no_data')}</td></tr>"}</tbody>
+                </table></div>
+                <div class='btn-row' style='margin-top:10px'><button>{t('common.save')}</button></div>
               </form>
             </div>
             """, user, current_menu="attendance", flash_msg=flash_msg, flash_type=flash_type)
@@ -3330,7 +3723,7 @@ def app(environ, start_response):
               <td>{r['credit_delta'] if r['credit_delta'] is not None else 0}</td>
               <td>{h(r['note'] or '-')}</td>
               <td>
-                <form method='post' class='filter-row'>
+                <form method='post' class='form-row'>
                   <input type='hidden' name='type' value='update_attendance'>
                   <input type='hidden' name='attendance_id' value='{r['id']}'>
                   <select name='status'>
@@ -3354,7 +3747,7 @@ def app(environ, start_response):
                   <input name='note' value='{h(r['note'] or '')}' style='min-width:120px'>
                   <button>{t('attendance.correction')}</button>
                 </form>
-                <form method='post' style='margin-top:4px'>
+                <form method='post' class='btn-row' style='margin-top:6px'>
                   <input type='hidden' name='type' value='mark_makeup_completed'>
                   <input type='hidden' name='attendance_id' value='{r['id']}'>
                   <button class='btn secondary'>{t('attendance.makeup_completed')}</button>
@@ -3369,28 +3762,32 @@ def app(environ, start_response):
         <div class='card'>
           <h4>{t('attendance.list')}</h4>
           <div class='muted'>{t('attendance.list_desc')}</div>
-          <form method='get' class='filter-row' style='margin-top:8px'>
+          <form method='get' class='mobile-stack' style='margin-top:8px'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
             <input type='hidden' name='selected_class_id' value='{selected_class_id}'>
+            <div class='filter-grid'>
             <label>{t('attendance.filter.date_from')} <input type='date' name='date_from' value='{date_from}'></label>
             <label>{t('attendance.filter.date_to')} <input type='date' name='date_to' value='{date_to}'></label>
             <label>{t('field.status')} <select name='status'><option value=''>{t('academics.day_all')}</option><option value='present' {'selected' if status_filter=='present' else ''}>{attendance_status_t('present')}</option><option value='late' {'selected' if status_filter=='late' else ''}>{attendance_status_t('late')}</option><option value='absent' {'selected' if status_filter=='absent' else ''}>{attendance_status_t('absent')}</option><option value='makeup' {'selected' if status_filter=='makeup' else ''}>{attendance_status_t('makeup')}</option></select></label>
             <label>{t('attendance.filter.deductible')} <select name='deductible'><option value=''>{t('academics.day_all')}</option><option value='deduct' {'selected' if deductible_filter=='deduct' else ''}>{t('attendance.charge.deduct')}</option><option value='no_deduct' {'selected' if deductible_filter=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option></select></label>
             <label>{t('attendance.requires_makeup')} <select name='requires_makeup'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if requires_makeup_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if requires_makeup_filter=='0' else ''}>{t('common.no')}</option></select></label>
             <label>{t('attendance.makeup_completed')} <select name='makeup_completed'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if makeup_completed_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if makeup_completed_filter=='0' else ''}>{t('common.no')}</option></select></label>
+          </div>
+          <div class='btn-row'>
             <button>{t('common.search')}</button>
             <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&makeup_needed=1'>{t('attendance.students_needing_makeup')}</a>
             <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&selected_student_id={selected_student_id}&selected_class_id={selected_class_id}&status={status_filter}&date_from={date_from}&date_to={date_to}&deductible={deductible_filter}&requires_makeup={requires_makeup_filter}&makeup_completed={makeup_completed_filter}&export=csv'>{t('attendance.export_csv')}</a>
+          </div>
           </form>
-          <table style='margin-top:10px'>
+          <div class='table-wrap' style='margin-top:10px'><table class='sticky-head'>
             <tr><th>{t('field.date')}</th><th>{t('field.student')}</th><th>{t('students.field.class')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th><th>{t('attendance.makeup_completed')}</th><th>{t('attendance.credit_impact')}</th><th>{t('field.note')}</th><th>{t('common.edit')}</th></tr>
             {row_html or f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-          </table>
+          </table></div>
         </div>
         <div class='card'>
           <h4>{t('attendance.manual_input_title')}</h4>
-          <form method='post' class='filter-row'>
+          <form method='post' class='form-row'>
             <input type='hidden' name='type' value='manual'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
@@ -3629,7 +4026,7 @@ def app(environ, start_response):
         </div>
         <div class='card'>
           <h4>{t('homework.add')}</h4>
-          <form method='post' class='filter-row'>
+          <form method='post' class='form-row'>
             <input type='hidden' name='type' value='homework_create'>
             <input type='hidden' name='class_id' value='{selected_class_id}'>
             <label>{t('academics.class_name')} <input value='{selected_class['name'] if selected_class else '-'}' readonly></label>
@@ -3736,8 +4133,8 @@ def app(environ, start_response):
         exam_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['name']}</td><td>{r['exam_date'] or '-'}</td><td>{r['report'] or '-'}</td></tr>" for r in exams])
         score_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['exam_id']}</td><td>{r['student_id']}</td><td>{r['score']}</td></tr>" for r in scores])
         html = render_html(t("exams.title"), f"""
-        <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("exams.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.exam_name")}</th><th>{t("field.exam_date")}</th><th>{t("field.report")}</th></tr>{exam_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         <div class='card'><h4>{t("exams.scores")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.exam_id")}</th><th>{t("field.student_id")}</th><th>{t("field.score")}</th></tr>{score_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="exams", flash_msg=flash_msg, flash_type=flash_type)
@@ -3777,7 +4174,7 @@ def app(environ, start_response):
         ])
         html = render_html(t("counseling.title"), f"""
         <div class='card'>
-          <form method='post' class='filter-row'>
+          <form method='post' class='form-row'>
             <label>{t('counseling.student_id')} <input name='student_id'></label>
             <label>{t('counseling.parent_id')} <input name='parent_id'></label>
             <label>{t('counseling.memo')} <input name='memo'></label>
@@ -3850,7 +4247,7 @@ def app(environ, start_response):
         {student_picker if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
         <div class='card'>
           <h4>{t("payments.input")}</h4>
-          <form method='post' class='filter-row'>
+          <form method='post' class='form-row'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
             <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
             <label>{t("field.paid_date")} <input name='paid_date' placeholder='2026-03-06'></label>
@@ -3876,7 +4273,7 @@ def app(environ, start_response):
         ann_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['title']}</td><td>{r['content']}</td><td>{r['created_by']}</td><td>{r['created_at']}</td></tr>" for r in rows])
         noti_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['type']}</td><td>{r['target_user_id'] or '-'}</td><td>{r['payload']}</td><td>{r['created_at']}</td></tr>" for r in noti])
         html = render_html(t("ann.title"), f"""
-        <div class='card'><h4>{t("ann.write")}</h4><form method='post' class='filter-row'>{t("field.title")}<input name='title'> {t('field.content')}<input name='content'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("ann.write")}</h4><form method='post' class='form-row'>{t("field.title")}<input name='title'> {t('field.content')}<input name='content'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("ann.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.title")}</th><th>{t("field.content")}</th><th>{t("field.writer")}</th><th>{t("field.created_at")}</th></tr>{ann_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         <div class='card'><h4>{t("ann.noti")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.type")}</th><th>{t("field.target")}</th><th>{t("field.data")}</th><th>{t("field.created_at")}</th></tr>{noti_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="announcements")
@@ -3932,9 +4329,9 @@ def app(environ, start_response):
         html = render_html(t("library.title"), f"""
         {student_picker}
         {teacher_picker}
-        <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.return")}</h4><form method='post' class='filter-row'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.return")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.books")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         <div class='card'><h4>{t("library.history")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.book_id")}</th><th>{t("field.student_id")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
         """, user, current_menu="library")
