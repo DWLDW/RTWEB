@@ -25,7 +25,7 @@ def handle_notifications_routes(path, method, environ, user, conn, ctx):
         for r in noti
     ])
     html = ctx["render_html"](ctx["t"]("ann.title"), f"""
-    <div class='card'><h4>{ctx['t']("ann.write")}</h4><form method='post' class='form-row'>{ctx['t']("field.title")}<input name='title'> {ctx['t']('field.content')}<input name='content'><button>{ctx['t']('common.save')}</button></form></div>
+    <div class='card'><h4>{ctx['t']("ann.write")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>{ctx['t']("field.title")}<input name='title'> {ctx['t']('field.content')}<input name='content'><button>{ctx['t']('common.save')}</button></form></div>
     <div class='card'>
       <h4>{ctx['t']('common.search')}</h4>
       <form method='get' class='mobile-stack query-form'>
@@ -33,7 +33,7 @@ def handle_notifications_routes(path, method, environ, user, conn, ctx):
         <input type='hidden' name='load' value='1'>
         <div class='btn-row'>
           <button>{ctx['t']('common.search')}</button>
-          <a class='btn secondary' href='/announcements?lang={ctx['query'].get('lang', '')}'>{ctx['t']('common.reset')}</a>
+          <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/announcements?lang={ctx['query'].get('lang', '')}'>{ctx['t']('common.reset')}</a>
         </div>
       </form>
     </div>

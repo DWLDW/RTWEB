@@ -1352,9 +1352,11 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       table { width:100%; border-collapse:collapse; background:white; }
       th, td { border:1px solid #e5e7eb; padding:10px; text-align:left; vertical-align:top; word-break:normal; overflow-wrap:normal; white-space:normal; }
       th { background:#f9fafb; }
-      .table-wrap table { table-layout:auto; min-width:840px; }
-      .table-wrap table th, .table-wrap table td { min-width:96px; }
-      .table-wrap table th:first-child, .table-wrap table td:first-child { min-width:72px; }
+      .card > table, .card > .admin-table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e5e7eb; border-radius:12px; }
+      .card > table > tbody, .card > table > thead, .card > table > tfoot { width:100%; }
+      .table-wrap table, .card > table { table-layout:auto; min-width:840px; }
+      .table-wrap table th, .table-wrap table td, .card > table th, .card > table td { min-width:96px; }
+      .table-wrap table th:first-child, .table-wrap table td:first-child, .card > table th:first-child, .card > table td:first-child { min-width:72px; }
       .col-class { min-width:160px; }
       .col-course { min-width:140px; }
       .col-level { min-width:120px; }
@@ -1474,7 +1476,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
     <script>
     (function(){
       var SCROLL_NS = 'rtweb:scroll:';
-      var CONTEXT_KEYS = ['load','md_view','week','ref_date','day','selected_class_id','selected_student_id','selected_teacher_id','selected_homework_id','schedule_id'];
+      var CONTEXT_KEYS = ['load','md_view','week','ref_date','day','selected_class_id','selected_student_id','selected_teacher_id','selected_homework_id','schedule_id','student_id','parent_id','status','date_from','date_to','lesson_mode'];
 
       function parseUrl(url){
         try {
@@ -1517,8 +1519,8 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
         var parsed = parseUrl(href);
         if (!parsed || parsed.origin !== window.location.origin) return false;
-        if (a.dataset.preserveScroll === '1' || a.classList.contains('preserve-scroll')) return true;
-        var inWorkingArea = !!a.closest('.table-wrap, form.query-form, .card ul, .picker-list');
+        if (a.dataset.preserveScroll === '1' || a.classList.contains('preserve-scroll') || a.classList.contains('picker-link') || a.classList.contains('admin-action-link')) return true;
+        var inWorkingArea = !!a.closest('.table-wrap, form.query-form, form.picker-form, .card ul, .picker-list, .btn-row');
         if (!inWorkingArea) return false;
         var samePath = parsed.pathname === window.location.pathname;
         var sameSection = parsed.pathname.split('/')[1] === window.location.pathname.split('/')[1];
@@ -1529,8 +1531,10 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         if (!form) return false;
         if (form.dataset.preserveScroll === '1') return true;
         var method = (form.getAttribute('method') || 'get').toLowerCase();
+        if (form.classList.contains('query-form') || form.classList.contains('picker-form')) return true;
+        if (method === 'post' && (form.dataset.preserveScroll === '1' || form.classList.contains('preserve-scroll-form'))) return true;
         if (method !== 'get') return false;
-        return form.classList.contains('query-form') || !!form.closest('.card, .table-wrap');
+        return !!form.closest('.table-wrap');
       }
 
       try {
@@ -1884,7 +1888,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
             keep["recent_class_ids"] = ",".join(new_recent[:5])
         qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
         sep = "&" if qp else ""
-        cand_rows += f"<li><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{label}</a></li>"
+        cand_rows += f"<li><a class='picker-link' data-preserve-scroll='1' href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{label}</a></li>"
 
     class_table = ""
     if is_class_picker:
@@ -1898,7 +1902,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
             qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
             sep = "&" if qp else ""
             student_short, student_full = summarize_student_names(c['student_names'] if 'student_names' in c.keys() else '')
-            rows += f"<tr><td><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} ? {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['foreign_teacher_name'] or '-'}</td><td>{c['chinese_teacher_name'] or '-'}</td><td title='{h(student_full)}'>{h(student_short)}</td><td>{c['student_count'] or 0}</td></tr>"
+            rows += f"<tr><td class='col-class'><a class='picker-link' data-preserve-scroll='1' href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} ? {c['name']}</a></td><td class='col-course'>{c['course_name'] or '-'}</td><td class='col-level'>{c['level_name'] or '-'}</td><td class='col-teacher'>{c['foreign_teacher_name'] or '-'}</td><td class='col-teacher'>{c['chinese_teacher_name'] or '-'}</td><td class='col-students' title='{h(student_full)}'>{h(student_short)}</td><td>{c['student_count'] or 0}</td></tr>"
         class_table = f"""
         <div class='table-wrap'><table>
           <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.student_count')}</th></tr>
@@ -1914,14 +1918,14 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
     return f"""
     <div class='card'>
       <h4>{title}</h4>
-      <form method='get' class='mobile-stack query-form'>
+      <form method='get' class='mobile-stack query-form picker-form'>
         <input type='hidden' name='lang' value='{lang}'>
         {hidden}
         {query_flag_html}
         <input name='{search_name}' value='{search_value or ''}' placeholder='search'>
         <div class='btn-row'>
           <button>{t('common.search')}</button>
-          <a class='btn secondary' href='{base_path}?lang={lang}'>{t('common.reset')}</a>
+          <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{base_path}?lang={lang}'>{t('common.reset')}</a>
         </div>
       </form>
       <div style='margin:6px 0'>{t('common.selected')}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
@@ -2150,7 +2154,7 @@ def app(environ, start_response):
             form = f"""
             <div class='card'>
               <h3>{t("users.add")}</h3>
-              <form method='post' class='form-row'>
+              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
                 <label>{t('field.name')} <input name='name' required></label>
                 <label>{t('login.username')} <input name='username' required></label>
                 <label>{t('login.password')} <input name='password' type='password'></label>
@@ -3083,7 +3087,7 @@ def app(environ, start_response):
         </div>
         <div class='card'>
         <h4>{t('common.edit')}</h4>
-        <form method='post' class='form-row'>
+        <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
           <input type='hidden' name='type' value='class_edit'>
           <label>{t('academics.class_name')} <input name='name' value='{h(class_row['name'] or '')}'></label>
           <label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{co['id']}' {'selected' if str(class_row['course_id'] or '')==str(co['id']) else ''}>{co['name']}</option>" for co in conn.execute('SELECT id, name FROM courses ORDER BY name').fetchall()])}</select></label>
@@ -4727,28 +4731,38 @@ def app(environ, start_response):
         flash_type = "success"
         q_exam_class_id = (query.get("selected_class_id", "") or "").strip()
         q_exam_student_id = (query.get("selected_student_id", "") or "").strip()
-        load_exams = query.get("load", "") == "1" or bool(q_exam_class_id) or bool(q_exam_student_id)
+        q_exam_class_q = (query.get("class_q", "") or "").strip()
+        q_exam_student_q = (query.get("student_q", "") or "").strip()
+        exam_picker_query_enabled = query.get("do_search", "") == "1" or bool(q_exam_class_q) or bool(q_exam_student_q) or bool(q_exam_class_id) or bool(q_exam_student_id)
+        class_candidates = fetch_class_candidates(conn, q_exam_class_q, limit=10) if exam_picker_query_enabled else []
+        student_candidates = fetch_student_candidates(conn, q_exam_student_q, limit=10) if exam_picker_query_enabled else []
+        selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (q_exam_class_id,)).fetchone() if q_exam_class_id.isdigit() else None
+        selected_student = conn.execute("SELECT id, user_id, student_no, name_ko FROM students WHERE id=?", (q_exam_student_id,)).fetchone() if q_exam_student_id.isdigit() else None
+        selected_student_user_id = str(selected_student["user_id"]) if selected_student else q_exam_student_id
+        load_exams = query.get("load", "") == "1" or bool(q_exam_class_id) or bool(selected_student_user_id)
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
             errs = []
+            class_input_id = d.get("class_id") or q_exam_class_id
+            score_exam_id = d.get("exam_id")
             if has_role(user, [ROLE_TEACHER]):
                 if typ == "exam":
-                    class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (d.get("class_id"), user["id"])).fetchone()
+                    class_ok = conn.execute("SELECT id FROM classes WHERE id=? AND teacher_id=?", (class_input_id, user["id"])).fetchone()
                     if not class_ok:
                         conn.close()
                         status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
                         start_response(status, headers)
                         return [body]
                 elif typ == "score":
-                    exam_ok = conn.execute("""SELECT e.id FROM exams e JOIN classes c ON c.id=e.class_id WHERE e.id=? AND c.teacher_id=?""", (d.get("exam_id"), user["id"])).fetchone()
+                    exam_ok = conn.execute("""SELECT e.id FROM exams e JOIN classes c ON c.id=e.class_id WHERE e.id=? AND c.teacher_id=?""", (score_exam_id, user["id"])).fetchone()
                     if not exam_ok:
                         conn.close()
                         status, headers, body = forbidden_html(user, t('forbidden.teacher_exam_only'))
                         start_response(status, headers)
                         return [body]
             if typ == "exam":
-                if not ensure_exists(conn, "classes", d.get("class_id")):
+                if not ensure_exists(conn, "classes", class_input_id):
                     add_error(errs, "class_id", "존재하지 않는 반입니다")
                 if not (d.get("name") or "").strip():
                     add_error(errs, "name", "필수값입니다")
@@ -4757,17 +4771,18 @@ def app(environ, start_response):
                 if d.get("linked_book_id") and not ensure_exists(conn, "books", d.get("linked_book_id")):
                     add_error(errs, "linked_book_id", "존재하지 않는 도서입니다")
                 if not errs:
-                    conn.execute("INSERT INTO exams(class_id, name, exam_date, report, linked_book_id, created_at) VALUES(?,?,?,?,?,?)", (d.get("class_id"), d.get("name"), d.get("exam_date"), d.get("report"), d.get("linked_book_id") or None, now()))
+                    conn.execute("INSERT INTO exams(class_id, name, exam_date, report, linked_book_id, created_at) VALUES(?,?,?,?,?,?)", (class_input_id, d.get("name"), d.get("exam_date"), d.get("report"), d.get("linked_book_id") or None, now()))
             elif typ == "score":
                 score_v = as_float(d.get("score"))
                 if not ensure_exists(conn, "exams", d.get("exam_id")):
                     add_error(errs, "exam_id", "존재하지 않는 시험입니다")
-                if not ensure_exists(conn, "users", d.get("student_id"), extra_where="role='student'"):
+                student_input_id = d.get("student_id") or selected_student_user_id
+                if not ensure_exists(conn, "users", student_input_id, extra_where="role='student'"):
                     add_error(errs, "student_id", "존재하지 않는 학생입니다")
                 if score_v is None or score_v < 0 or score_v > 100:
                     add_error(errs, "score", "0~100 범위의 숫자여야 합니다")
                 if not errs:
-                    conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (d.get("exam_id"), d.get("student_id"), score_v, now()))
+                    conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (d.get("exam_id"), student_input_id, score_v, now()))
             if errs:
                 flash_msg = format_errors(errs)
                 flash_type = "error"
@@ -4797,16 +4812,24 @@ def app(environ, start_response):
                 exams = [r for r in exams if str(r["class_id"] or "") == q_exam_class_id]
                 allowed_exam_ids = {str(r["id"]) for r in exams}
                 scores = [r for r in scores if str(r["exam_id"] or "") in allowed_exam_ids]
-            if q_exam_student_id.isdigit():
-                scores = [r for r in scores if str(r["student_id"] or "") == q_exam_student_id]
+            if str(selected_student_user_id).isdigit():
+                scores = [r for r in scores if str(r["student_id"] or "") == str(selected_student_user_id)]
                 allowed_exam_ids = {str(r["exam_id"]) for r in scores}
                 exams = [r for r in exams if str(r["id"] or "") in allowed_exam_ids]
 
+        class_picker = render_picker_block(t("picker.class"), "class_q", q_exam_class_q, "selected_class_id", q_exam_class_id,
+                                         (selected_class["name"] if selected_class else ""), class_candidates, "/exams", CURRENT_LANG,
+                                         {"selected_student_id": q_exam_student_id, "student_q": q_exam_student_q, "load": "1"}, query_enabled=exam_picker_query_enabled)
+        student_picker = render_picker_block(t("picker.student"), "student_q", q_exam_student_q, "selected_student_id", q_exam_student_id,
+                                           (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'} / U:{selected_student['user_id']})" if selected_student else ""), student_candidates, "/exams", CURRENT_LANG,
+                                           {"selected_class_id": q_exam_class_id, "class_q": q_exam_class_q, "load": "1"}, query_enabled=exam_picker_query_enabled)
         exam_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['name']}</td><td>{r['exam_date'] or '-'}</td><td>{r['report'] or '-'}</td></tr>" for r in exams])
         score_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['exam_id']}</td><td>{r['student_id']}</td><td>{r['score']}</td></tr>" for r in scores])
         html = render_html(t("exams.title"), f"""
-        <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
+        {class_picker if has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]) else ''}
+        {student_picker if has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]) else ''}
+        <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id' value='{h(q_exam_class_id)}' placeholder='ID'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id' value='{h(selected_student_user_id)}' placeholder='User ID'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
         <div class='card'>
           <h4>{t('common.search')}</h4>
           <form method='get' class='mobile-stack query-form'>
@@ -4840,13 +4863,25 @@ def app(environ, start_response):
         q_c_student_id = (query.get("student_id", "") or "").strip()
         q_c_parent_id = (query.get("parent_id", "") or "").strip()
         q_c_special = (query.get("is_special_note", "") or "").strip()
-        load_counseling = query.get("load", "") == "1" or bool(q_c_student_id) or bool(q_c_parent_id) or bool(q_c_special)
+        q_c_selected_student_id = (query.get("selected_student_id", "") or "").strip()
+        q_c_student_q = (query.get("student_q", "") or "").strip()
+        q_c_parent_q = (query.get("parent_q", "") or "").strip()
+        counseling_picker_query_enabled = query.get("do_search", "") == "1" or bool(q_c_student_q) or bool(q_c_parent_q) or bool(q_c_selected_student_id)
+        student_candidates = fetch_student_candidates(conn, q_c_student_q, limit=10) if counseling_picker_query_enabled else []
+        selected_student = conn.execute("SELECT id, user_id, student_no, name_ko FROM students WHERE id=?", (q_c_selected_student_id,)).fetchone() if q_c_selected_student_id.isdigit() else None
+        q_c_student_user_id = str(selected_student["user_id"]) if selected_student else q_c_student_id
+        parent_rows = conn.execute("SELECT id, name, username FROM users WHERE role='parent' AND (?='' OR name LIKE ? OR username LIKE ?) ORDER BY id DESC LIMIT 10", (q_c_parent_q, f"%{q_c_parent_q}%", f"%{q_c_parent_q}%")).fetchall() if counseling_picker_query_enabled else []
+        parent_candidates = [{"id": r["id"], "label": f"{r['name']} ({r['username']})"} for r in parent_rows]
+        selected_parent = conn.execute("SELECT id, name, username FROM users WHERE role='parent' AND id=?", (q_c_parent_id,)).fetchone() if q_c_parent_id.isdigit() else None
+        load_counseling = query.get("load", "") == "1" or bool(q_c_student_user_id) or bool(q_c_parent_id) or bool(q_c_special)
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             errs = []
-            if not ensure_exists(conn, "users", d.get("student_id"), extra_where="role='student'"):
+            student_input_id = d.get("student_id") or q_c_student_user_id
+            if not ensure_exists(conn, "users", student_input_id, extra_where="role='student'"):
                 add_error(errs, "student_id", "존재하지 않는 학생입니다")
-            if d.get("parent_id") and not ensure_exists(conn, "users", d.get("parent_id"), extra_where="role='parent'"):
+            parent_input_id = d.get("parent_id") or q_c_parent_id
+            if parent_input_id and not ensure_exists(conn, "users", parent_input_id, extra_where="role='parent'"):
                 add_error(errs, "parent_id", "존재하지 않는 학부모입니다")
             if not (d.get("memo") or "").strip():
                 add_error(errs, "memo", "필수값입니다")
@@ -4855,7 +4890,7 @@ def app(environ, start_response):
                 flash_type = "error"
                 log_event(conn, "ERROR", path, "상담 저장 검증 실패", "\n".join(errs), user["id"])
             else:
-                conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("parent_id") or None, d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
+                conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (student_input_id, parent_input_id or None, d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
                 conn.commit()
                 flash_msg = "저장되었습니다"
             load_counseling = True
@@ -4864,9 +4899,9 @@ def app(environ, start_response):
         if load_counseling:
             where = []
             params = []
-            if q_c_student_id.isdigit():
+            if str(q_c_student_user_id).isdigit():
                 where.append("student_id=?")
-                params.append(q_c_student_id)
+                params.append(str(q_c_student_user_id))
             if q_c_parent_id.isdigit():
                 where.append("parent_id=?")
                 params.append(q_c_parent_id)
@@ -4876,18 +4911,28 @@ def app(environ, start_response):
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
             rows = conn.execute(f"SELECT * FROM counseling{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
 
+        student_picker = render_picker_block(t("picker.student"), "student_q", q_c_student_q, "selected_student_id", q_c_selected_student_id,
+                                            (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'} / U:{selected_student['user_id']})" if selected_student else ""),
+                                            student_candidates, "/counseling", CURRENT_LANG,
+                                            {"parent_id": q_c_parent_id, "parent_q": q_c_parent_q, "load": "1", "is_special_note": q_c_special}, query_enabled=counseling_picker_query_enabled)
+        parent_picker = render_picker_block(t("picker.parent"), "parent_q", q_c_parent_q, "parent_id", q_c_parent_id,
+                                           (f"{selected_parent['name']} ({selected_parent['username']})" if selected_parent else ""),
+                                           parent_candidates, "/counseling", CURRENT_LANG,
+                                           {"selected_student_id": q_c_selected_student_id, "student_q": q_c_student_q, "load": "1", "is_special_note": q_c_special}, query_enabled=counseling_picker_query_enabled)
         table_rows = "".join([
             f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['parent_id'] or '-'}</td><td>{r['memo'] or '-'}</td><td>{'Y' if r['is_special_note'] else '-'}</td><td>{r['created_at'] or '-'}</td></tr>"
             for r in rows
         ])
         html = render_html(t("counseling.title"), f"""
+        {student_picker}
+        {parent_picker}
         <div class='card'>
           <h4>{t('common.search')}</h4>
           <form method='get' class='mobile-stack query-form'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
             <div class='filter-grid'>
-              <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_id)}'></label>
+              <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_user_id)}'></label>
               <label>{t('counseling.parent_id')} <input name='parent_id' value='{h(q_c_parent_id)}'></label>
               <label>{t('counseling.special')}
                 <select name='is_special_note'>
@@ -4904,9 +4949,9 @@ def app(environ, start_response):
           </form>
         </div>
         <div class='card'>
-          <form method='post' class='form-row'>
-            <label>{t('counseling.student_id')} <input name='student_id'></label>
-            <label>{t('counseling.parent_id')} <input name='parent_id'></label>
+          <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+            <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_user_id)}' placeholder='User ID'></label>
+            <label>{t('counseling.parent_id')} <input name='parent_id' value='{h(q_c_parent_id)}'></label>
             <label>{t('counseling.memo')} <input name='memo'></label>
             <label>{t('counseling.special')} <input type='checkbox' name='is_special_note' value='1'></label>
             <button>{t("common.save")}</button>
@@ -4996,13 +5041,14 @@ def app(environ, start_response):
             <input type='hidden' name='load' value='1'>
             <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
             <button>{t('common.search')}</button>
-            <a class='btn secondary' href='/payments?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/payments?lang={CURRENT_LANG}'>{t('common.reset')}</a>
           </form>
         </div>
         <div class='card'>
           <h4>{t("payments.input")}</h4>
-          <form method='post' class='form-row'>
+          <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
             <input type='hidden' name='student_id' value='{selected_student_id}'>
+            <label>{t('common.selected')} <input value='{(selected_student['name_ko'] if selected_student else '-')}' readonly></label>
             <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
             <label>{t("field.paid_date")} <input name='paid_date' placeholder='2026-03-06'></label>
             <label>{t("field.amount")} <input name='amount'></label>
@@ -5086,9 +5132,9 @@ def app(environ, start_response):
         html = render_html(t("library.title"), f"""
         {student_picker}
         {teacher_picker}
-        <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.return")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("common.selected")}<input value='{(selected_student["name_ko"] if selected_student else "-")}' readonly> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
+        <div class='card'><h4>{t("library.return")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.books")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows if load_library else ''}{(f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not book_rows) else ''}</table></div>
         <div class='card'><h4>{t("library.history")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.book_id")}</th><th>{t("field.student_id")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows if load_library else ''}{(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not loan_rows) else ''}</table></div>
         """, user, current_menu="library")

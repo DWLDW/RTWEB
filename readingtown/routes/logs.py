@@ -23,7 +23,7 @@ def handle_logs_routes(path, user, conn, ctx):
         <input type='hidden' name='load' value='1'>
         <div class='btn-row'>
           <button>{ctx['t']('common.search')}</button>
-          <a class='btn secondary' href='/logs?lang={query.get('lang', '')}'>{ctx['t']('common.reset')}</a>
+          <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/logs?lang={query.get('lang', '')}'>{ctx['t']('common.reset')}</a>
         </div>
       </form>
       {'' if load_logs else ("<div class='empty-msg'>" + ctx['t']('common.query_to_load') + "</div>")}
