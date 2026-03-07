@@ -1350,8 +1350,16 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .btn.secondary { background:#6b7280; }
       .table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e5e7eb; border-radius:12px; background:white; }
       table { width:100%; border-collapse:collapse; background:white; }
-      th, td { border:1px solid #e5e7eb; padding:10px; text-align:left; vertical-align:top; word-break:break-word; }
+      th, td { border:1px solid #e5e7eb; padding:10px; text-align:left; vertical-align:top; word-break:normal; overflow-wrap:normal; white-space:normal; }
       th { background:#f9fafb; }
+      .table-wrap table { table-layout:auto; min-width:840px; }
+      .table-wrap table th, .table-wrap table td { min-width:96px; }
+      .table-wrap table th:first-child, .table-wrap table td:first-child { min-width:72px; }
+      .col-class { min-width:160px; }
+      .col-course { min-width:140px; }
+      .col-level { min-width:120px; }
+      .col-teacher { min-width:150px; }
+      .col-students { min-width:220px; }
       .badge { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:#e5e7eb; }
       .badge.active { background:#dcfce7; color:#166534; }
       .badge.leave { background:#fef3c7; color:#92400e; }
@@ -1465,18 +1473,87 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
     scroll_js = """
     <script>
     (function(){
-      var key = 'rtweb:scroll:' + window.location.pathname;
+      var SCROLL_NS = 'rtweb:scroll:';
+      var CONTEXT_KEYS = ['load','md_view','week','ref_date','day','selected_class_id','selected_student_id','selected_teacher_id','selected_homework_id','schedule_id'];
+
+      function parseUrl(url){
+        try {
+          return new URL(url, window.location.origin);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function contextFromSearchParams(sp){
+        var parts = [];
+        CONTEXT_KEYS.forEach(function(k){
+          var v = sp.get(k);
+          if (v !== null && v !== '') {
+            parts.push(k + '=' + v);
+          }
+        });
+        return parts.join('&');
+      }
+
+      function keyForUrl(url){
+        var parsed = parseUrl(url || window.location.href);
+        if (!parsed) {
+          return SCROLL_NS + window.location.pathname;
+        }
+        var context = contextFromSearchParams(parsed.searchParams);
+        return SCROLL_NS + parsed.pathname + (context ? (':' + context) : '');
+      }
+
+      function saveScrollFor(url){
+        var y = window.scrollY || window.pageYOffset || 0;
+        try {
+          sessionStorage.setItem(keyForUrl(url), String(y));
+        } catch (e) {}
+      }
+
+      function shouldPreserveForLink(a){
+        if (!a || !a.getAttribute) return false;
+        var href = a.getAttribute('href') || '';
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
+        var parsed = parseUrl(href);
+        if (!parsed || parsed.origin !== window.location.origin) return false;
+        if (a.dataset.preserveScroll === '1' || a.classList.contains('preserve-scroll')) return true;
+        var inWorkingArea = !!a.closest('.table-wrap, form.query-form, .card ul, .picker-list');
+        if (!inWorkingArea) return false;
+        var samePath = parsed.pathname === window.location.pathname;
+        var sameSection = parsed.pathname.split('/')[1] === window.location.pathname.split('/')[1];
+        return samePath || sameSection;
+      }
+
+      function shouldPreserveForForm(form){
+        if (!form) return false;
+        if (form.dataset.preserveScroll === '1') return true;
+        var method = (form.getAttribute('method') || 'get').toLowerCase();
+        if (method !== 'get') return false;
+        return form.classList.contains('query-form') || !!form.closest('.card, .table-wrap');
+      }
+
       try {
-        var restore = sessionStorage.getItem(key);
+        var currentKey = keyForUrl(window.location.href);
+        var restore = sessionStorage.getItem(currentKey);
         if (restore !== null) {
           window.scrollTo(0, parseInt(restore, 10) || 0);
-          sessionStorage.removeItem(key);
+          sessionStorage.removeItem(currentKey);
         }
       } catch (e) {}
-      var forms = document.querySelectorAll("form[method='get'], form.query-form");
-      forms.forEach(function(form){
+
+      document.querySelectorAll('form').forEach(function(form){
+        if (!shouldPreserveForForm(form)) return;
         form.addEventListener('submit', function(){
-          try { sessionStorage.setItem(key, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
+          var action = form.getAttribute('action') || window.location.href;
+          saveScrollFor(action);
+        });
+      });
+
+      document.querySelectorAll('a').forEach(function(a){
+        if (!shouldPreserveForLink(a)) return;
+        a.addEventListener('click', function(){
+          saveScrollFor(a.href);
         });
       });
     })();
