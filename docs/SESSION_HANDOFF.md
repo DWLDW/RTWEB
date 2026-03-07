@@ -54,6 +54,7 @@ Behavior added or fixed:
 - `Students Needing Makeup` now forces query-first load parameters so the pending makeup list actually renders instead of showing an empty pre-query state
 - the schedule-side makeup picker now allows blank search as a valid query and treats it as "show all pending makeup students for assignment"
 - makeup candidate labels in `/schedule` now show `absence date / original class / student / homeroom teacher` so operators can assign the right student without guessing
+- fixed a schedule makeup picker crash when blank-search results reused the generic student picker branch without a `phone` field
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above

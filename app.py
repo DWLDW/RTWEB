@@ -2476,7 +2476,11 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
         label = c.get('label', '') if isinstance(c, dict) else ''
         if not label:
             if 'student_no' in c.keys():
-                label = f"{c['name_ko']} ({c['student_no'] or '-'}, {c['phone'] or '-'})"
+                phone_value = c['phone'] if 'phone' in c.keys() else None
+                if phone_value is not None:
+                    label = f"{c['name_ko']} ({c['student_no'] or '-'}, {phone_value or '-'})"
+                else:
+                    label = f"{c['name_ko']} ({c['student_no'] or '-'})"
             elif 'course_name' in c.keys():
                 student_short, _ = summarize_student_names(c['student_names'] if 'student_names' in c.keys() else '')
                 label = f"{c['name']} / {c['course_name'] or '-'} / {c['level_name'] or '-'} / {student_short}"
