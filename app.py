@@ -1,4 +1,4 @@
-﻿import html as html_lib
+import html as html_lib
 import json
 import os
 import sqlite3
@@ -1941,6 +1941,7 @@ def app(environ, start_response):
     conn = get_db()
 
     notifications_result = handle_notifications_routes(path, method, environ, user, conn, {
+        "query": query,
         "has_role": has_role,
         "ROLE_OWNER": ROLE_OWNER,
         "ROLE_MANAGER": ROLE_MANAGER,
@@ -1958,6 +1959,7 @@ def app(environ, start_response):
         return [body]
 
     logs_result = handle_logs_routes(path, user, conn, {
+        "query": query,
         "has_role": has_role,
         "ROLE_OWNER": ROLE_OWNER,
         "forbidden_html": forbidden_html,
@@ -4383,8 +4385,10 @@ def app(environ, start_response):
         flash_type = "success"
         selected_class_id = (query.get("selected_class_id", "") or "").strip()
         selected_homework_id = (query.get("selected_homework_id", "") or "").strip()
+        load_homework = query.get("load", "") == "1" or bool(selected_class_id) or bool(selected_homework_id)
+        class_query_enabled = query.get("do_search", "") == "1" or bool((query.get("class_q", "") or "").strip()) or bool(selected_class_id)
 
-        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=20, show_all_when_empty=True)
+        class_candidates = fetch_class_candidates(conn, query.get("class_q", ""), limit=20, show_all_when_empty=class_query_enabled)
         selected_class = conn.execute(
             """SELECT c.id, c.name, c.teacher_id, co.name AS course_name, l.name AS level_name, u.name AS teacher_name
             FROM classes c
@@ -4503,6 +4507,9 @@ def app(environ, start_response):
                     flash_msg = format_errors(errs)
                     flash_type = "error"
 
+        if method == "POST":
+            load_homework = True
+
         # access scoped homework list
         hw_params = []
         hw_where = []
@@ -4519,20 +4526,22 @@ def app(environ, start_response):
             hw_where.append("s.guardian_name=?")
             hw_params.append(user["name"])
         where_sql = ("WHERE " + " AND ".join(hw_where)) if hw_where else ""
-        homework_rows = conn.execute(
-            f"""SELECT DISTINCT h.id, h.class_id, h.teacher_id, h.title, h.description, h.due_date, h.status, h.created_at,
-            c.name AS class_name, u.name AS teacher_name,
-            (SELECT COUNT(*) FROM students st WHERE st.current_class_id=h.class_id) AS target_count,
-            (SELECT COUNT(*) FROM homework_submissions hs2 WHERE hs2.homework_id=h.id AND hs2.submitted=1) AS submitted_count
-            FROM homework h
-            LEFT JOIN classes c ON c.id=h.class_id
-            LEFT JOIN users u ON u.id=h.teacher_id
-            LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
-            LEFT JOIN students s ON s.user_id=hs.student_id
-            {where_sql}
-            ORDER BY h.id DESC LIMIT 200""",
-            tuple(hw_params),
-        ).fetchall()
+        homework_rows = []
+        if load_homework:
+            homework_rows = conn.execute(
+                f"""SELECT DISTINCT h.id, h.class_id, h.teacher_id, h.title, h.description, h.due_date, h.status, h.created_at,
+                c.name AS class_name, u.name AS teacher_name,
+                (SELECT COUNT(*) FROM students st WHERE st.current_class_id=h.class_id) AS target_count,
+                (SELECT COUNT(*) FROM homework_submissions hs2 WHERE hs2.homework_id=h.id AND hs2.submitted=1) AS submitted_count
+                FROM homework h
+                LEFT JOIN classes c ON c.id=h.class_id
+                LEFT JOIN users u ON u.id=h.teacher_id
+                LEFT JOIN homework_submissions hs ON hs.homework_id=h.id
+                LEFT JOIN students s ON s.user_id=hs.student_id
+                {where_sql}
+                ORDER BY h.id DESC LIMIT 200""",
+                tuple(hw_params),
+            ).fetchall()
 
         selected_homework = None
         if selected_homework_id.isdigit():
@@ -4560,7 +4569,8 @@ def app(environ, start_response):
         class_picker = render_picker_block(
             t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
             (selected_class["name"] if selected_class else ""), class_candidates, "/homework", CURRENT_LANG,
-            {"selected_homework_id": selected_homework_id},
+            {"selected_homework_id": selected_homework_id, "load": "1"},
+            query_enabled=class_query_enabled,
         )
 
         hw_list_html = ""
@@ -4605,9 +4615,11 @@ def app(environ, start_response):
         </div>
         <div class='card'>
           <h4>{t('homework.list')}</h4>
+          {'' if load_homework else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <table>
             <tr><th>{t('field.title')}</th><th>{t('academics.class_name')}</th><th>{t('field.due_date')}</th><th>{t('field.writer')}</th><th>{t('homework.progress')}</th></tr>
-            {hw_list_html or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+            {hw_list_html if load_homework else ''}
+            {(f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_homework and not hw_list_html) else ''}
           </table>
         </div>
         <div class='card'>
@@ -4636,6 +4648,9 @@ def app(environ, start_response):
             return [body]
         flash_msg = ""
         flash_type = "success"
+        q_exam_class_id = (query.get("selected_class_id", "") or "").strip()
+        q_exam_student_id = (query.get("selected_student_id", "") or "").strip()
+        load_exams = query.get("load", "") == "1" or bool(q_exam_class_id) or bool(q_exam_student_id)
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             typ = d.get("type")
@@ -4683,26 +4698,55 @@ def app(environ, start_response):
             else:
                 conn.commit()
                 flash_msg = "저장되었습니다"
-        if has_role(user, [ROLE_TEACHER]):
-            exams = conn.execute("SELECT e.* FROM exams e JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
-            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN exams e ON e.id=es.exam_id JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY es.id DESC", (user["id"],)).fetchall()
-        elif has_role(user, [ROLE_STUDENT]):
-            exams = conn.execute("SELECT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id WHERE es.student_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
-            scores = conn.execute("SELECT * FROM exam_scores WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
-        elif has_role(user, [ROLE_PARENT]):
-            exams = conn.execute("SELECT DISTINCT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY e.id DESC", (user["name"],)).fetchall()
-            scores = conn.execute("SELECT es.* FROM exam_scores es JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY es.id DESC", (user["name"],)).fetchall()
-        else:
-            exams = conn.execute("SELECT * FROM exams ORDER BY id DESC").fetchall()
-            scores = conn.execute("SELECT * FROM exam_scores ORDER BY id DESC").fetchall()
+            load_exams = True
+
+        exams = []
+        scores = []
+        if load_exams:
+            if has_role(user, [ROLE_TEACHER]):
+                exams = conn.execute("SELECT e.* FROM exams e JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
+                scores = conn.execute("SELECT es.* FROM exam_scores es JOIN exams e ON e.id=es.exam_id JOIN classes c ON c.id=e.class_id WHERE c.teacher_id=? ORDER BY es.id DESC", (user["id"],)).fetchall()
+            elif has_role(user, [ROLE_STUDENT]):
+                exams = conn.execute("SELECT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id WHERE es.student_id=? ORDER BY e.id DESC", (user["id"],)).fetchall()
+                scores = conn.execute("SELECT * FROM exam_scores WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+            elif has_role(user, [ROLE_PARENT]):
+                exams = conn.execute("SELECT DISTINCT e.* FROM exams e JOIN exam_scores es ON es.exam_id=e.id JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY e.id DESC", (user["name"],)).fetchall()
+                scores = conn.execute("SELECT es.* FROM exam_scores es JOIN students s ON s.user_id=es.student_id WHERE s.guardian_name=? ORDER BY es.id DESC", (user["name"],)).fetchall()
+            else:
+                exams = conn.execute("SELECT * FROM exams ORDER BY id DESC").fetchall()
+                scores = conn.execute("SELECT * FROM exam_scores ORDER BY id DESC").fetchall()
+
+            if q_exam_class_id.isdigit():
+                exams = [r for r in exams if str(r["class_id"] or "") == q_exam_class_id]
+                allowed_exam_ids = {str(r["id"]) for r in exams}
+                scores = [r for r in scores if str(r["exam_id"] or "") in allowed_exam_ids]
+            if q_exam_student_id.isdigit():
+                scores = [r for r in scores if str(r["student_id"] or "") == q_exam_student_id]
+                allowed_exam_ids = {str(r["exam_id"]) for r in scores}
+                exams = [r for r in exams if str(r["id"] or "") in allowed_exam_ids]
 
         exam_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['class_id']}</td><td>{r['name']}</td><td>{r['exam_date'] or '-'}</td><td>{r['report'] or '-'}</td></tr>" for r in exams])
         score_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['exam_id']}</td><td>{r['student_id']}</td><td>{r['score']}</td></tr>" for r in scores])
         html = render_html(t("exams.title"), f"""
         <div class='card'><h4>{t("exams.add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='exam'>{t("field.class_id")}<input name='class_id'> {t("field.exam_name")}<input name='name'> {t("field.exam_date")}<input name='exam_date'> {t("field.report")}<input name='report'> {t("field.book_id")}<input name='linked_book_id'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("exams.score_input")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='score'>{t("field.exam_id")}<input name='exam_id'> {t("field.student_id")}<input name='student_id'> {t("field.score")}<input name='score'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("exams.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.exam_name")}</th><th>{t("field.exam_date")}</th><th>{t("field.report")}</th></tr>{exam_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t("exams.scores")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.exam_id")}</th><th>{t("field.student_id")}</th><th>{t("field.score")}</th></tr>{score_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'>
+          <h4>{t('common.search')}</h4>
+          <form method='get' class='mobile-stack query-form'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='load' value='1'>
+            <div class='filter-grid'>
+              <label>{t('field.class_id')} <input name='selected_class_id' value='{h(q_exam_class_id)}'></label>
+              <label>{t('field.student_id')} <input name='selected_student_id' value='{h(q_exam_student_id)}'></label>
+            </div>
+            <div class='btn-row'>
+              <button>{t('common.search')}</button>
+              <a class='btn secondary' href='/exams?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            </div>
+          </form>
+        </div>
+        <div class='card'><h4>{t("exams.list")}</h4>{'' if load_exams else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.class_id")}</th><th>{t("field.exam_name")}</th><th>{t("field.exam_date")}</th><th>{t("field.report")}</th></tr>{exam_rows if load_exams else ''}{(f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_exams and not exam_rows) else ''}</table></div>
+        <div class='card'><h4>{t("exams.scores")}</h4>{'' if load_exams else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.exam_id")}</th><th>{t("field.student_id")}</th><th>{t("field.score")}</th></tr>{score_rows if load_exams else ''}{(f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_exams and not score_rows) else ''}</table></div>
         """, user, current_menu="exams", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
@@ -4716,6 +4760,10 @@ def app(environ, start_response):
             return [body]
         flash_msg = ""
         flash_type = "success"
+        q_c_student_id = (query.get("student_id", "") or "").strip()
+        q_c_parent_id = (query.get("parent_id", "") or "").strip()
+        q_c_special = (query.get("is_special_note", "") or "").strip()
+        load_counseling = query.get("load", "") == "1" or bool(q_c_student_id) or bool(q_c_parent_id) or bool(q_c_special)
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             errs = []
@@ -4733,12 +4781,51 @@ def app(environ, start_response):
                 conn.execute("INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)", (d.get("student_id"), d.get("parent_id") or None, d.get("memo"), 1 if d.get("is_special_note") else 0, user["id"], now()))
                 conn.commit()
                 flash_msg = "저장되었습니다"
-        rows = conn.execute("SELECT * FROM counseling ORDER BY id DESC").fetchall()
+            load_counseling = True
+
+        rows = []
+        if load_counseling:
+            where = []
+            params = []
+            if q_c_student_id.isdigit():
+                where.append("student_id=?")
+                params.append(q_c_student_id)
+            if q_c_parent_id.isdigit():
+                where.append("parent_id=?")
+                params.append(q_c_parent_id)
+            if q_c_special in ("1", "0"):
+                where.append("is_special_note=?")
+                params.append(q_c_special)
+            where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+            rows = conn.execute(f"SELECT * FROM counseling{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
+
         table_rows = "".join([
             f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['parent_id'] or '-'}</td><td>{r['memo'] or '-'}</td><td>{'Y' if r['is_special_note'] else '-'}</td><td>{r['created_at'] or '-'}</td></tr>"
             for r in rows
         ])
         html = render_html(t("counseling.title"), f"""
+        <div class='card'>
+          <h4>{t('common.search')}</h4>
+          <form method='get' class='mobile-stack query-form'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='load' value='1'>
+            <div class='filter-grid'>
+              <label>{t('counseling.student_id')} <input name='student_id' value='{h(q_c_student_id)}'></label>
+              <label>{t('counseling.parent_id')} <input name='parent_id' value='{h(q_c_parent_id)}'></label>
+              <label>{t('counseling.special')}
+                <select name='is_special_note'>
+                  <option value=''>{t('academics.day_all')}</option>
+                  <option value='1' {'selected' if q_c_special=='1' else ''}>{t('common.yes')}</option>
+                  <option value='0' {'selected' if q_c_special=='0' else ''}>{t('common.no')}</option>
+                </select>
+              </label>
+            </div>
+            <div class='btn-row'>
+              <button>{t('common.search')}</button>
+              <a class='btn secondary' href='/counseling?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            </div>
+          </form>
+        </div>
         <div class='card'>
           <form method='post' class='form-row'>
             <label>{t('counseling.student_id')} <input name='student_id'></label>
@@ -4750,9 +4837,11 @@ def app(environ, start_response):
         </div>
         <div class='card'>
           <h4>{t('counseling.list')}</h4>
+          {'' if load_counseling else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <table>
             <tr><th>ID</th><th>{t('counseling.student_id')}</th><th>{t('counseling.parent_id')}</th><th>{t('counseling.memo')}</th><th>{t('counseling.special')}</th><th>created_at</th></tr>
-            {table_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+            {table_rows if load_counseling else ''}
+            {(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_counseling and not table_rows) else ''}
           </table>
         </div>
         """, user, current_menu="counseling", flash_msg=flash_msg, flash_type=flash_type)
@@ -4766,8 +4855,10 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
-        selected_student_id = query.get("selected_student_id", "")
-        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
+        selected_student_id = (query.get("selected_student_id", "") or "").strip()
+        student_query_enabled = query.get("do_search", "") == "1" or bool((query.get("student_q", "") or "").strip()) or bool(selected_student_id)
+        load_payments = query.get("load", "") == "1" or bool(selected_student_id)
+        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10) if student_query_enabled else []
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         flash_msg = ""
         flash_type = "success"
@@ -4798,19 +4889,39 @@ def app(environ, start_response):
                 conn.execute("INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)", (student_user_id, d.get("paid_date"), amount_v, hours_v, remain_v, now()))
                 conn.commit()
                 flash_msg = "저장되었습니다"
-        if has_role(user, [ROLE_STUDENT]):
-            rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
-        elif has_role(user, [ROLE_PARENT]):
-            rows = conn.execute("SELECT p.* FROM payments p JOIN students s ON s.user_id=p.student_id WHERE s.guardian_name=? ORDER BY p.id DESC", (user["name"],)).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
+            load_payments = True
+
+        rows = []
+        if load_payments:
+            if has_role(user, [ROLE_STUDENT]):
+                rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (user["id"],)).fetchall()
+            elif has_role(user, [ROLE_PARENT]):
+                rows = conn.execute("SELECT p.* FROM payments p JOIN students s ON s.user_id=p.student_id WHERE s.guardian_name=? ORDER BY p.id DESC", (user["name"],)).fetchall()
+            else:
+                if selected_student_id and selected_student_id.isdigit():
+                    selected_user = conn.execute("SELECT user_id FROM students WHERE id=?", (selected_student_id,)).fetchone()
+                    if selected_user:
+                        rows = conn.execute("SELECT * FROM payments WHERE student_id=? ORDER BY id DESC", (selected_user["user_id"],)).fetchall()
+                    else:
+                        rows = []
+                else:
+                    rows = conn.execute("SELECT * FROM payments ORDER BY id DESC").fetchall()
 
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
-                                            student_candidates, "/payments", CURRENT_LANG, {})
+                                            student_candidates, "/payments", CURRENT_LANG, {"load": "1"}, query_enabled=student_query_enabled)
         row_html = "".join([f"<tr><td>{r['id']}</td><td>{r['student_id']}</td><td>{r['paid_date']}</td><td>{r['amount']}</td><td>{r['package_hours']}</td><td>{r['remaining_classes']}</td></tr>" for r in rows])
         html = render_html(t("payments.title"), f"""
         {student_picker if has_role(user, [ROLE_OWNER, ROLE_MANAGER]) else ''}
+        <div class='card'>
+          <form method='get' class='btn-row query-form'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='load' value='1'>
+            <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
+            <button>{t('common.search')}</button>
+            <a class='btn secondary' href='/payments?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+          </form>
+        </div>
         <div class='card'>
           <h4>{t("payments.input")}</h4>
           <form method='post' class='form-row'>
@@ -4823,7 +4934,7 @@ def app(environ, start_response):
             <button>{t('common.save')}</button>
           </form>
         </div>
-        <div class='card'><h4>{t("payments.list")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.student_id")}</th><th>{t("field.paid_date")}</th><th>{t("field.amount")}</th><th>{t("field.package_hours")}</th><th>{t("field.remaining_classes")}</th></tr>{row_html or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("payments.list")}</h4>{'' if load_payments else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.student_id")}</th><th>{t("field.paid_date")}</th><th>{t("field.amount")}</th><th>{t("field.package_hours")}</th><th>{t("field.remaining_classes")}</th></tr>{row_html if load_payments else ''}{(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_payments and not row_html) else ''}</table></div>
         """, user, current_menu="payments", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
@@ -4853,10 +4964,12 @@ def app(environ, start_response):
             status, headers, body = forbidden_html(user)
             start_response(status, headers)
             return [body]
-        selected_student_id = query.get("selected_student_id", "")
-        selected_teacher_id = query.get("selected_teacher_id", "")
-        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10)
-        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10)
+        selected_student_id = (query.get("selected_student_id", "") or "").strip()
+        selected_teacher_id = (query.get("selected_teacher_id", "") or "").strip()
+        picker_query_enabled = query.get("do_search", "") == "1" or bool((query.get("student_q", "") or "").strip()) or bool((query.get("teacher_q", "") or "").strip()) or bool(selected_student_id) or bool(selected_teacher_id)
+        load_library = query.get("load", "") == "1" or bool(selected_student_id) or bool(selected_teacher_id)
+        student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10) if picker_query_enabled else []
+        teacher_candidates = fetch_teacher_candidates(conn, query.get("teacher_q", ""), limit=10) if picker_query_enabled else []
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         selected_teacher = fetch_teacher_by_id(conn, selected_teacher_id) if selected_teacher_id else None
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
@@ -4880,16 +4993,17 @@ def app(environ, start_response):
                     conn.execute("UPDATE books SET status='available' WHERE id=?", (book["id"],))
                     conn.execute("UPDATE book_loans SET returned_at=? WHERE book_id=? AND returned_at IS NULL", (now(), book["id"]))
             conn.commit()
-        books = conn.execute("SELECT * FROM books ORDER BY id DESC").fetchall()
-        loans = conn.execute("SELECT * FROM book_loans ORDER BY id DESC").fetchall()
+            load_library = True
+        books = conn.execute("SELECT * FROM books ORDER BY id DESC").fetchall() if load_library else []
+        loans = conn.execute("SELECT * FROM book_loans ORDER BY id DESC").fetchall() if load_library else []
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/library", CURRENT_LANG,
-                                            {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", "")})
+                                            {"selected_teacher_id": selected_teacher_id, "teacher_q": query.get("teacher_q", ""), "load": "1"}, query_enabled=picker_query_enabled)
         teacher_picker = render_picker_block(t("picker.teacher"), "teacher_q", query.get("teacher_q", ""), "selected_teacher_id", selected_teacher_id,
                                             (f"{selected_teacher['name']} ({selected_teacher['username']})" if selected_teacher else ""),
                                             teacher_candidates, "/library", CURRENT_LANG,
-                                            {"selected_student_id": selected_student_id, "student_q": query.get("student_q", "")})
+                                            {"selected_student_id": selected_student_id, "student_q": query.get("student_q", ""), "load": "1"}, query_enabled=picker_query_enabled)
         book_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['code']}</td><td>{r['title']}</td><td>{r['status']}</td></tr>" for r in books])
         loan_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['book_id']}</td><td>{r['student_id']}</td><td>{r['loaned_at']}</td><td>{r['returned_at'] or '-'}</td><td>{r['handled_by']}</td></tr>" for r in loans])
         html = render_html(t("library.title"), f"""
@@ -4898,8 +5012,8 @@ def app(environ, start_response):
         <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'><input type='hidden' name='teacher_id' value='{selected_teacher_id}'>{t("field.code")}<input name='code'> {t("field.student_id")}<input value='{selected_student_id}' readonly> {t("field.teacher_id")}<input value='{selected_teacher_id}' readonly><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.return")}</h4><form method='post' class='form-row'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.books")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows or f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
-        <div class='card'><h4>{t("library.history")}</h4><table><tr><th>{t("field.id")}</th><th>{t("field.book_id")}</th><th>{t("field.student_id")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows or f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"}</table></div>
+        <div class='card'><h4>{t("library.books")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows if load_library else ''}{(f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not book_rows) else ''}</table></div>
+        <div class='card'><h4>{t("library.history")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.book_id")}</th><th>{t("field.student_id")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows if load_library else ''}{(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not loan_rows) else ''}</table></div>
         """, user, current_menu="library")
         status, headers, body = text_resp(html)
         conn.close()
