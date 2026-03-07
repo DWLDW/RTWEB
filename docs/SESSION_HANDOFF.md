@@ -72,6 +72,8 @@ Behavior added or fixed:
 - the schedule-side makeup assignment UI is no longer a separate collapsed card in the right column; it now sits open under the schedule create/edit form when a lesson is selected
 - schedule makeup-student search now paginates in 12-row pages with previous/next navigation instead of silently truncating the result set
 - the schedule card `Attendance & Evaluation` button was reduced so its visual weight is closer to the `More` control and the card layout stays denser
+- `/users`, `/attendance`, `/payments`, and `/library` large tables now show total result counts and numeric page links instead of only prev/next-style paging
+- schedule makeup-student search now shows total candidate count and numeric page links as well, not just a truncated first page
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
@@ -83,6 +85,7 @@ Known issues:
 - completed makeup status labels in some schedule/detail tables still show raw `assigned/completed` values and should be translated in the next UX pass
 - schedule `More` dropdown behavior was validated by compile only; browser layout verification is still needed for overlap/z-index edge cases
 - the makeup search pager range text is currently English-only (`Showing x-y`) and should be moved to translations in the next i18n pass
+- library sort headers still use the shared generic sort helper and should get route-specific page reset cleanup in the next table UX pass
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
@@ -93,6 +96,7 @@ Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the makeup credit/date persistence changes
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the schedule action/menu cleanup
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after makeup-search pagination and schedule button-size adjustments
+- `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after total-count/numeric-pagination updates
 
 Next recommended task:
-- browser-verify the schedule card density, `More` menu overlap, and makeup-search prev/next pager, then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks
+- browser-verify total-count and numeric page links on `/users`, `/attendance`, `/payments`, `/library`, and schedule makeup search, then clean up remaining table i18n/raw-key leaks

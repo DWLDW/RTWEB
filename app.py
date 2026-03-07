@@ -14,7 +14,7 @@ from email import policy
 from email.parser import BytesParser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, quote
+from urllib.parse import parse_qs, quote, urlencode
 from wsgiref.simple_server import make_server, WSGIServer
 from readingtown.routes.auth import handle_auth_routes
 from readingtown.routes.notifications import handle_notifications_routes
@@ -615,6 +615,80 @@ def h(v):
     if v is None:
         return ""
     return html_lib.escape(str(v), quote=True)
+
+
+def compact_query_params(params):
+    out = {}
+    for k, v in (params or {}).items():
+        if v in (None, ""):
+            continue
+        out[k] = str(v)
+    return out
+
+
+def build_query_href(base_path, lang, params):
+    qp = compact_query_params({"lang": lang, **(params or {})})
+    return f"{base_path}?{urlencode(qp)}" if qp else base_path
+
+
+def next_sort_dir(current_sort_by, current_sort_dir, target_sort_by):
+    return "desc" if current_sort_by == target_sort_by and current_sort_dir == "asc" else "asc"
+
+
+def sort_indicator(current_sort_by, current_sort_dir, target_sort_by):
+    if current_sort_by != target_sort_by:
+        return ""
+    return " ▲" if current_sort_dir == "asc" else " ▼"
+
+
+def render_sort_th(label, sort_key, current_sort_by, current_sort_dir, base_path, lang, keep_params):
+    href = build_query_href(
+        base_path,
+        lang,
+        {
+            **(keep_params or {}),
+            "sort_by": sort_key,
+            "sort_dir": next_sort_dir(current_sort_by, current_sort_dir, sort_key),
+            "page": 1,
+        },
+    )
+    return f"<th><a class='admin-action-link' data-preserve-scroll='1' href='{href}'>{h(label)}{sort_indicator(current_sort_by, current_sort_dir, sort_key)}</a></th>"
+
+
+def render_pagination(base_path, lang, page, page_size, row_count, has_more, keep_params, total_count=None, page_param="page"):
+    if page <= 1 and not has_more and (total_count is None or total_count <= page_size):
+        return ""
+    start_n = ((page - 1) * page_size) + 1 if row_count else 0
+    end_n = ((page - 1) * page_size) + row_count if row_count else 0
+    prev_link = ""
+    next_link = ""
+    total_pages = 0
+    if total_count is not None and page_size > 0:
+        total_pages = max(1, (int(total_count) + page_size - 1) // page_size)
+    if page > 1:
+        prev_link = f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{build_query_href(base_path, lang, {**(keep_params or {}), page_param: page - 1})}'>{t('common.prev')}</a>"
+    if has_more:
+        next_link = f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{build_query_href(base_path, lang, {**(keep_params or {}), page_param: page + 1})}'>{t('common.next')}</a>"
+    page_links = ""
+    if total_pages > 1:
+        window_start = max(1, page - 2)
+        window_end = min(total_pages, page + 2)
+        if window_start > 1:
+            window_end = min(total_pages, window_start + 4)
+        if window_end - window_start < 4:
+            window_start = max(1, window_end - 4)
+        link_bits = []
+        for page_num in range(window_start, window_end + 1):
+            if page_num == page:
+                link_bits.append(f"<span class='badge'>{page_num}</span>")
+            else:
+                href = build_query_href(base_path, lang, {**(keep_params or {}), page_param: page_num})
+                link_bits.append(f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{href}'>{page_num}</a>")
+        page_links = "".join(link_bits)
+    total_text = f"{start_n}-{end_n}"
+    if total_count is not None:
+        total_text = f"{start_n}-{end_n} / {total_count}"
+    return f"<div class='btn-row' style='margin-top:10px'>{prev_link}{page_links}{next_link}<span class='muted'>{total_text}</span></div>"
 
 
 def ensure_exists(conn, table, value, field="id", extra_where="", extra_params=()):
@@ -2204,7 +2278,7 @@ def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
 def fetch_makeup_candidates(conn, keyword, limit=10, offset=0, show_all_when_empty=False):
     kw = (keyword or "").strip()
     if not kw and not show_all_when_empty:
-        return [], False
+        return [], False, 0
     params = []
     where_sql = ""
     if kw:
@@ -2216,6 +2290,22 @@ def fetch_makeup_candidates(conn, keyword, limit=10, offset=0, show_all_when_emp
             COALESCE(ht.name, '') LIKE ?
         )"""
         params.extend([like, like, like, like])
+    total_count = conn.execute(
+        f"""SELECT COUNT(*)
+        FROM attendance a
+        JOIN students st ON st.user_id=a.student_id
+        LEFT JOIN classes c ON c.id=a.class_id
+        LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+        WHERE COALESCE(a.requires_makeup,0)=1
+          AND COALESCE(a.makeup_completed,0)=0
+          AND NOT EXISTS (
+            SELECT 1 FROM makeup_assignments ma
+            WHERE ma.source_attendance_id=a.id
+              AND COALESCE(ma.status, 'assigned')='assigned'
+          )
+          {where_sql}""",
+        tuple(params),
+    ).fetchone()[0]
     fetch_limit = max(1, int(limit)) + 1
     params.extend([fetch_limit, max(0, int(offset or 0))])
     rows = conn.execute(
@@ -2253,7 +2343,7 @@ def fetch_makeup_candidates(conn, keyword, limit=10, offset=0, show_all_when_emp
         tuple(params),
     ).fetchall()
     has_more = len(rows) > limit
-    return rows[:limit], has_more
+    return rows[:limit], has_more, total_count
 
 
 def complete_makeup_assignment(conn, student_user_id, schedule_id, attendance_id):
@@ -2915,23 +3005,50 @@ def app(environ, start_response):
         q_user_name = (query.get("q_name", "") or "").strip()
         q_role = (query.get("q_role", "") or "").strip()
         edit_user_id = (query.get("edit_user_id", "") or "").strip()
+        user_sort_by = (query.get("sort_by", "") or "id").strip()
+        user_sort_dir = (query.get("sort_dir", "") or "desc").strip().lower()
+        user_page = max(1, as_int(query.get("page", "1")) or 1)
+        user_page_size = 20
+        user_sort_map = {
+            "id": "u.id",
+            "name": "u.name COLLATE NOCASE",
+            "username": "u.username COLLATE NOCASE",
+            "role": "u.role",
+            "teacher_type": "COALESCE(u.teacher_type,'')",
+        }
+        if user_sort_by not in user_sort_map:
+            user_sort_by = "id"
+        if user_sort_dir not in ("asc", "desc"):
+            user_sort_dir = "desc"
         users = []
+        users_has_more = False
+        users_total_count = 0
         selected_edit_user = None
         if load_users:
             where = []
             params = []
             if q_user_name:
-                where.append("(name LIKE ? OR username LIKE ?)")
+                where.append("(u.name LIKE ? OR u.username LIKE ?)")
                 params.extend([f"%{q_user_name}%", f"%{q_user_name}%"])
             if q_role in (ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT):
-                where.append("role=?")
+                where.append("u.role=?")
                 params.append(q_role)
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-            users = conn.execute(f"SELECT * FROM users{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
+            users_total_count = conn.execute(
+                f"SELECT COUNT(*) FROM users u{where_sql}",
+                tuple(params),
+            ).fetchone()[0]
+            users = conn.execute(
+                f"SELECT u.* FROM users u{where_sql} ORDER BY {user_sort_map[user_sort_by]} {user_sort_dir}, u.id DESC LIMIT ? OFFSET ?",
+                tuple(params + [user_page_size + 1, (user_page - 1) * user_page_size]),
+            ).fetchall()
+            users_has_more = len(users) > user_page_size
+            users = users[:user_page_size]
         if edit_user_id.isdigit():
             selected_edit_user = conn.execute("SELECT id, name, username, role, teacher_type FROM users WHERE id=?", (edit_user_id,)).fetchone()
+        user_keep_params = {"load": "1", "q_name": q_user_name, "q_role": q_role, "sort_by": user_sort_by, "sort_dir": user_sort_dir}
         rows = "".join([
-            f"<tr><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(t('users.teacher_type.foreign') if u['teacher_type']=='foreign' else t('users.teacher_type.chinese') if u['teacher_type']=='chinese' else '-')}</td><td><div class='btn-row'><a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/users?lang={CURRENT_LANG}&load=1&q_name={quote(q_user_name)}&q_role={quote(q_role)}&edit_user_id={u["id"]}'>{t('users.manage')}</a><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' style='display:inline-block; margin:0'><input type='hidden' name='action' value='delete_user'><input type='hidden' name='user_id' value='{u["id"]}'><button class='btn secondary' type='submit' onclick='return confirm(&quot;Delete this user?&quot;)'>{t('common.delete')}</button></form></div></td></tr>"
+            f"<tr><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(t('users.teacher_type.foreign') if u['teacher_type']=='foreign' else t('users.teacher_type.chinese') if u['teacher_type']=='chinese' else '-')}</td><td><div class='btn-row'><a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{build_query_href('/users', CURRENT_LANG, {**user_keep_params, 'page': user_page, 'edit_user_id': u['id']})}'>{t('users.manage')}</a><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' style='display:inline-block; margin:0'><input type='hidden' name='action' value='delete_user'><input type='hidden' name='user_id' value='{u["id"]}'><button class='btn secondary' type='submit' onclick='return confirm(&quot;Delete this user?&quot;)'>{t('common.delete')}</button></form></div></td></tr>"
             for u in users
         ])
         form = ""
@@ -2993,7 +3110,7 @@ def app(environ, start_response):
                 {teacher_type_field}
                 <label>{t('users.new_password')} <input name='password' type='password' placeholder='{t('users.password_optional')}'></label>
                 <button>{t("common.save")}</button>
-                <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/users?lang={CURRENT_LANG}&load=1&q_name={quote(q_user_name)}&q_role={quote(q_role)}'>{t('common.reset')}</a>
+                <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='{build_query_href('/users', CURRENT_LANG, user_keep_params)}'>{t('common.reset')}</a>
               </form>
             </div>
             """
@@ -3004,6 +3121,8 @@ def app(environ, start_response):
           <form method='get' class='mobile-stack query-form'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
+            <input type='hidden' name='sort_by' value='{user_sort_by}'>
+            <input type='hidden' name='sort_dir' value='{user_sort_dir}'>
             <div class='filter-grid'>
               <label>{t('field.name')} <input name='q_name' value='{h(q_user_name)}'></label>
               <label>{t('field.role')}
@@ -3024,10 +3143,11 @@ def app(environ, start_response):
           </form>
           {'' if load_users else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <div class='table-wrap'><table>
-            <tr><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th><th>{t('users.teacher_type')}</th><th>{t('common.edit')}</th></tr>
+            <tr>{render_sort_th(t('field.name'), 'name', user_sort_by, user_sort_dir, '/users', CURRENT_LANG, {'load':'1','q_name':q_user_name,'q_role':q_role})}{render_sort_th(t('login.username'), 'username', user_sort_by, user_sort_dir, '/users', CURRENT_LANG, {'load':'1','q_name':q_user_name,'q_role':q_role})}{render_sort_th(t('field.role'), 'role', user_sort_by, user_sort_dir, '/users', CURRENT_LANG, {'load':'1','q_name':q_user_name,'q_role':q_role})}{render_sort_th(t('users.teacher_type'), 'teacher_type', user_sort_by, user_sort_dir, '/users', CURRENT_LANG, {'load':'1','q_name':q_user_name,'q_role':q_role})}<th>{t('common.edit')}</th></tr>
             {rows if load_users else ''}
             {("<tr><td colspan='5' class='empty-msg'>" + t('common.no_data') + "</td></tr>") if (load_users and not rows) else ''}
           </table></div>
+          {render_pagination('/users', CURRENT_LANG, user_page, user_page_size, len(users), users_has_more, user_keep_params, total_count=users_total_count) if load_users else ''}
         </div>
         """
         html = render_html(t("users.page_title"), body_html, user, current_menu="users", flash_msg=flash_msg, flash_type=flash_type)
@@ -4653,7 +4773,7 @@ def app(environ, start_response):
             or bool((query.get("makeup_q", "") or "").strip())
             or bool(selected_makeup_source_id)
         )
-        makeup_candidates, makeup_has_more = fetch_makeup_candidates(
+        makeup_candidates, makeup_has_more, makeup_total_count = fetch_makeup_candidates(
             conn,
             query.get("makeup_q", ""),
             limit=makeup_page_size,
@@ -5018,11 +5138,22 @@ def app(environ, start_response):
                             f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ''}&schedule_id={selected_schedule['id']}&makeup_load=1&makeup_q={quote(query.get('makeup_q', '') or '')}&makeup_offset={max(0, makeup_offset - makeup_page_size)}#schedule-makeup-panel'>{t('common.prev')}</a>"
                             if makeup_offset > 0 else ""
                         )
+                        + "".join([
+                            (
+                                f"<span class='badge'>{page_num}</span>"
+                                if page_num == ((makeup_offset // makeup_page_size) + 1)
+                                else f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ''}&schedule_id={selected_schedule['id']}&makeup_load=1&makeup_q={quote(query.get('makeup_q', '') or '')}&makeup_offset={(page_num - 1) * makeup_page_size}#schedule-makeup-panel'>{page_num}</a>"
+                            )
+                            for page_num in range(
+                                max(1, ((makeup_offset // makeup_page_size) + 1) - 2),
+                                min(max(1, ((makeup_total_count + makeup_page_size - 1) // makeup_page_size)), ((makeup_offset // makeup_page_size) + 1) + 2) + 1
+                            )
+                        ])
                         + (
                             f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ''}&schedule_id={selected_schedule['id']}&makeup_load=1&makeup_q={quote(query.get('makeup_q', '') or '')}&makeup_offset={makeup_offset + makeup_page_size}#schedule-makeup-panel'>{t('common.next')}</a>"
                             if makeup_has_more else ""
                         )
-                        + f"<span class='muted'>Showing {makeup_offset + 1 if makeup_candidates else 0}-{makeup_offset + len(makeup_candidates)}"
+                        + f"<span class='muted'>{makeup_offset + 1 if makeup_candidates else 0}-{makeup_offset + len(makeup_candidates)} / {makeup_total_count}"
                         + "</span></div>"
                     ) if makeup_query_enabled else ""
                 ),
@@ -5687,6 +5818,25 @@ def app(environ, start_response):
                     conn.commit()
                     flash_msg = t("common.save")
 
+        attendance_sort_by = (query.get("sort_by", "") or "lesson_date").strip()
+        attendance_sort_dir = (query.get("sort_dir", "") or "desc").strip().lower()
+        attendance_page = max(1, as_int(query.get("page", "1")) or 1)
+        attendance_page_size = 25
+        attendance_sort_map = {
+            "lesson_date": "a.lesson_date",
+            "student_name": "st.name_ko COLLATE NOCASE",
+            "class_name": "c.name COLLATE NOCASE",
+            "status": "a.status",
+            "absence_charge_type": "a.absence_charge_type",
+            "requires_makeup": "COALESCE(a.requires_makeup,0)",
+            "makeup_completed": "COALESCE(a.makeup_completed,0)",
+            "makeup_lesson_date": "cmp.lesson_date",
+            "credit_delta": "a.credit_delta",
+        }
+        if attendance_sort_by not in attendance_sort_map:
+            attendance_sort_by = "lesson_date"
+        if attendance_sort_dir not in ("asc", "desc"):
+            attendance_sort_dir = "desc"
         where = []
         params = []
         if has_role(user, [ROLE_TEACHER]):
@@ -5739,11 +5889,39 @@ def app(environ, start_response):
         LEFT JOIN attendance cmp ON cmp.id=a.makeup_attendance_id
         """
         where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-        rows = conn.execute(base_sql + where_sql + " ORDER BY a.lesson_date DESC, a.id DESC LIMIT 500", tuple(params)).fetchall() if load_attendance else []
+        attendance_order_sql = f" ORDER BY {attendance_sort_map[attendance_sort_by]} {attendance_sort_dir}, a.id DESC"
+        attendance_keep_params = {
+            "load": "1",
+            "selected_student_id": selected_student_id,
+            "selected_class_id": selected_class_id,
+            "status": status_filter,
+            "date_from": date_from,
+            "date_to": date_to,
+            "deductible": deductible_filter,
+            "requires_makeup": requires_makeup_filter,
+            "makeup_completed": makeup_completed_filter,
+            "sort_by": attendance_sort_by,
+            "sort_dir": attendance_sort_dir,
+        }
+        rows = []
+        attendance_has_more = False
+        attendance_total_count = 0
+        if load_attendance:
+            attendance_total_count = conn.execute(
+                "SELECT COUNT(*) FROM attendance a LEFT JOIN students s ON s.user_id=a.student_id" + where_sql,
+                tuple(params),
+            ).fetchone()[0]
+            rows = conn.execute(
+                base_sql + where_sql + attendance_order_sql + " LIMIT ? OFFSET ?",
+                tuple(params + [attendance_page_size + 1, (attendance_page - 1) * attendance_page_size]),
+            ).fetchall()
+            attendance_has_more = len(rows) > attendance_page_size
+            rows = rows[:attendance_page_size]
 
         if query.get("export") == "csv":
+            export_rows = conn.execute(base_sql + where_sql + attendance_order_sql, tuple(params)).fetchall()
             lines = ["id,date,student_no,student_name,class,status,absence_charge_type,requires_makeup,makeup_completed,credit_delta,makeup_attendance_id,makeup_date,target_schedule_id,makeup_assignment_status,note"]
-            for r in rows:
+            for r in export_rows:
                 safe_note = str(r["note"] or "").replace('"', "'")
                 lines.append(
                     f'"{r["id"]}","{r["lesson_date"] or ""}","{r["student_no"] or ""}","{r["student_name"] or ""}","{r["class_name"] or ""}","{r["status"] or ""}","{r["absence_charge_type"] or ""}","{r["requires_makeup"] or 0}","{r["makeup_completed"] or 0}","{r["credit_delta"] or 0}","{r["makeup_attendance_id"] or ""}","{r["makeup_lesson_date"] or ""}","{r["target_schedule_id"] or ""}","{r["makeup_assignment_status"] or ""}","{safe_note}"'
@@ -5755,11 +5933,11 @@ def app(environ, start_response):
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/attendance", CURRENT_LANG,
-                                            {"selected_class_id": selected_class_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter})
+                                            {"selected_class_id": selected_class_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter, "sort_by": attendance_sort_by, "sort_dir": attendance_sort_dir})
         class_picker = render_picker_block(t("picker.class"), "class_q", query.get("class_q", ""), "selected_class_id", selected_class_id,
                                           (selected_class["name"] if selected_class else ""),
                                           class_candidates, "/attendance", CURRENT_LANG,
-                                          {"selected_student_id": selected_student_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter},
+                                          {"selected_student_id": selected_student_id, "status": status_filter, "date_from": date_from, "date_to": date_to, "deductible": deductible_filter, "requires_makeup": requires_makeup_filter, "makeup_completed": makeup_completed_filter, "sort_by": attendance_sort_by, "sort_dir": attendance_sort_dir},
                                           query_flag_name="class_load", query_enabled=attendance_class_query_enabled)
 
         row_html = ""
@@ -5818,6 +5996,8 @@ def app(environ, start_response):
             <input type='hidden' name='load' value='1'>
             <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
             <input type='hidden' name='selected_class_id' value='{selected_class_id}'>
+            <input type='hidden' name='sort_by' value='{attendance_sort_by}'>
+            <input type='hidden' name='sort_dir' value='{attendance_sort_dir}'>
             <div class='filter-grid'>
             <label>{t('attendance.filter.date_from')} <input type='date' name='date_from' value='{date_from}'></label>
             <label>{t('attendance.filter.date_to')} <input type='date' name='date_to' value='{date_to}'></label>
@@ -5829,15 +6009,16 @@ def app(environ, start_response):
           <div class='btn-row'>
             <button>{t('common.search')}</button>
             <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&load=1&makeup_needed=1&requires_makeup=1&makeup_completed=0'>{t('attendance.students_needing_makeup')}</a>
-            <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&selected_student_id={selected_student_id}&selected_class_id={selected_class_id}&status={status_filter}&date_from={date_from}&date_to={date_to}&deductible={deductible_filter}&requires_makeup={requires_makeup_filter}&makeup_completed={makeup_completed_filter}&export=csv'>{t('attendance.export_csv')}</a>
+            <a class='btn secondary' href='{build_query_href('/attendance', CURRENT_LANG, {**attendance_keep_params, 'export': 'csv'})}'>{t('attendance.export_csv')}</a>
           </div>
           </form>
           {'' if load_attendance else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <div class='table-wrap' style='margin-top:10px'><table class='sticky-head'>
-            <tr><th>{t('field.date')}</th><th>{t('field.student')}</th><th>{t('students.field.class')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th><th>{t('attendance.makeup_completed')}</th><th>{t('attendance.makeup_date')}</th><th>{t('attendance.credit_impact')}</th><th>{t('field.note')}</th><th>{t('common.edit')}</th></tr>
+            <tr>{render_sort_th(t('field.date'), 'lesson_date', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('field.student'), 'student_name', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('students.field.class'), 'class_name', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('field.status'), 'status', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('attendance.absence_charge_type'), 'absence_charge_type', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('attendance.requires_makeup'), 'requires_makeup', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('attendance.makeup_completed'), 'makeup_completed', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('attendance.makeup_date'), 'makeup_lesson_date', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}{render_sort_th(t('attendance.credit_impact'), 'credit_delta', attendance_sort_by, attendance_sort_dir, '/attendance', CURRENT_LANG, {k:v for k,v in attendance_keep_params.items() if k != 'load'})}<th>{t('field.note')}</th><th>{t('common.edit')}</th></tr>
             {row_html if load_attendance else ''}
             {(f"<tr><td colspan='11' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_attendance and not row_html) else ''}
           </table></div>
+          {render_pagination('/attendance', CURRENT_LANG, attendance_page, attendance_page_size, len(rows), attendance_has_more, attendance_keep_params, total_count=attendance_total_count) if load_attendance else ''}
         </div>
         <div class='card'>
           <h4>{t('attendance.manual_input_title')}</h4>
@@ -6434,6 +6615,26 @@ def app(environ, start_response):
         selected_student_id = (query.get("selected_student_id", "") or "").strip()
         student_query_enabled = query.get("do_search", "") == "1" or bool((query.get("student_q", "") or "").strip()) or bool(selected_student_id)
         load_payments = query.get("load", "") == "1" or bool(selected_student_id)
+        payment_sort_by = (query.get("sort_by", "") or "paid_date").strip()
+        payment_sort_dir = (query.get("sort_dir", "") or "desc").strip().lower()
+        payment_page = max(1, as_int(query.get("page", "1")) or 1)
+        payment_page_size = 20
+        payment_sort_map = {
+            "student_name": "st.name_ko COLLATE NOCASE",
+            "student_no": "st.student_no COLLATE NOCASE",
+            "class_name": "c.name COLLATE NOCASE",
+            "package_name": "pp.name COLLATE NOCASE",
+            "paid_date": "p.paid_date",
+            "amount": "p.amount",
+            "list_price": "p.list_price",
+            "discount_rate": "p.discount_rate",
+            "package_hours": "p.package_hours",
+            "remaining_classes": "p.remaining_classes",
+        }
+        if payment_sort_by not in payment_sort_map:
+            payment_sort_by = "paid_date"
+        if payment_sort_dir not in ("asc", "desc"):
+            payment_sort_dir = "desc"
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10) if student_query_enabled else []
         selected_student = conn.execute("SELECT id, name_ko, student_no, remaining_credits FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         package_rows = conn.execute("SELECT id, code, name, lesson_credits, list_price FROM payment_packages WHERE COALESCE(status,'active')='active' ORDER BY id DESC, code ASC").fetchall()
@@ -6485,8 +6686,15 @@ def app(environ, start_response):
             load_payments = True
 
         rows = []
+        payments_has_more = False
+        payments_total_count = 0
         if load_payments:
+            limit_offset = f" ORDER BY {payment_sort_map[payment_sort_by]} {payment_sort_dir}, p.id DESC LIMIT ? OFFSET ?"
             if has_role(user, [ROLE_STUDENT]):
+                payments_total_count = conn.execute(
+                    "SELECT COUNT(*) FROM payments p WHERE p.student_id=?",
+                    (user["id"],),
+                ).fetchone()[0]
                 rows = conn.execute(
                     """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
                     pp.code AS package_code, pp.name AS package_name
@@ -6495,10 +6703,17 @@ def app(environ, start_response):
                     LEFT JOIN classes c ON c.id=st.current_class_id
                     LEFT JOIN payment_packages pp ON pp.id=p.package_id
                     WHERE p.student_id=?
-                    ORDER BY p.id DESC""",
-                    (user["id"],),
+                    """ + limit_offset,
+                    (user["id"], payment_page_size + 1, (payment_page - 1) * payment_page_size),
                 ).fetchall()
             elif has_role(user, [ROLE_PARENT]):
+                payments_total_count = conn.execute(
+                    """SELECT COUNT(*)
+                    FROM payments p
+                    JOIN students s ON s.user_id=p.student_id
+                    WHERE s.guardian_name=?""",
+                    (user["name"],),
+                ).fetchone()[0]
                 rows = conn.execute(
                     """SELECT p.*, s.id AS student_row_id, s.name_ko AS student_name, s.student_no, c.name AS class_name,
                     pp.code AS package_code, pp.name AS package_name
@@ -6507,13 +6722,17 @@ def app(environ, start_response):
                     LEFT JOIN classes c ON c.id=s.current_class_id
                     LEFT JOIN payment_packages pp ON pp.id=p.package_id
                     WHERE s.guardian_name=?
-                    ORDER BY p.id DESC""",
-                    (user["name"],),
+                    """ + limit_offset,
+                    (user["name"], payment_page_size + 1, (payment_page - 1) * payment_page_size),
                 ).fetchall()
             else:
                 if selected_student_id and selected_student_id.isdigit():
                     selected_user = conn.execute("SELECT user_id FROM students WHERE id=?", (selected_student_id,)).fetchone()
                     if selected_user:
+                        payments_total_count = conn.execute(
+                            "SELECT COUNT(*) FROM payments p WHERE p.student_id=?",
+                            (selected_user["user_id"],),
+                        ).fetchone()[0]
                         rows = conn.execute(
                             """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
                             pp.code AS package_code, pp.name AS package_name
@@ -6522,12 +6741,13 @@ def app(environ, start_response):
                             LEFT JOIN classes c ON c.id=st.current_class_id
                             LEFT JOIN payment_packages pp ON pp.id=p.package_id
                             WHERE p.student_id=?
-                            ORDER BY p.id DESC""",
-                            (selected_user["user_id"],),
+                            """ + limit_offset,
+                            (selected_user["user_id"], payment_page_size + 1, (payment_page - 1) * payment_page_size),
                         ).fetchall()
                     else:
                         rows = []
                 else:
+                    payments_total_count = conn.execute("SELECT COUNT(*) FROM payments p").fetchone()[0]
                     rows = conn.execute(
                         """SELECT p.*, st.id AS student_row_id, st.name_ko AS student_name, st.student_no, c.name AS class_name,
                         pp.code AS package_code, pp.name AS package_name
@@ -6535,12 +6755,16 @@ def app(environ, start_response):
                         LEFT JOIN students st ON st.user_id=p.student_id
                         LEFT JOIN classes c ON c.id=st.current_class_id
                         LEFT JOIN payment_packages pp ON pp.id=p.package_id
-                        ORDER BY p.id DESC"""
+                        """ + limit_offset,
+                        (payment_page_size + 1, (payment_page - 1) * payment_page_size),
                     ).fetchall()
+            payments_has_more = len(rows) > payment_page_size
+            rows = rows[:payment_page_size]
 
+        payment_keep_params = {"load": "1", "selected_student_id": selected_student_id, "sort_by": payment_sort_by, "sort_dir": payment_sort_dir}
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
-                                            student_candidates, "/payments", CURRENT_LANG, {"load": "1"}, query_enabled=student_query_enabled)
+                                            student_candidates, "/payments", CURRENT_LANG, {"load": "1", "sort_by": payment_sort_by, "sort_dir": payment_sort_dir}, query_enabled=student_query_enabled)
         row_html = "".join([
             f"<tr><td>{h(r['student_name'] or '-')}</td><td>{h(r['student_no'] or '-')}</td><td>{h(r['class_name'] or '-')}</td><td>{h((r['package_code'] or '-') + ' / ' + (r['package_name'] or '-'))}</td><td>{r['paid_date'] or '-'}</td><td>{r['amount']}</td><td>{r['list_price'] if r['list_price'] is not None else '-'}</td><td>{(str(r['discount_rate']) + '%') if r['discount_rate'] is not None else '-'}</td><td>{r['package_hours']}</td><td>{r['remaining_classes']}</td></tr>"
             for r in rows
@@ -6552,6 +6776,8 @@ def app(environ, start_response):
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
             <input type='hidden' name='load' value='1'>
             <input type='hidden' name='selected_student_id' value='{selected_student_id}'>
+            <input type='hidden' name='sort_by' value='{payment_sort_by}'>
+            <input type='hidden' name='sort_dir' value='{payment_sort_dir}'>
             <button>{t('common.search')}</button>
             <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/payments?lang={CURRENT_LANG}'>{t('common.reset')}</a>
           </form>
@@ -6569,7 +6795,7 @@ def app(environ, start_response):
             <button>{t('common.save')}</button>
           </form>
         </div>
-        <div class='card'><h4>{t("payments.list")}</h4>{'' if load_payments else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.name")}</th><th>{t("students.field.student_no")}</th><th>{t("students.field.class")}</th><th>패키지</th><th>{t("students.field.paid_date")}</th><th>실결제금액</th><th>정가</th><th>할인율</th><th>{t("students.field.package_hours")}</th><th>{t("students.field.remaining_classes")}</th></tr>{row_html if load_payments else ''}{(f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_payments and not row_html) else ''}</table></div>
+        <div class='card'><h4>{t("payments.list")}</h4>{'' if load_payments else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr>{render_sort_th(t("field.name"), 'student_name', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th(t("students.field.student_no"), 'student_no', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th(t("students.field.class"), 'class_name', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th('패키지', 'package_name', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th(t("students.field.paid_date"), 'paid_date', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th('실결제금액', 'amount', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th('정가', 'list_price', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th('할인율', 'discount_rate', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th(t("students.field.package_hours"), 'package_hours', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}{render_sort_th(t("students.field.remaining_classes"), 'remaining_classes', payment_sort_by, payment_sort_dir, '/payments', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id})}</tr>{row_html if load_payments else ''}{(f"<tr><td colspan='10' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_payments and not row_html) else ''}</table>{render_pagination('/payments', CURRENT_LANG, payment_page, payment_page_size, len(rows), payments_has_more, payment_keep_params, total_count=payments_total_count) if load_payments else ''}</div>
         """, user, current_menu="payments", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
@@ -6602,6 +6828,32 @@ def app(environ, start_response):
         selected_student_id = (query.get("selected_student_id", "") or "").strip()
         picker_query_enabled = query.get("do_search", "") == "1" or bool((query.get("student_q", "") or "").strip()) or bool(selected_student_id)
         load_library = query.get("load", "") == "1" or bool(selected_student_id)
+        book_sort_by = (query.get("book_sort_by", "") or "id").strip()
+        book_sort_dir = (query.get("book_sort_dir", "") or "desc").strip().lower()
+        book_page = max(1, as_int(query.get("book_page", "1")) or 1)
+        book_page_size = 20
+        loan_sort_by = (query.get("loan_sort_by", "") or "loaned_at").strip()
+        loan_sort_dir = (query.get("loan_sort_dir", "") or "desc").strip().lower()
+        loan_page = max(1, as_int(query.get("loan_page", "1")) or 1)
+        loan_page_size = 20
+        book_sort_map = {"id": "b.id", "code": "b.code COLLATE NOCASE", "title": "b.title COLLATE NOCASE", "status": "b.status"}
+        loan_sort_map = {
+            "code": "b.code COLLATE NOCASE",
+            "title": "b.title COLLATE NOCASE",
+            "student_name": "s.name_ko COLLATE NOCASE",
+            "student_no": "s.student_no COLLATE NOCASE",
+            "loaned_at": "bl.loaned_at",
+            "returned_at": "bl.returned_at",
+            "handler_name": "u.name COLLATE NOCASE",
+        }
+        if book_sort_by not in book_sort_map:
+            book_sort_by = "id"
+        if loan_sort_by not in loan_sort_map:
+            loan_sort_by = "loaned_at"
+        if book_sort_dir not in ("asc", "desc"):
+            book_sort_dir = "desc"
+        if loan_sort_dir not in ("asc", "desc"):
+            loan_sort_dir = "desc"
         student_candidates = fetch_student_candidates(conn, query.get("student_q", ""), limit=10) if picker_query_enabled else []
         selected_student = conn.execute("SELECT id, name_ko, student_no FROM students WHERE id=?", (selected_student_id,)).fetchone() if selected_student_id else None
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
@@ -6626,20 +6878,46 @@ def app(environ, start_response):
                     conn.execute("UPDATE book_loans SET returned_at=? WHERE book_id=? AND returned_at IS NULL", (now(), book["id"]))
             conn.commit()
             load_library = True
-        books = conn.execute("SELECT * FROM books ORDER BY id DESC").fetchall() if load_library else []
-        loans = conn.execute(
+        books = []
+        loans = []
+        books_has_more = False
+        loans_has_more = False
+        books_total_count = 0
+        loans_total_count = 0
+        if load_library:
+            books_total_count = conn.execute("SELECT COUNT(*) FROM books b").fetchone()[0]
+            books = conn.execute(
+                f"SELECT b.* FROM books b ORDER BY {book_sort_map[book_sort_by]} {book_sort_dir}, b.id DESC LIMIT ? OFFSET ?",
+                (book_page_size + 1, (book_page - 1) * book_page_size),
+            ).fetchall()
+            books_has_more = len(books) > book_page_size
+            books = books[:book_page_size]
+        if load_library:
+            loans_total_count = conn.execute("SELECT COUNT(*) FROM book_loans bl").fetchone()[0]
+            loans = conn.execute(
             """SELECT bl.id, b.code, b.title, s.name_ko AS student_name, s.student_no,
             bl.loaned_at, bl.returned_at, u.name AS handler_name
             FROM book_loans bl
             LEFT JOIN books b ON b.id=bl.book_id
             LEFT JOIN students s ON s.user_id=bl.student_id
             LEFT JOIN users u ON u.id=bl.handled_by
-            ORDER BY bl.id DESC"""
-        ).fetchall() if load_library else []
+            ORDER BY """ + f"{loan_sort_map[loan_sort_by]} {loan_sort_dir}, bl.id DESC LIMIT ? OFFSET ?",
+            (loan_page_size + 1, (loan_page - 1) * loan_page_size),
+        ).fetchall()
+            loans_has_more = len(loans) > loan_page_size
+            loans = loans[:loan_page_size]
+        library_keep_params = {
+            "load": "1",
+            "selected_student_id": selected_student_id,
+            "book_sort_by": book_sort_by,
+            "book_sort_dir": book_sort_dir,
+            "loan_sort_by": loan_sort_by,
+            "loan_sort_dir": loan_sort_dir,
+        }
         student_picker = render_picker_block(t("picker.student"), "student_q", query.get("student_q", ""), "selected_student_id", selected_student_id,
                                             (f"{selected_student['name_ko']} ({selected_student['student_no'] or '-'})" if selected_student else ""),
                                             student_candidates, "/library", CURRENT_LANG,
-                                            {"load": "1"}, query_enabled=picker_query_enabled)
+                                            library_keep_params, query_enabled=picker_query_enabled)
         book_rows = "".join([f"<tr><td>{r['id']}</td><td>{r['code']}</td><td>{r['title']}</td><td>{r['status']}</td></tr>" for r in books])
         loan_rows = "".join([f"<tr><td>{r['code'] or '-'}</td><td>{h(r['title'] or '-')}</td><td>{h(r['student_name'] or '-')}</td><td>{h(r['student_no'] or '-')}</td><td>{r['loaned_at']}</td><td>{r['returned_at'] or '-'}</td><td>{h(r['handler_name'] or '-')}</td></tr>" for r in loans])
         html = render_html(t("library.title"), f"""
@@ -6647,8 +6925,8 @@ def app(environ, start_response):
         <div class='card'><h4>{t("library.book_add")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='book'>{t("field.code")}<input name='code'> {t("field.title")}<input name='title'><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.loan")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='loan'><input type='hidden' name='student_id' value='{selected_student_id}'>{t("field.code")}<input name='code'> {t("common.selected")}<input value='{(selected_student["name_ko"] if selected_student else "-")}' readonly> {t("students.field.student_no")}<input value='{(selected_student["student_no"] if selected_student else "-")}' readonly> <label>Handled By <input value='{h(user["name"])}' readonly></label><button>{t('common.save')}</button></form></div>
         <div class='card'><h4>{t("library.return")}</h4><form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'><input type='hidden' name='type' value='return'>{t("field.code")}<input name='code'><button>{t('common.save')}</button></form></div>
-        <div class='card'><h4>{t("library.books")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.id")}</th><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.status")}</th></tr>{book_rows if load_library else ''}{(f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not book_rows) else ''}</table></div>
-        <div class='card'><h4>{t("library.history")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr><th>{t("field.code")}</th><th>{t("field.title")}</th><th>{t("field.name")}</th><th>{t("students.field.student_no")}</th><th>{t("field.loaned_at")}</th><th>{t("field.returned_at")}</th><th>{t("field.handler")}</th></tr>{loan_rows if load_library else ''}{(f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not loan_rows) else ''}</table></div>
+        <div class='card'><h4>{t("library.books")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr>{render_sort_th(t("field.id"), 'id', book_sort_by, book_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'loan_sort_by':loan_sort_by,'loan_sort_dir':loan_sort_dir,'loan_page':loan_page})}{render_sort_th(t("field.code"), 'code', book_sort_by, book_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'loan_sort_by':loan_sort_by,'loan_sort_dir':loan_sort_dir,'loan_page':loan_page})}{render_sort_th(t("field.title"), 'title', book_sort_by, book_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'loan_sort_by':loan_sort_by,'loan_sort_dir':loan_sort_dir,'loan_page':loan_page})}{render_sort_th(t("field.status"), 'status', book_sort_by, book_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'loan_sort_by':loan_sort_by,'loan_sort_dir':loan_sort_dir,'loan_page':loan_page})}</tr>{book_rows if load_library else ''}{(f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not book_rows) else ''}</table>{render_pagination('/library', CURRENT_LANG, book_page, book_page_size, len(books), books_has_more, {**library_keep_params, 'loan_page': loan_page}, total_count=books_total_count, page_param='book_page') if load_library else ''}</div>
+        <div class='card'><h4>{t("library.history")}</h4>{'' if load_library else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}<table><tr>{render_sort_th(t("field.code"), 'code', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("field.title"), 'title', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("field.name"), 'student_name', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("students.field.student_no"), 'student_no', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("field.loaned_at"), 'loaned_at', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("field.returned_at"), 'returned_at', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}{render_sort_th(t("field.handler"), 'handler_name', loan_sort_by, loan_sort_dir, '/library', CURRENT_LANG, {'load':'1','selected_student_id':selected_student_id,'book_sort_by':book_sort_by,'book_sort_dir':book_sort_dir,'book_page':book_page})}</tr>{loan_rows if load_library else ''}{(f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_library and not loan_rows) else ''}</table>{render_pagination('/library', CURRENT_LANG, loan_page, loan_page_size, len(loans), loans_has_more, {**library_keep_params, 'book_page': book_page}, total_count=loans_total_count, page_param='loan_page') if load_library else ''}</div>
         """, user, current_menu="library")
         status, headers, body = text_resp(html)
         conn.close()
