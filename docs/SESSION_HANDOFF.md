@@ -22,6 +22,7 @@ Routes/pages modified:
 Behavior added or fixed:
 - `/users` now follows the Phase 1 UX direction more closely: create form is collapsed by default, search/list stays separate, and list rows now open a focused edit panel instead of exposing only a raw ID table
 - `/users` now supports owner-side editing of name, username, teacher type, and optional password reset for existing users without exposing password hashes or mixing edit controls into the result table
+- `/users` now has a guarded delete action; self-delete, owner delete, and delete of accounts tied to operational data are blocked
 - restored `app.py` from the clean HEAD version after a workspace encoding corruption and then reapplied the current admin UX fixes
 - `/schedule` now supports deleting the selected schedule from the lesson detail panel
 - `/schedule` class list no longer auto-loads by default; it stays collapsed until Query is pressed
@@ -34,6 +35,7 @@ Behavior added or fixed:
 - `/exams` now uses selected class/student context, exam dropdowns, and readable exam/score tables instead of raw internal IDs
 - `/counseling` now hides raw student/parent IDs in the search/form/list UI and uses picker context with readable names
 - `/masterdata` now has a `수납 패키지` section for package code/name/credits/list price management
+- `/masterdata` payment package labels now use translation keys and the ambiguous teacher-only tab was removed because teacher management belongs under `/users`
 - `/payments` now uses package master values, stores package/list price/discount, and recharges `students.remaining_credits` on save
 - sample packages seeded: `RT30`, `RT60`, `WK24`, `VIP12`
 - request body parsing is now cached, so CSRF checks and route handlers do not consume POST bodies twice
@@ -42,6 +44,8 @@ Behavior added or fixed:
 - added shared admin UX guidelines to standardize query-first pages, collapsed forms, picker output, and result density
 - updated project priorities to move role policy and UX structure ahead of cosmetic polish
 - added an integrated roadmap that combines operational must-haves, UX stabilization, branding timing, and phased structural cleanup
+- `/attendance` now stays in a true query-first state and does not render large result tables until Search is pressed
+- `/attendance` row editing now uses a collapsible edit panel instead of always showing every dropdown in the table cell
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
