@@ -6,6 +6,9 @@ import traceback
 import uuid
 import io
 import csv
+import re
+import hmac
+import hashlib
 from email import policy
 from email.parser import BytesParser
 from datetime import datetime, timedelta, timezone
@@ -888,6 +891,41 @@ def create_session(conn, user_id):
     return token
 
 
+def csrf_secret():
+    return os.getenv("CSRF_SECRET", "rtweb-csrf-dev-secret").encode("utf-8")
+
+
+def make_csrf_token(session_token):
+    if not session_token:
+        return ""
+    return hmac.new(csrf_secret(), str(session_token).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def inject_csrf_tokens(html, user=None):
+    session_token = None if not user else user["session_token"] if "session_token" in user.keys() else None
+    token = make_csrf_token(session_token)
+    if not token:
+        return html
+    pattern = re.compile(r'(<form\b[^>]*method=[\'"]post[\'"][^>]*>)', re.IGNORECASE)
+    return pattern.sub(rf"\1<input type='hidden' name='_csrf_token' value='{token}'>", html)
+
+
+def request_csrf_token(environ, data=None):
+    header_token = (environ.get("HTTP_X_CSRF_TOKEN") or "").strip()
+    if header_token:
+        return header_token
+    if data is None:
+        data = parse_body(environ)
+    return (data.get("_csrf_token") or "").strip()
+
+
+def require_csrf(environ, user, data=None):
+    session_token = None if not user else user["session_token"] if "session_token" in user.keys() else None
+    expected = make_csrf_token(session_token)
+    provided = request_csrf_token(environ, data=data)
+    return bool(expected) and hmac.compare_digest(provided, expected)
+
+
 def invalidate_session(conn, token):
     if token:
         conn.execute("DELETE FROM sessions WHERE token=?", (token,))
@@ -1589,7 +1627,7 @@ def current_user(environ):
         return None
     conn = get_db()
     row = conn.execute(
-        "SELECT s.created_at AS session_created_at, u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?", (token,)
+        "SELECT s.created_at AS session_created_at, s.token AS session_token, u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?", (token,)
     ).fetchone()
     if not row:
         conn.close()
@@ -1611,6 +1649,7 @@ def current_user(environ):
 
 def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg="", flash_type="success"):
     lang = lang or CURRENT_LANG
+    body = inject_csrf_tokens(body, user=user)
     css = """
     <style>
       html { -webkit-text-size-adjust: 100%; }
@@ -2347,6 +2386,13 @@ def app(environ, start_response):
         status, headers, body = resp
         start_response(status, headers)
         return [body]
+    if method == "POST":
+        req_data = parse_body(environ)
+        if not require_csrf(environ, user, data=req_data):
+            html = render_html("403 Forbidden", "<div class='flash error'>Invalid CSRF token. Refresh the page and try again.</div>", user)
+            status, headers, body = text_resp(html, "403 Forbidden")
+            start_response(status, headers)
+            return [body]
     # Dashboard
     if path == "/dashboard":
         stats = {}
