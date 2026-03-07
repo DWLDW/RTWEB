@@ -1065,6 +1065,12 @@ def weekday_from_ref(ref_date_str=None, week_offset=0):
     target = base + timedelta(days=week_offset * 7)
     return target.strftime("%a"), target.isoformat()
 
+
+def date_for_weekday(week_start, day_code):
+    day_offsets = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+    offset = day_offsets.get((day_code or "").strip(), 0)
+    return (week_start + timedelta(days=offset)).isoformat()
+
 def iso_monday_str(ref_date_str=None, week_offset=0):
     monday, _, _, _ = week_bounds_from_ref(ref_date_str, week_offset)
     return monday.isoformat()
@@ -4296,6 +4302,7 @@ def app(environ, start_response):
             ref_date_str = datetime.utcnow().date().isoformat()
         selected_weekday, selected_view_date = weekday_from_ref(ref_date_str, week_offset)
         selected_day = selected_day_query.capitalize() if selected_day_query.capitalize() in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") else selected_weekday
+        selected_view_date = date_for_weekday(week_start, selected_day)
         print_mode = query.get("print", "") == "1"
 
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
