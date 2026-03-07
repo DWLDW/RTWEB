@@ -55,6 +55,18 @@ Do not apply to unrelated navigation.
 - Move code first, refactor later.
 - Avoid large one-shot app.py splits.
 
+## Session End Rule
+At the end of every coding task, Codex must update docs/SESSION_HANDOFF.md with:
+- files changed
+- routes/pages modified
+- behavior added or fixed
+- known issues
+- quick verification done
+- next recommended task
+
+Keep it short.
+Do not restate full code.
+
 ## Output Format
 After each change output:
 
