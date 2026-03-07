@@ -552,6 +552,27 @@ def calc_credit_delta(status_v, absence_charge_type, credit_unit):
     return 0.0
 
 
+def normalize_absence_handling(status_v, absence_charge_type, existing_makeup_completed=0):
+    completed_flag = 1 if str(existing_makeup_completed) in ("1", "True", "true") else 0
+    if status_v != "absent":
+        return None, 0, 0
+    normalized_charge = absence_charge_type if absence_charge_type in ("deduct", "no_deduct") else None
+    requires_makeup = 1 if normalized_charge == "no_deduct" else 0
+    makeup_completed = completed_flag if requires_makeup else 0
+    return normalized_charge, requires_makeup, makeup_completed
+
+
+def cancel_pending_makeup_assignments(conn, source_attendance_id):
+    if not source_attendance_id:
+        return
+    conn.execute(
+        """UPDATE makeup_assignments
+        SET status='cancelled', completed_at=COALESCE(completed_at, ?)
+        WHERE source_attendance_id=? AND COALESCE(status,'assigned')='assigned'""",
+        (now(), source_attendance_id),
+    )
+
+
 def apply_credit_adjustment(conn, student_user_id, old_delta, new_delta):
     old_v = as_float(old_delta) if old_delta is not None else 0.0
     new_v = as_float(new_delta) if new_delta is not None else 0.0
@@ -5154,26 +5175,20 @@ def app(environ, start_response):
                 for st in students_in_class:
                     sid = str(st["user_id"])
                     status_v = (d.get(f"status_{sid}") or "present").strip()
-                    if status_v not in ("present", "late", "absent", "makeup"):
+                    if status_v not in ("present", "late", "absent"):
                         row_errors.append(f"{st['name_ko']}: {t('validation.status_invalid')}")
                     absence_charge_type = (d.get(f"absence_charge_type_{sid}") or "").strip()
-                    requires_makeup = parse_bool_flag(d.get(f"requires_makeup_{sid}"))
-                    if requires_makeup is None:
-                        row_errors.append(f"{st['name_ko']}: {t('attendance.validation.bool_invalid')}")
-                        requires_makeup = 0
                     if status_v == "absent":
                         if absence_charge_type not in ("deduct", "no_deduct"):
                             row_errors.append(f"{st['name_ko']}: {t('attendance.validation.charge_required')}")
-                    else:
-                        absence_charge_type = ""
-                        requires_makeup = 0
+                    normalized_charge, requires_makeup, makeup_completed = normalize_absence_handling(status_v, absence_charge_type, 0)
                     row = {
                         "student_user_id": st["user_id"],
                         "status": status_v,
                         "teacher_memo": (d.get(f"teacher_memo_{sid}") or "").strip(),
-                        "absence_charge_type": absence_charge_type,
+                        "absence_charge_type": normalized_charge,
                         "requires_makeup": requires_makeup,
-                        "makeup_completed": 0,
+                        "makeup_completed": makeup_completed,
                     }
                     for sf in score_fields:
                         raw = (d.get(f"{sf}_{sid}") or "").strip()
@@ -5196,14 +5211,24 @@ def app(environ, start_response):
                         row_credit_delta = calc_credit_delta(row["status"], row["absence_charge_type"], class_credit_unit)
                         if target_schedule_id is not None:
                             existing = conn.execute(
-                                "SELECT id, credit_delta FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
+                                "SELECT id, credit_delta, makeup_completed FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
                                 (target_schedule_id, row["student_user_id"], post_lesson_date),
                             ).fetchone()
                         else:
                             existing = conn.execute(
-                                "SELECT id, credit_delta FROM attendance WHERE class_id=? AND schedule_id IS NULL AND student_id=? AND lesson_date=?",
+                                "SELECT id, credit_delta, makeup_completed FROM attendance WHERE class_id=? AND schedule_id IS NULL AND student_id=? AND lesson_date=?",
                                 (class_id_for_lesson, row["student_user_id"], post_lesson_date),
                             ).fetchone()
+                        if row["status"] == "absent":
+                            row["absence_charge_type"], row["requires_makeup"], row["makeup_completed"] = normalize_absence_handling(
+                                row["status"],
+                                row["absence_charge_type"],
+                                existing["makeup_completed"] if existing else 0,
+                            )
+                        else:
+                            row["absence_charge_type"], row["requires_makeup"], row["makeup_completed"] = normalize_absence_handling(
+                                row["status"], None, 0
+                            )
 
                         if existing:
                             keep_id = existing["id"]
@@ -5220,6 +5245,8 @@ def app(environ, start_response):
                                 ),
                             )
                             apply_credit_adjustment(conn, row["student_user_id"], existing["credit_delta"], row_credit_delta)
+                            if row["requires_makeup"] == 0:
+                                cancel_pending_makeup_assignments(conn, keep_id)
                         else:
                             cur = conn.execute(
                                 """INSERT INTO attendance(
@@ -5270,9 +5297,8 @@ def app(environ, start_response):
                 def score_cell(field):
                     val = ex[field] if ex and field in ex.keys() else None
                     return f"<input class='score-input' name='{field}_{sid}' value='{h(val if val is not None else '')}'>"
-                status_val = (ex["status"] if ex else "present")
+                status_val = ("present" if ex and ex["status"] == "makeup" else (ex["status"] if ex else "present"))
                 charge_val = (ex["absence_charge_type"] if ex and 'absence_charge_type' in ex.keys() and ex["absence_charge_type"] else 'deduct')
-                requires_makeup_val = 1 if ex and 'requires_makeup' in ex.keys() and str(ex['requires_makeup']) in ('1','true','True') else 0
                 student_rows_html += f"""
                 <tr>
                   <td>{h(st['student_no'] or '-')}</td>
@@ -5281,15 +5307,10 @@ def app(environ, start_response):
                     <option value='present' {'selected' if status_val=='present' else ''}>{attendance_status_t('present')}</option>
                     <option value='late' {'selected' if status_val=='late' else ''}>{attendance_status_t('late')}</option>
                     <option value='absent' {'selected' if status_val=='absent' else ''}>{attendance_status_t('absent')}</option>
-                    <option value='makeup' {'selected' if status_val=='makeup' else ''}>{attendance_status_t('makeup')}</option>
                   </select></td>
                   <td><select name='absence_charge_type_{sid}'>
                     <option value='deduct' {'selected' if charge_val=='deduct' else ''}>{t('attendance.charge.deduct')}</option>
                     <option value='no_deduct' {'selected' if charge_val=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option>
-                  </select></td>
-                  <td><select name='requires_makeup_{sid}'>
-                    <option value='0' {'selected' if requires_makeup_val==0 else ''}>{t('common.no')}</option>
-                    <option value='1' {'selected' if requires_makeup_val==1 else ''}>{t('common.yes')}</option>
                   </select></td>
                   <td>{score_cell('participation_score')}</td>
                   <td>{score_cell('fluency_score')}</td>
@@ -5326,10 +5347,10 @@ def app(environ, start_response):
                 {empty_student_notice}
                 <div class='table-wrap'><table class='sticky-head'>
                   <thead><tr>
-                    <th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th><th>{t('attendance.requires_makeup')}</th>
+                    <th>{t('students.field.student_no')}</th><th>{t('field.name')}</th><th>{t('field.status')}</th><th>{t('attendance.absence_charge_type')}</th>
                     <th>{score_labels['participation_score']}</th><th>{score_labels['fluency_score']}</th><th>{score_labels['vocabulary_score']}</th><th>{score_labels['reading_score']}</th><th>{score_labels['homework_score']}</th><th>{score_labels['attitude_score']}</th><th>{t('lesson.score.teacher_memo')}</th>
                   </tr></thead>
-                  <tbody>{student_rows_html or f"<tr><td colspan='12' class='empty-msg'>{t('common.no_data')}</td></tr>"}</tbody>
+                  <tbody>{student_rows_html or f"<tr><td colspan='11' class='empty-msg'>{t('common.no_data')}</td></tr>"}</tbody>
                 </table></div>
                 <div class='btn-row' style='margin-top:10px'><button>{t('common.save')}</button></div>
               </form>
@@ -5379,36 +5400,37 @@ def app(environ, start_response):
                         start_response(status, headers)
                         return [body]
                 status_v = (d.get("status") or "").strip()
-                if status_v not in ("present", "late", "absent", "makeup"):
+                if status_v not in ("present", "late", "absent"):
                     add_error(errs, "status", t("validation.status_invalid"))
                 charge_type = (d.get("absence_charge_type") or "").strip()
                 if status_v == "absent":
                     if charge_type not in ("deduct", "no_deduct"):
                         add_error(errs, "absence_charge_type", t("attendance.validation.charge_required"))
-                else:
-                    charge_type = ""
-                requires_makeup = parse_bool_flag(d.get("requires_makeup"))
-                makeup_completed = parse_bool_flag(d.get("makeup_completed"))
-                if requires_makeup is None or makeup_completed is None:
-                    add_error(errs, "makeup", t("attendance.validation.bool_invalid"))
-                if status_v != "absent":
-                    requires_makeup = 0
-                if requires_makeup == 0:
-                    makeup_completed = 0
                 note_v = (d.get("note") or "").strip()
                 if errs:
                     flash_msg = format_errors(errs)
                     flash_type = "error"
                 else:
                     unit = get_class_credit_unit(conn, row["class_id"])
+                    current_row = conn.execute(
+                        "SELECT makeup_completed FROM attendance WHERE id=?",
+                        (attendance_id,),
+                    ).fetchone()
+                    charge_type, requires_makeup, makeup_completed = normalize_absence_handling(
+                        status_v,
+                        charge_type,
+                        current_row["makeup_completed"] if current_row else 0,
+                    )
                     new_delta = calc_credit_delta(status_v, charge_type, unit)
                     conn.execute(
                         """UPDATE attendance SET status=?, note=?, absence_charge_type=?, requires_makeup=?, makeup_completed=?, credit_delta=? WHERE id=?""",
                         (status_v, note_v or None, charge_type or None, requires_makeup, makeup_completed, new_delta, attendance_id),
                     )
+                    if requires_makeup == 0:
+                        cancel_pending_makeup_assignments(conn, attendance_id)
                     apply_credit_adjustment(conn, row["student_id"], row["credit_delta"], new_delta)
                     attendance_schedule_id = conn.execute("SELECT schedule_id FROM attendance WHERE id=?", (attendance_id,)).fetchone()
-                    if attendance_schedule_id and attendance_schedule_id["schedule_id"] and status_v in ("present", "late", "makeup"):
+                    if attendance_schedule_id and attendance_schedule_id["schedule_id"] and status_v in ("present", "late"):
                         complete_makeup_assignment(conn, row["student_id"], attendance_schedule_id["schedule_id"], attendance_id)
                     conn.commit()
                     flash_msg = t("attendance.updated")
@@ -5442,7 +5464,7 @@ def app(environ, start_response):
                 if not ensure_exists(conn, "users", student_id, extra_where="role='student'"):
                     add_error(errs, "student_id", "Invalid student")
                 status_v = (d.get("status") or "").strip()
-                if status_v not in ("present", "late", "absent", "makeup"):
+                if status_v not in ("present", "late", "absent"):
                     add_error(errs, "status", t("validation.status_invalid"))
                 lesson_date_v = (d.get("lesson_date") or "").strip()
                 if not is_valid_date(lesson_date_v):
@@ -5450,14 +5472,7 @@ def app(environ, start_response):
                 charge_type = (d.get("absence_charge_type") or "").strip()
                 if status_v == "absent" and charge_type not in ("deduct", "no_deduct"):
                     add_error(errs, "absence_charge_type", t("attendance.validation.charge_required"))
-                if status_v != "absent":
-                    charge_type = ""
-                requires_makeup = parse_bool_flag(d.get("requires_makeup"))
-                if requires_makeup is None:
-                    add_error(errs, "requires_makeup", t("attendance.validation.bool_invalid"))
-                    requires_makeup = 0
-                if status_v != "absent":
-                    requires_makeup = 0
+                charge_type, requires_makeup, makeup_completed = normalize_absence_handling(status_v, charge_type, 0)
                 created_by = user["id"]
                 if errs:
                     flash_msg = format_errors(errs)
@@ -5469,7 +5484,7 @@ def app(environ, start_response):
                         """INSERT INTO attendance(class_id, student_id, lesson_date, status, note, created_by, created_at,
                         absence_charge_type, requires_makeup, makeup_completed, credit_delta)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                        (class_id, student_id, lesson_date_v, status_v, d.get("note"), created_by, now(), charge_type or None, requires_makeup, 0, credit_delta),
+                        (class_id, student_id, lesson_date_v, status_v, d.get("note"), created_by, now(), charge_type or None, requires_makeup, makeup_completed, credit_delta),
                     )
                     apply_credit_adjustment(conn, student_id, 0.0, credit_delta)
                     if status_v == "absent":
@@ -5556,7 +5571,7 @@ def app(environ, start_response):
               <td>{r['lesson_date'] or '-'}</td>
               <td>{h(r['student_name'] or '-')}</td>
               <td>{h(r['class_name'] or '-')}</td>
-              <td>{attendance_status_t(r['status']) if r['status'] else '-'}</td>
+              <td>{attendance_status_t('present') if r['status']=='makeup' else (attendance_status_t(r['status']) if r['status'] else '-')}</td>
               <td>{t('attendance.charge.deduct') if r['absence_charge_type']=='deduct' else (t('attendance.charge.no_deduct') if r['absence_charge_type']=='no_deduct' else '-')}</td>
               <td>{t('common.yes') if str(r['requires_makeup']) in ('1','True','true') else t('common.no')}</td>
               <td>{t('common.yes') if str(r['makeup_completed']) in ('1','True','true') else t('common.no')}</td>
@@ -5571,28 +5586,15 @@ def app(environ, start_response):
                     <div class='filter-grid'>
                       <label>{t('field.status')}
                         <select name='status'>
-                          <option value='present' {'selected' if r['status']=='present' else ''}>{attendance_status_t('present')}</option>
+                          <option value='present' {'selected' if r['status'] in ('present','makeup') else ''}>{attendance_status_t('present')}</option>
                           <option value='late' {'selected' if r['status']=='late' else ''}>{attendance_status_t('late')}</option>
                           <option value='absent' {'selected' if r['status']=='absent' else ''}>{attendance_status_t('absent')}</option>
-                          <option value='makeup' {'selected' if r['status']=='makeup' else ''}>{attendance_status_t('makeup')}</option>
                         </select>
                       </label>
                       <label>{t('attendance.absence_charge_type')}
                         <select name='absence_charge_type'>
                           <option value='deduct' {'selected' if r['absence_charge_type']=='deduct' else ''}>{t('attendance.charge.deduct')}</option>
                           <option value='no_deduct' {'selected' if r['absence_charge_type']=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option>
-                        </select>
-                      </label>
-                      <label>{t('attendance.requires_makeup')}
-                        <select name='requires_makeup'>
-                          <option value='0' {'selected' if str(r['requires_makeup']) not in ('1','True','true') else ''}>{t('common.no')}</option>
-                          <option value='1' {'selected' if str(r['requires_makeup']) in ('1','True','true') else ''}>{t('common.yes')}</option>
-                        </select>
-                      </label>
-                      <label>{t('attendance.makeup_completed')}
-                        <select name='makeup_completed'>
-                          <option value='0' {'selected' if str(r['makeup_completed']) not in ('1','True','true') else ''}>{t('common.no')}</option>
-                          <option value='1' {'selected' if str(r['makeup_completed']) in ('1','True','true') else ''}>{t('common.yes')}</option>
                         </select>
                       </label>
                       <label>{t('field.note')} <input name='note' value='{h(r['note'] or '')}'></label>
@@ -5620,7 +5622,7 @@ def app(environ, start_response):
             <div class='filter-grid'>
             <label>{t('attendance.filter.date_from')} <input type='date' name='date_from' value='{date_from}'></label>
             <label>{t('attendance.filter.date_to')} <input type='date' name='date_to' value='{date_to}'></label>
-            <label>{t('field.status')} <select name='status'><option value=''>{t('academics.day_all')}</option><option value='present' {'selected' if status_filter=='present' else ''}>{attendance_status_t('present')}</option><option value='late' {'selected' if status_filter=='late' else ''}>{attendance_status_t('late')}</option><option value='absent' {'selected' if status_filter=='absent' else ''}>{attendance_status_t('absent')}</option><option value='makeup' {'selected' if status_filter=='makeup' else ''}>{attendance_status_t('makeup')}</option></select></label>
+            <label>{t('field.status')} <select name='status'><option value=''>{t('academics.day_all')}</option><option value='present' {'selected' if status_filter=='present' else ''}>{attendance_status_t('present')}</option><option value='late' {'selected' if status_filter=='late' else ''}>{attendance_status_t('late')}</option><option value='absent' {'selected' if status_filter=='absent' else ''}>{attendance_status_t('absent')}</option></select></label>
             <label>{t('attendance.filter.deductible')} <select name='deductible'><option value=''>{t('academics.day_all')}</option><option value='deduct' {'selected' if deductible_filter=='deduct' else ''}>{t('attendance.charge.deduct')}</option><option value='no_deduct' {'selected' if deductible_filter=='no_deduct' else ''}>{t('attendance.charge.no_deduct')}</option></select></label>
             <label>{t('attendance.requires_makeup')} <select name='requires_makeup'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if requires_makeup_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if requires_makeup_filter=='0' else ''}>{t('common.no')}</option></select></label>
             <label>{t('attendance.makeup_completed')} <select name='makeup_completed'><option value=''>{t('academics.day_all')}</option><option value='1' {'selected' if makeup_completed_filter=='1' else ''}>{t('common.yes')}</option><option value='0' {'selected' if makeup_completed_filter=='0' else ''}>{t('common.no')}</option></select></label>
@@ -5647,9 +5649,8 @@ def app(environ, start_response):
             <label>{t('field.student_id')} <input value='{selected_student_id}' readonly></label>
             <label>{t('field.class_id')} <input value='{selected_class_id}' readonly></label>
             <label>{t('field.date')} <input name='lesson_date' placeholder='2026-03-06'></label>
-            <label>{t('field.status')} <select name='status'><option value='present'>{attendance_status_t('present')}</option><option value='late'>{attendance_status_t('late')}</option><option value='absent'>{attendance_status_t('absent')}</option><option value='makeup'>{attendance_status_t('makeup')}</option></select></label>
+            <label>{t('field.status')} <select name='status'><option value='present'>{attendance_status_t('present')}</option><option value='late'>{attendance_status_t('late')}</option><option value='absent'>{attendance_status_t('absent')}</option></select></label>
             <label>{t('attendance.absence_charge_type')} <select name='absence_charge_type'><option value='deduct'>{t('attendance.charge.deduct')}</option><option value='no_deduct'>{t('attendance.charge.no_deduct')}</option></select></label>
-            <label>{t('attendance.requires_makeup')} <select name='requires_makeup'><option value='0'>{t('common.no')}</option><option value='1'>{t('common.yes')}</option></select></label>
             <label>{t('field.note')} <input name='note'></label>
             <button>{t("common.save")}</button>
           </form>
