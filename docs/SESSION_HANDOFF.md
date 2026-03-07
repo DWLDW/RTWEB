@@ -55,6 +55,11 @@ Behavior added or fixed:
 - the schedule-side makeup picker now allows blank search as a valid query and treats it as "show all pending makeup students for assignment"
 - makeup candidate labels in `/schedule` now show `absence date / original class / student / homeroom teacher` so operators can assign the right student without guessing
 - fixed a schedule makeup picker crash when blank-search results reused the generic student picker branch without a `phone` field
+- fixed the generic picker so row-provided `label` values are actually used for SQLite row candidates, which restores the detailed makeup candidate text in `/schedule`
+- `/schedule` makeup assignment UI is now collapsed by default under lesson detail instead of always occupying the right-side column
+- lesson attendance entry now includes assigned makeup students for that schedule so they can be marked present/late in the actual class roster flow
+- class detail now shows makeup-assigned students targeting that class, and class attendance CSV exports now include makeup-related columns
+- global attendance CSV exports now include `makeup_attendance_id`, `target_schedule_id`, and assignment status for auditability
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above

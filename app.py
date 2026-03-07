@@ -2473,7 +2473,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
 
     for c in ordered:
         cid = c['id']
-        label = c.get('label', '') if isinstance(c, dict) else ''
+        label = c['label'] if ('label' in c.keys()) else ''
         if not label:
             if 'student_no' in c.keys():
                 phone_value = c['phone'] if 'phone' in c.keys() else None
@@ -3786,9 +3786,32 @@ def app(environ, start_response):
             (class_id,),
         ).fetchall()
         attendance_rows = conn.execute(
-            """SELECT a.lesson_date, s.name_ko AS student_name, a.status, a.note
+            """SELECT a.lesson_date, s.name_ko AS student_name, a.status, a.note,
+            a.absence_charge_type, a.requires_makeup, a.makeup_completed, a.makeup_attendance_id
             FROM attendance a LEFT JOIN students s ON s.user_id=a.student_id
             WHERE a.class_id=? ORDER BY a.id DESC LIMIT 20""",
+            (class_id,),
+        ).fetchall()
+        class_makeup_rows = conn.execute(
+            """SELECT
+                ma.id,
+                st.student_no,
+                st.name_ko AS student_name,
+                ht.name AS homeroom_teacher_name,
+                src.lesson_date AS source_lesson_date,
+                src_cls.name AS source_class_name,
+                tgt.day_of_week,
+                tgt.start_time,
+                tgt.end_time,
+                COALESCE(ma.status,'assigned') AS assignment_status
+            FROM makeup_assignments ma
+            JOIN schedules tgt ON tgt.id=ma.target_schedule_id
+            JOIN attendance src ON src.id=ma.source_attendance_id
+            JOIN students st ON st.user_id=ma.student_id
+            LEFT JOIN classes src_cls ON src_cls.id=src.class_id
+            LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+            WHERE tgt.class_id=?
+            ORDER BY ma.id DESC LIMIT 30""",
             (class_id,),
         ).fetchall()
         homework_rows = conn.execute(
@@ -3819,9 +3842,11 @@ def app(environ, start_response):
                     lines.append(f'"{r["student_no"] or ""}","{r["name_ko"] or ""}","{r["phone"] or ""}","{r["status"] or ""}"')
                 filename = f"class_{class_id}_students.csv"
             else:
-                lines = ["lesson_date,student_name,status,note"]
+                lines = ["lesson_date,student_name,status,absence_charge_type,requires_makeup,makeup_completed,makeup_attendance_id,note"]
                 for r in attendance_rows:
-                    lines.append(f'"{r["lesson_date"] or ""}","{r["student_name"] or ""}","{r["status"] or ""}","{r["note"] or ""}"')
+                    lines.append(
+                        f'"{r["lesson_date"] or ""}","{r["student_name"] or ""}","{r["status"] or ""}","{r["absence_charge_type"] or ""}","{r["requires_makeup"] or 0}","{r["makeup_completed"] or 0}","{r["makeup_attendance_id"] or ""}","{r["note"] or ""}"'
+                    )
                 filename = f"class_{class_id}_attendance.csv"
             conn.close()
             start_response("200 OK", [
@@ -3844,6 +3869,7 @@ def app(environ, start_response):
             for r in sorted(schedules, key=lambda x: (day_sort_value(x['day_of_week']), x['start_time'] or '')):
                 schedule_rows += f"<tr><td>{r['day_of_week'] or '-'}</td><td>{r['start_time'] or '-'} ~ {r['end_time'] or '-'}</td><td>{r['classroom'] or '-'}</td><td><span class='badge {r['status'] or ''}'>{status_t(r['status']) if r['status'] else '-'}</span></td><td>{r['note'] or '-'}</td></tr>"
         attendance_html = rows_html(attendance_rows, ["lesson_date", "student_name", "status", "note"])
+        class_makeup_html = rows_html(class_makeup_rows, ["student_no", "student_name", "homeroom_teacher_name", "source_lesson_date", "source_class_name", "day_of_week", "start_time", "end_time", "assignment_status"])
         homework_html = rows_html(homework_rows, ["title", "due_date", "submitted_count", "total_submissions"])
         exam_html = rows_html(exam_rows, ["exam_name", "exam_date", "avg_score", "score_count"])
         next_order = "desc" if student_order == "asc" else "asc"
@@ -3894,6 +3920,13 @@ def app(environ, start_response):
         <table>
           <tr><th>{t('academics.day_of_week')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.classroom')}</th><th>{t('academics.status')}</th><th>{t('field.note')}</th></tr>
           {schedule_rows}
+        </table>
+        </div>
+        <div class='card'>
+        <h4>{t('attendance.makeup_assigned_list')}</h4>
+        <table>
+          <tr><th>{t('students.field.student_no')}</th><th>{t('field.student')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('field.date')}</th><th>{t('academics.class_name')}</th><th>{t('academics.day_of_week')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('academics.status')}</th></tr>
+          {class_makeup_html}
         </table>
         </div>
         <div class='card'>
@@ -4936,21 +4969,23 @@ def app(environ, start_response):
                 <button class='btn secondary' type='submit'>{t('common.delete')}</button>
               </form>
             </div>
-            <div class='card' id='lesson-makeup'>
-              <h4>{t('attendance.makeup_assign')}</h4>
-              {makeup_picker}
-              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
-                <input type='hidden' name='type' value='assign_makeup'>
-                <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
-                <input type='hidden' name='source_attendance_id' value='{selected_makeup_source_id}'>
-                <label>{t('attendance.makeup_source_absence')} <input value='{selected_makeup_label or "-"}' readonly></label>
-                <button {'disabled' if not selected_makeup_source_id else ''}>{t('attendance.makeup_assign')}</button>
-              </form>
-              <div class='table-wrap' style='margin-top:10px'><table>
-                <tr><th>{t('field.student')}</th><th>{t('students.field.student_no')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('attendance.makeup_source_absence')}</th><th>{t('common.delete')}</th></tr>
-                {makeup_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-              </table></div>
-            </div>
+            <details class='card' id='lesson-makeup' {'open' if (query.get('makeup_load','')=='1' or selected_makeup_source_id) else ''}>
+              <summary><strong>{t('attendance.makeup_assign')}</strong></summary>
+              <div style='margin-top:12px'>
+                {makeup_picker}
+                <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                  <input type='hidden' name='type' value='assign_makeup'>
+                  <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
+                  <input type='hidden' name='source_attendance_id' value='{selected_makeup_source_id}'>
+                  <label>{t('attendance.makeup_source_absence')} <input value='{selected_makeup_label or "-"}' readonly></label>
+                  <button {'disabled' if not selected_makeup_source_id else ''}>{t('attendance.makeup_assign')}</button>
+                </form>
+                <div class='table-wrap' style='margin-top:10px'><table>
+                  <tr><th>{t('field.student')}</th><th>{t('students.field.student_no')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('attendance.makeup_source_absence')}</th><th>{t('common.delete')}</th></tr>
+                  {makeup_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+                </table></div>
+              </div>
+            </details>
             """
 
         if print_mode:
@@ -5154,6 +5189,31 @@ def app(environ, start_response):
                 "SELECT id, user_id, student_no, name_ko FROM students WHERE current_class_id=? ORDER BY name_ko, id",
                 (class_id_for_lesson,),
             ).fetchall()
+            makeup_students = []
+            if target_schedule_id:
+                makeup_students = conn.execute(
+                    """SELECT
+                        st.id,
+                        st.user_id,
+                        st.student_no,
+                        st.name_ko,
+                        src.lesson_date AS source_lesson_date,
+                        srcc.name AS source_class_name,
+                        ht.name AS homeroom_teacher_name
+                    FROM makeup_assignments ma
+                    JOIN students st ON st.user_id=ma.student_id
+                    JOIN attendance src ON src.id=ma.source_attendance_id
+                    LEFT JOIN classes srcc ON srcc.id=src.class_id
+                    LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+                    WHERE ma.target_schedule_id=? AND COALESCE(ma.status,'assigned')='assigned'
+                    ORDER BY st.name_ko, st.id""",
+                    (target_schedule_id,),
+                ).fetchall()
+                seen_student_ids = {str(r["user_id"]) for r in students_in_class}
+                for ms in makeup_students:
+                    if str(ms["user_id"]) not in seen_student_ids:
+                        students_in_class.append(ms)
+                        seen_student_ids.add(str(ms["user_id"]))
 
             score_fields = ["participation_score", "fluency_score", "vocabulary_score", "reading_score", "homework_score", "attitude_score"]
             score_labels = {
@@ -5273,7 +5333,7 @@ def app(environ, start_response):
                             )
                             keep_id = cur.lastrowid
                             apply_credit_adjustment(conn, row["student_user_id"], 0.0, row_credit_delta)
-                        if target_schedule_id is not None and row["status"] in ("present", "late", "makeup"):
+                        if target_schedule_id is not None and row["status"] in ("present", "late"):
                             complete_makeup_assignment(conn, row["student_user_id"], target_schedule_id, keep_id)
                         if target_schedule_id is not None:
                             conn.execute("DELETE FROM attendance WHERE id<>? AND schedule_id=? AND student_id=? AND lesson_date=?", (keep_id, target_schedule_id, row["student_user_id"], post_lesson_date))
@@ -5309,10 +5369,13 @@ def app(environ, start_response):
                     return f"<input class='score-input' name='{field}_{sid}' value='{h(val if val is not None else '')}'>"
                 status_val = ("present" if ex and ex["status"] == "makeup" else (ex["status"] if ex else "present"))
                 charge_val = (ex["absence_charge_type"] if ex and 'absence_charge_type' in ex.keys() and ex["absence_charge_type"] else 'deduct')
+                makeup_badge = ""
+                if 'source_lesson_date' in st.keys():
+                    makeup_badge = f"<div class='muted'>{t('attendance.makeup_pending')}: {h(st['source_lesson_date'] or '-')} / {h(st['source_class_name'] or '-')} / {h(homeroom_display_name(st['homeroom_teacher_name']))}</div>"
                 student_rows_html += f"""
                 <tr>
                   <td>{h(st['student_no'] or '-')}</td>
-                  <td>{h(st['name_ko'] or '-')}</td>
+                  <td>{h(st['name_ko'] or '-')}{makeup_badge}</td>
                   <td><select name='status_{sid}'>
                     <option value='present' {'selected' if status_val=='present' else ''}>{attendance_status_t('present')}</option>
                     <option value='late' {'selected' if status_val=='late' else ''}>{attendance_status_t('late')}</option>
@@ -5544,21 +5607,23 @@ def app(environ, start_response):
             where.append("COALESCE(a.requires_makeup,0)=1 AND COALESCE(a.makeup_completed,0)=0")
 
         base_sql = """SELECT a.*, c.name AS class_name, st.name_ko AS student_name, st.student_no,
+        ma.target_schedule_id, ma.status AS makeup_assignment_status,
         COALESCE(c.credit_unit,1) AS class_credit_unit
         FROM attendance a
         LEFT JOIN classes c ON c.id=a.class_id
         LEFT JOIN students st ON st.user_id=a.student_id
         LEFT JOIN students s ON s.user_id=a.student_id
+        LEFT JOIN makeup_assignments ma ON ma.source_attendance_id=a.id
         """
         where_sql = (" WHERE " + " AND ".join(where)) if where else ""
         rows = conn.execute(base_sql + where_sql + " ORDER BY a.lesson_date DESC, a.id DESC LIMIT 500", tuple(params)).fetchall() if load_attendance else []
 
         if query.get("export") == "csv":
-            lines = ["id,date,student_no,student_name,class,status,absence_charge_type,requires_makeup,makeup_completed,credit_delta,note"]
+            lines = ["id,date,student_no,student_name,class,status,absence_charge_type,requires_makeup,makeup_completed,credit_delta,makeup_attendance_id,target_schedule_id,makeup_assignment_status,note"]
             for r in rows:
                 safe_note = str(r["note"] or "").replace('"', "'")
                 lines.append(
-                    f'"{r["id"]}","{r["lesson_date"] or ""}","{r["student_no"] or ""}","{r["student_name"] or ""}","{r["class_name"] or ""}","{r["status"] or ""}","{r["absence_charge_type"] or ""}","{r["requires_makeup"] or 0}","{r["makeup_completed"] or 0}","{r["credit_delta"] or 0}","{safe_note}"'
+                    f'"{r["id"]}","{r["lesson_date"] or ""}","{r["student_no"] or ""}","{r["student_name"] or ""}","{r["class_name"] or ""}","{r["status"] or ""}","{r["absence_charge_type"] or ""}","{r["requires_makeup"] or 0}","{r["makeup_completed"] or 0}","{r["credit_delta"] or 0}","{r["makeup_attendance_id"] or ""}","{r["target_schedule_id"] or ""}","{r["makeup_assignment_status"] or ""}","{safe_note}"'
                 )
             conn.close()
             start_response("200 OK", [("Content-Type", "text/csv; charset=utf-8"), ("Content-Disposition", "attachment; filename=attendance.csv")])
