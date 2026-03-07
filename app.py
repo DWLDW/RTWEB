@@ -8,7 +8,7 @@ import io
 import csv
 from email import policy
 from email.parser import BytesParser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
@@ -797,15 +797,100 @@ def repair_profile_integrity(conn):
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     return conn
-
 def hash_pw(pw: str) -> str:
-    # 단순 데모용
     import hashlib
-    return hashlib.sha256(pw.encode("utf-8")).hexdigest()
+    import secrets
+
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt.encode("utf-8"), 200000)
+    return f"pbkdf2_sha256$200000${salt}${digest.hex()}"
+
+
+def verify_pw(pw: str, stored_hash: str) -> bool:
+    import hashlib
+    import hmac
+
+    stored_hash = str(stored_hash or "")
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt, digest = stored_hash.split("$", 3)
+            derived = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt.encode("utf-8"), int(iterations))
+            return hmac.compare_digest(derived.hex(), digest)
+        except Exception:
+            return False
+    return hmac.compare_digest(hashlib.sha256(pw.encode("utf-8")).hexdigest(), stored_hash)
+
+
+def needs_password_rehash(stored_hash: str) -> bool:
+    return not str(stored_hash or "").startswith("pbkdf2_sha256$")
+
 
 def now():
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_iso_datetime(value):
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def session_ttl_seconds():
+    try:
+        return max(300, int(os.getenv("SESSION_TTL_SECONDS", str(60 * 60 * 12))))
+    except ValueError:
+        return 60 * 60 * 12
+
+
+def session_cookie_secure(environ=None):
+    if str(os.getenv("SESSION_COOKIE_SECURE", "")).strip() == "1":
+        return True
+    if environ is None:
+        return False
+    return (environ.get("wsgi.url_scheme") or "").lower() == "https"
+
+
+def build_session_cookie(token, environ=None):
+    parts = [
+        f"session={token}",
+        "Path=/",
+        "HttpOnly",
+        "SameSite=Lax",
+        f"Max-Age={session_ttl_seconds()}",
+    ]
+    if session_cookie_secure(environ):
+        parts.append("Secure")
+    return "; ".join(parts)
+
+
+def clear_session_cookie(environ=None):
+    parts = ["session=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"]
+    if session_cookie_secure(environ):
+        parts.append("Secure")
+    return "; ".join(parts)
+
+
+def create_session(conn, user_id):
+    token = str(uuid.uuid4())
+    conn.execute("INSERT INTO sessions(user_id, token, created_at) VALUES(?,?,?)", (user_id, token, now()))
+    return token
+
+
+def invalidate_session(conn, token):
+    if token:
+        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
 
 
 def week_bounds_from_ref(ref_date_str=None, week_offset=0):
@@ -969,7 +1054,8 @@ def ensure_schedule_row(conn, class_id, day_of_week, start_time, end_time, class
                         (class_id, day_of_week, start_time, end_time, week_start_date)).fetchone()["id"]
 
 
-def seed_demo_data(conn, force=False):
+def seed_demo_data(conn, force=False, options=None):
+    options = dict(options or {})
     app_env = (os.getenv("APP_ENV") or "").strip().lower()
     allow = force or app_env in ("staging", "demo") or os.getenv("SEED_DEMO_DATA") == "1"
     if not allow:
@@ -979,85 +1065,150 @@ def seed_demo_data(conn, force=False):
     if not force and base_users > 300:
         return {"seeded": False, "reason": "existing_data"}
 
-    owner_id = ensure_user_account(conn, "Demo Owner", "demo_owner", ROLE_OWNER)
-    ensure_user_account(conn, "Demo Manager A", "demo_manager_a", ROLE_MANAGER)
-    ensure_user_account(conn, "Demo Manager B", "demo_manager_b", ROLE_MANAGER)
+    preset = str(options.get("preset", "")).strip().lower()
+    preset_counts = {
+        "large_school": {
+            "manager_count": 4,
+            "foreign_teacher_count": 10,
+            "chinese_teacher_count": 10,
+            "parent_count": 240,
+            "student_count": 400,
+            "course_count": 8,
+            "level_count": 4,
+            "class_count": 40,
+            "classroom_count": 12,
+            "book_count": 500,
+            "announcement_count": 8,
+        }
+    }.get(preset, {})
 
-    foreign_names = ["Alex Carter", "Emma Stone", "Liam Foster", "Noah Reed"]
-    chinese_names = ["Wang Li", "Chen Yu", "Zhao Min", "Liu Fang"]
+    def opt_int(name, default, minimum=0):
+        raw = options.get(name, preset_counts.get(name, default))
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = default
+        return max(minimum, value)
+
+    manager_count = opt_int("manager_count", 2, 1)
+    foreign_teacher_count = opt_int("foreign_teacher_count", 4, 1)
+    chinese_teacher_count = opt_int("chinese_teacher_count", 4, 1)
+    student_count = opt_int("student_count", 30, 1)
+    parent_count = opt_int("parent_count", max(12, (student_count + 1) // 2), 1)
+    course_count = opt_int("course_count", 4, 1)
+    level_count = opt_int("level_count", 3, 1)
+    class_count = opt_int("class_count", 8, 1)
+    classroom_count = opt_int("classroom_count", max(6, class_count // 4), 1)
+    book_count = opt_int("book_count", max(24, class_count * 6), 0)
+    announcement_count = opt_int("announcement_count", 4, 0)
+
+    owner_id = ensure_user_account(conn, "Demo Owner", "demo_owner", ROLE_OWNER)
+    for i in range(1, manager_count + 1):
+        ensure_user_account(conn, f"Demo Manager {chr(64 + i)}", f"demo_manager_{i:02d}", ROLE_MANAGER)
+
+    foreign_first = ["Alex", "Emma", "Liam", "Noah", "Olivia", "Mason", "Sophia", "Ethan", "Ava", "Lucas", "Mia", "James"]
+    foreign_last = ["Carter", "Stone", "Foster", "Reed", "Brooks", "Parker", "Cole", "Hayes", "Price", "Kelly", "Turner", "Morris"]
+    chinese_family = ["Wang", "Li", "Zhang", "Liu", "Chen", "Yang", "Zhao", "Huang", "Wu", "Zhou", "Xu", "Sun", "Ma", "Zhu", "Hu", "Guo"]
+    chinese_given = ["Li", "Yu", "Min", "Fang", "Xin", "Jie", "Nan", "Yun", "Tao", "Rui", "Jing", "Han", "Yue", "Bo", "Qi", "Ling"]
+
+    def teacher_name(index, kind):
+        if kind == "foreign":
+            return f"{foreign_first[(index - 1) % len(foreign_first)]} {foreign_last[((index - 1) // len(foreign_first)) % len(foreign_last)]}"
+        return f"{chinese_family[(index - 1) % len(chinese_family)]} {chinese_given[((index - 1) // len(chinese_family)) % len(chinese_given)]}"
+
     foreign_ids = []
     chinese_ids = []
-    for i, nm in enumerate(foreign_names, 1):
-        uid = ensure_user_account(conn, nm, f"demo_ft_{i}", ROLE_TEACHER, teacher_type="foreign")
+    for i in range(1, foreign_teacher_count + 1):
+        uid = ensure_user_account(conn, teacher_name(i, "foreign"), f"demo_ft_{i:02d}", ROLE_TEACHER, teacher_type="foreign")
         ensure_teacher_profile(conn, uid, "foreign")
         foreign_ids.append(uid)
-    for i, nm in enumerate(chinese_names, 1):
-        uid = ensure_user_account(conn, nm, f"demo_ct_{i}", ROLE_TEACHER, teacher_type="chinese")
+    for i in range(1, chinese_teacher_count + 1):
+        uid = ensure_user_account(conn, teacher_name(i, "chinese"), f"demo_ct_{i:02d}", ROLE_TEACHER, teacher_type="chinese")
         ensure_teacher_profile(conn, uid, "chinese")
         chinese_ids.append(uid)
 
     parent_ids = []
-    for i in range(1, 13):
-        pid = ensure_user_account(conn, f"Parent {i:02d}", f"demo_parent_{i:02d}", ROLE_PARENT)
+    for i in range(1, parent_count + 1):
+        pid = ensure_user_account(conn, f"Parent {i:03d}", f"demo_parent_{i:03d}", ROLE_PARENT)
         parent_ids.append(pid)
 
+    base_courses = ["Phonics", "Reading", "Writing", "Speaking", "Grammar", "Vocabulary", "Debate", "Test Prep", "Literature", "Presentation"]
+    course_names = base_courses[:course_count]
+    if len(course_names) < course_count:
+        for i in range(len(course_names) + 1, course_count + 1):
+            course_names.append(f"Course {i}")
+
+    level_labels = ["Starter", "Basic", "Intermediate", "Advanced", "Master"]
+    selected_levels = level_labels[:level_count]
+    if len(selected_levels) < level_count:
+        for i in range(len(selected_levels) + 1, level_count + 1):
+            selected_levels.append(f"Level {i}")
+
     course_ids = {}
-    for cn in ["Phonics", "Reading", "Writing", "Speaking"]:
-        course_ids[cn] = ensure_course(conn, cn)
-
     level_ids = {}
-    for cname, cid in course_ids.items():
-        level_ids[(cname, "Starter")] = ensure_level(conn, cid, "Starter")
-        level_ids[(cname, "Basic")] = ensure_level(conn, cid, "Basic")
-        level_ids[(cname, "Advanced")] = ensure_level(conn, cid, "Advanced")
+    for cname in course_names:
+        course_ids[cname] = ensure_course(conn, cname)
+        for level_name in selected_levels:
+            level_ids[(cname, level_name)] = ensure_level(conn, course_ids[cname], level_name)
 
-    for room in ["R101", "R102", "R103", "R201", "R202", "R301"]:
-        ensure_classroom(conn, room)
+    classrooms = []
+    for i in range(1, classroom_count + 1):
+        floor = 100 + (((i - 1) // 4) + 1) * 100
+        room_name = f"R{floor + ((i - 1) % 4) + 1}"
+        ensure_classroom(conn, room_name)
+        classrooms.append(room_name)
 
     slots = [
         ("16:25-17:20", "16:25", "17:20"),
         ("17:25-18:20", "17:25", "18:20"),
         ("18:30-19:25", "18:30", "19:25"),
         ("19:35-20:30", "19:35", "20:30"),
+        ("20:35-21:30", "20:35", "21:30"),
     ]
     for label, st, et in slots:
         ensure_time_slot(conn, label, st, et)
 
-    class_specs = [
-        ("Phonics Starter A", "Phonics", "Starter", 0, 0, 1.0, "active", "Beginner sounds focus"),
-        ("Phonics Basic B", "Phonics", "Basic", 1, 1, 1.0, "active", "Blend practice"),
-        ("Reading Starter A", "Reading", "Starter", 2, 2, 1.5, "active", "Short stories"),
-        ("Reading Advanced", "Reading", "Advanced", 3, 3, 1.5, "active", "Comprehension intensive"),
-        ("Writing Basic", "Writing", "Basic", 0, 2, 1.0, "active", "Sentence building"),
-        ("Writing Advanced", "Writing", "Advanced", 1, 3, 1.5, "inactive", "Essay drills"),
-        ("Speaking Basic", "Speaking", "Basic", 2, 0, 1.0, "active", "Conversation core"),
-        ("Speaking Advanced", "Speaking", "Advanced", 3, 1, 1.5, "active", "Debate and presentation"),
-    ]
-
     class_ids = []
-    for name, c, lv, fi, ci, unit, status, memo in class_specs:
-        class_ids.append(ensure_class(conn, name, course_ids[c], level_ids[(c, lv)], foreign_ids[fi], chinese_ids[ci], unit, status, memo))
+    for i in range(1, class_count + 1):
+        cname = course_names[(i - 1) % len(course_names)]
+        level_name = selected_levels[((i - 1) // len(course_names)) % len(selected_levels)]
+        foreign_teacher_id = foreign_ids[(i - 1) % len(foreign_ids)]
+        chinese_teacher_id = chinese_ids[(i - 1) % len(chinese_ids)]
+        class_name = f"{cname} {level_name} {chr(64 + ((i - 1) % 26) + 1)}"
+        credit_unit = 1.0 if i % 3 else 1.5
+        status_v = "active" if i % 11 else "inactive"
+        memo = f"Auto-seeded demo class {i}"
+        class_id = ensure_class(conn, class_name, course_ids[cname], level_ids[(cname, level_name)], foreign_teacher_id, chinese_teacher_id, credit_unit, status_v, memo)
+        class_ids.append(class_id)
 
-    student_name_pairs = [
-        ("Li Wei", "Leo"), ("Zhang Hao", "Hank"), ("Wang Xin", "Shawn"), ("Liu Yue", "Luna"), ("Chen Mo", "Momo"),
-        ("Yang Fan", "Finn"), ("Zhao Lin", "Lynn"), ("Sun Rui", "Ray"), ("He Jing", "Jane"), ("Guo Min", "Mina"),
-        ("Xu Tao", "Tom"), ("Deng Yu", "Yuri"), ("Qin Han", "Hans"), ("Zhou Yi", "Ethan"), ("Ma Ke", "Mark"),
-        ("Fang Xin", "Cindy"), ("Hu Lei", "Liam"), ("Xie An", "Ann"), ("Cao Yu", "Yuna"), ("Peng Jie", "Jay"),
-        ("Tang Wei", "Wade"), ("Lu Na", "Nora"), ("Shen Qi", "Kiki"), ("Song Yu", "Yoyo"), ("Yuan Bo", "Bobby"),
-        ("Jiang Nan", "Nina"), ("Ren Hao", "Howard"), ("Dong Li", "Lily"), ("Pan Yu", "Ruby"), ("Wei Chen", "Chris"),
-    ]
+    english_given = ["Leo", "Hank", "Shawn", "Luna", "Momo", "Finn", "Lynn", "Ray", "Jane", "Mina", "Tom", "Yuri", "Hans", "Ethan", "Mark", "Cindy", "Liam", "Ann", "Yuna", "Jay", "Wade", "Nora", "Kiki", "Yoyo", "Bobby", "Nina", "Howard", "Lily", "Ruby", "Chris"]
+
+    def student_name_pair(index):
+        family = chinese_family[(index - 1) % len(chinese_family)]
+        given = chinese_given[((index - 1) // len(chinese_family)) % len(chinese_given)]
+        en = english_given[(index - 1) % len(english_given)]
+        return f"{family} {given}", f"{en} {index:03d}"
 
     student_user_ids = []
-    statuses = ["active"] * 22 + ["leave"] * 4 + ["ended"] * 4
-    for i, (name_ko, name_en) in enumerate(student_name_pairs, 1):
-        uid = ensure_user_account(conn, name_ko, f"demo_student_{i:02d}", ROLE_STUDENT)
+    active_cut = max(1, int(student_count * 0.82))
+    leave_cut = max(active_cut + 1, int(student_count * 0.92))
+    for i in range(1, student_count + 1):
+        name_ko, name_en = student_name_pair(i)
+        uid = ensure_user_account(conn, name_ko, f"demo_student_{i:03d}", ROLE_STUDENT)
         student_user_ids.append(uid)
         guardian_idx = (i - 1) % len(parent_ids)
         guardian_user = conn.execute("SELECT name FROM users WHERE id=?", (parent_ids[guardian_idx],)).fetchone()
         class_id = class_ids[(i - 1) % len(class_ids)]
-        status_v = statuses[i - 1]
+        if i <= active_cut:
+            status_v = "active"
+        elif i <= leave_cut:
+            status_v = "leave"
+        else:
+            status_v = "ended"
         credits = float(6 + (i % 10))
         homeroom_teacher_id = foreign_ids[(i - 1) % len(foreign_ids)] if i % 2 else chinese_ids[(i - 1) % len(chinese_ids)]
+        leave_start = "2026-01-10" if status_v == "leave" else None
+        leave_end = "2026-02-01" if status_v == "leave" else None
         row = conn.execute("SELECT id FROM students WHERE user_id=?", (uid,)).fetchone()
         if row:
             conn.execute(
@@ -1065,9 +1216,9 @@ def seed_demo_data(conn, force=False):
                 current_class_id=?, homeroom_teacher_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
                 WHERE user_id=?""",
                 (
-                    f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
-                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
-                    "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), uid,
+                    f"ST{i:04d}", name_ko, name_en, f"138{i:08d}"[-11:], guardian_user["name"], f"139{i:08d}"[-11:],
+                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", leave_start, leave_end,
+                    "Auto-seeded demo student", now(), uid,
                 ),
             )
         else:
@@ -1076,35 +1227,34 @@ def seed_demo_data(conn, force=False):
                 homeroom_teacher_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at)
                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    uid, f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
-                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
-                    "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), now(),
+                    uid, f"ST{i:04d}", name_ko, name_en, f"138{i:08d}"[-11:], guardian_user["name"], f"139{i:08d}"[-11:],
+                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", leave_start, leave_end,
+                    "Auto-seeded demo student", now(), now(),
                 ),
             )
 
     week_start = iso_monday_str(datetime.utcnow().date().isoformat(), 0)
-    rooms = ["R101", "R102", "R103", "R201", "R202", "R301"]
     weekday_cycle = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    slot_cycle = [("16:25", "17:20"), ("17:25", "18:20"), ("18:30", "19:25")]
-
+    slot_cycle = [(st, et) for _, st, et in slots[:4]]
     schedule_rows = []
     for idx, cls_id in enumerate(class_ids):
-        lesson_count = 2 if idx % 3 == 0 else 3
+        lesson_count = 2 if idx % 4 == 0 else 3
         for j in range(lesson_count):
             day = weekday_cycle[(idx + j) % len(weekday_cycle)]
             st, et = slot_cycle[(idx + j) % len(slot_cycle)]
-            room = rooms[(idx + j) % len(rooms)]
+            room = classrooms[(idx + j) % len(classrooms)]
             teacher_id = foreign_ids[idx % len(foreign_ids)]
             sc_id = ensure_schedule_row(conn, cls_id, day, st, et, room, teacher_id, week_start)
             schedule_rows.append((sc_id, cls_id, day, st, et, room))
 
     class_students = {}
-    for r in conn.execute("SELECT user_id, current_class_id FROM students WHERE current_class_id IS NOT NULL").fetchall():
+    for r in conn.execute("SELECT user_id, current_class_id FROM students WHERE current_class_id IS NOT NULL ORDER BY id").fetchall():
         class_students.setdefault(r["current_class_id"], []).append(r["user_id"])
 
-    recent_days = [0, 1, 2]
-    for sc_id, cls_id, day, st, et, room in schedule_rows[:18]:
-        students = class_students.get(cls_id, [])[:8]
+    recent_days = [0, 1, 2, 3]
+    attendance_seeded = 0
+    for sc_id, cls_id, day, st, et, room in schedule_rows:
+        students = class_students.get(cls_id, [])[:12]
         class_credit = conn.execute("SELECT COALESCE(credit_unit,1) AS credit_unit FROM classes WHERE id=?", (cls_id,)).fetchone()["credit_unit"]
         for sid_idx, sid in enumerate(students):
             for back in recent_days:
@@ -1113,21 +1263,17 @@ def seed_demo_data(conn, force=False):
                 charge = None
                 requires = 0
                 makeup_done = 0
-                if (sid_idx + back) % 7 == 0:
+                if (sid_idx + back) % 9 == 0:
                     status_v = "absent"
                     charge = "deduct" if (sid_idx % 2 == 0) else "no_deduct"
                     requires = 1
                     makeup_done = 1 if (sid_idx % 4 == 0) else 0
-                elif (sid_idx + back) % 5 == 0:
+                elif (sid_idx + back) % 6 == 0:
                     status_v = "late"
-                elif (sid_idx + back) % 11 == 0:
+                elif (sid_idx + back) % 13 == 0:
                     status_v = "makeup"
                 delta = calc_credit_delta(status_v, charge, class_credit)
-
-                exists = conn.execute(
-                    "SELECT id FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?",
-                    (sc_id, sid, lesson_date),
-                ).fetchone()
+                exists = conn.execute("SELECT id FROM attendance WHERE schedule_id=? AND student_id=? AND lesson_date=?", (sc_id, sid, lesson_date)).fetchone()
                 if exists:
                     conn.execute(
                         """UPDATE attendance SET status=?, class_id=?, note=?, created_by=?, participation_score=?, fluency_score=?,
@@ -1136,8 +1282,7 @@ def seed_demo_data(conn, force=False):
                         (
                             status_v, cls_id, "demo attendance", owner_id,
                             3 + ((sid_idx + 1) % 3), 2 + ((sid_idx + back) % 4), 3 + (sid_idx % 3), 2 + ((sid_idx + 2) % 4),
-                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo",
-                            charge, requires, makeup_done, delta, exists["id"],
+                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo", charge, requires, makeup_done, delta, exists["id"],
                         ),
                     )
                 else:
@@ -1149,12 +1294,13 @@ def seed_demo_data(conn, force=False):
                         (
                             cls_id, sid, lesson_date, status_v, "demo attendance", owner_id, now(), sc_id,
                             3 + ((sid_idx + 1) % 3), 2 + ((sid_idx + back) % 4), 3 + (sid_idx % 3), 2 + ((sid_idx + 2) % 4),
-                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo",
-                            charge, requires, makeup_done, delta,
+                            3 + ((sid_idx + 3) % 3), 3 + ((sid_idx + 4) % 3), "Demo lesson memo", charge, requires, makeup_done, delta,
                         ),
                     )
+                    attendance_seeded += 1
 
-    for cls_id in class_ids[:8]:
+    homework_seeded = 0
+    for cls_id in class_ids[:min(class_count, 20)]:
         teacher_id = conn.execute("SELECT COALESCE(foreign_teacher_id, teacher_id) AS tid FROM classes WHERE id=?", (cls_id,)).fetchone()["tid"]
         for hidx in range(1, 3):
             title = f"Week Task {hidx} - Class {cls_id}"
@@ -1169,8 +1315,7 @@ def seed_demo_data(conn, force=False):
                     (cls_id, teacher_id, title, "Demo homework content", due_date, owner_id, now(), now()),
                 )
                 hw_id = conn.execute("SELECT id FROM homework WHERE class_id=? AND title=?", (cls_id, title)).fetchone()["id"]
-
-            students = class_students.get(cls_id, [])[:10]
+            students = class_students.get(cls_id, [])[:12]
             for sidx, sid in enumerate(students):
                 sub = conn.execute("SELECT id FROM homework_submissions WHERE homework_id=? AND student_id=?", (hw_id, sid)).fetchone()
                 submitted = 1 if (sidx + hidx) % 3 != 0 else 0
@@ -1186,8 +1331,10 @@ def seed_demo_data(conn, force=False):
                         "INSERT INTO homework_submissions(homework_id, student_id, submitted, submitted_at, feedback, feedback_teacher_id, updated_at) VALUES(?,?,?,?,?,?,?)",
                         (hw_id, sid, submitted, submitted_at, feedback, teacher_id, now()),
                     )
+                    homework_seeded += 1
 
-    for cls_id in class_ids[:6]:
+    exam_seeded = 0
+    for cls_id in class_ids[:min(class_count, 16)]:
         exam_name = f"Monthly Check {cls_id}"
         exam_date = (datetime.utcnow().date() - timedelta(days=7)).isoformat()
         ex = conn.execute("SELECT id FROM exams WHERE class_id=? AND name=?", (cls_id, exam_name)).fetchone()
@@ -1197,8 +1344,7 @@ def seed_demo_data(conn, force=False):
         else:
             conn.execute("INSERT INTO exams(class_id, name, exam_date, report, created_at) VALUES(?,?,?,?,?)", (cls_id, exam_name, exam_date, "Demo exam", now()))
             exam_id = conn.execute("SELECT id FROM exams WHERE class_id=? AND name=?", (cls_id, exam_name)).fetchone()["id"]
-
-        students = class_students.get(cls_id, [])[:10]
+        students = class_students.get(cls_id, [])[:12]
         for sidx, sid in enumerate(students):
             score = float(65 + ((sidx * 7 + cls_id) % 31))
             erow = conn.execute("SELECT id FROM exam_scores WHERE exam_id=? AND student_id=?", (exam_id, sid)).fetchone()
@@ -1206,9 +1352,12 @@ def seed_demo_data(conn, force=False):
                 conn.execute("UPDATE exam_scores SET score=? WHERE id=?", (score, erow["id"]))
             else:
                 conn.execute("INSERT INTO exam_scores(exam_id, student_id, score, created_at) VALUES(?,?,?,?)", (exam_id, sid, score, now()))
+                exam_seeded += 1
 
-    for idx, sid in enumerate(student_user_ids[:24]):
-        for pidx in range(2):
+    payment_seeded = 0
+    for idx, sid in enumerate(student_user_ids):
+        payment_cycles = 2 if idx % 3 else 3
+        for pidx in range(payment_cycles):
             paid_date = (datetime.utcnow().date() - timedelta(days=20 - (idx % 10) - pidx * 14)).isoformat()
             amount = 1200 + (idx % 6) * 150 + pidx * 80
             row = conn.execute("SELECT id FROM payments WHERE student_id=? AND paid_date=? AND amount=?", (sid, paid_date, amount)).fetchone()
@@ -1217,17 +1366,70 @@ def seed_demo_data(conn, force=False):
                     "INSERT INTO payments(student_id, paid_date, amount, package_hours, remaining_classes, created_at) VALUES(?,?,?,?,?,?)",
                     (sid, paid_date, amount, 24, 8 + (idx % 6), now()),
                 )
+                payment_seeded += 1
+
+    counseling_seeded = 0
+    for idx, sid in enumerate(student_user_ids[:max(20, student_count // 3)]):
+        parent_id = parent_ids[idx % len(parent_ids)]
+        memo = f"Seeded counseling note {idx + 1}"
+        existing = conn.execute("SELECT id FROM counseling WHERE student_id=? AND memo=?", (sid, memo)).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT INTO counseling(student_id, parent_id, memo, is_special_note, created_by, created_at) VALUES(?,?,?,?,?,?)",
+                (sid, parent_id, memo, 1 if idx % 7 == 0 else 0, owner_id, now()),
+            )
+            counseling_seeded += 1
+
+    book_seeded = 0
+    loan_seeded = 0
+    for i in range(1, book_count + 1):
+        code = f"BK{i:04d}"
+        title = f"Reading Book {i:04d}"
+        brow = conn.execute("SELECT id, status FROM books WHERE code=?", (code,)).fetchone()
+        if brow:
+            book_id = brow["id"]
+        else:
+            conn.execute("INSERT INTO books(code, title, status, created_at) VALUES(?,?,?,?)", (code, title, "available", now()))
+            book_id = conn.execute("SELECT id FROM books WHERE code=?", (code,)).fetchone()["id"]
+            book_seeded += 1
+        if i <= min(book_count, max(30, student_count // 4)):
+            sid = student_user_ids[(i - 1) % len(student_user_ids)]
+            existing_loan = conn.execute("SELECT id FROM book_loans WHERE book_id=? AND student_id=?", (book_id, sid)).fetchone()
+            if not existing_loan:
+                conn.execute(
+                    "INSERT INTO book_loans(book_id, student_id, loaned_at, handled_by, created_at) VALUES(?,?,?,?,?)",
+                    (book_id, sid, now(), owner_id, now()),
+                )
+                conn.execute("UPDATE books SET status='borrowed' WHERE id=?", (book_id,))
+                loan_seeded += 1
+
+    announcement_seeded = 0
+    for i in range(1, announcement_count + 1):
+        title = f"Demo Announcement {i:02d}"
+        existing = conn.execute("SELECT id FROM announcements WHERE title=?", (title,)).fetchone()
+        if not existing:
+            conn.execute("INSERT INTO announcements(title, content, created_by, created_at) VALUES(?,?,?,?)", (title, f"Seeded announcement content {i}", owner_id, now()))
+            announcement_seeded += 1
 
     return {
         "seeded": True,
+        "preset": preset or "default",
         "teachers_foreign": len(foreign_ids),
         "teachers_chinese": len(chinese_ids),
         "parents": len(parent_ids),
         "students": len(student_user_ids),
         "classes": len(class_ids),
         "schedules": len(schedule_rows),
+        "attendance_rows": attendance_seeded,
+        "homework_rows": homework_seeded,
+        "exam_rows": exam_seeded,
+        "payment_rows": payment_seeded,
+        "counseling_rows": counseling_seeded,
+        "books": book_count,
+        "book_rows": book_seeded,
+        "loan_rows": loan_seeded,
+        "announcement_rows": announcement_seeded,
     }
-
 def init_db():
     conn = get_db()
 
@@ -1332,10 +1534,26 @@ def current_user(environ):
         return None
     conn = get_db()
     row = conn.execute(
-        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?", (token,)
+        "SELECT s.created_at AS session_created_at, u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?", (token,)
     ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    created_at = parse_iso_datetime(row["session_created_at"])
+    if created_at is None:
+        invalidate_session(conn, token)
+        conn.commit()
+        conn.close()
+        return None
+    age = (datetime.now(timezone.utc) - created_at.astimezone(timezone.utc)).total_seconds()
+    if age > session_ttl_seconds():
+        invalidate_session(conn, token)
+        conn.commit()
+        conn.close()
+        return None
     conn.close()
     return row
+
 def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg="", flash_type="success"):
     lang = lang or CURRENT_LANG
     css = """
@@ -1588,8 +1806,11 @@ def require_login(environ):
     if not user:
         return None, redirect('/login')
     return user, None
-def redirect(path):
-    return "302 Found", [("Location", path)], b""
+def redirect(path, headers=None):
+    hdrs = [("Location", path)]
+    if headers:
+        hdrs.extend(headers)
+    return "302 Found", hdrs, b""
 def has_role(user, roles):
     return user and user["role"] in roles
 def route_allowed(user, route_key):
@@ -1970,6 +2191,11 @@ def app(environ, start_response):
         "parse_body": parse_body,
         "get_db": get_db,
         "hash_pw": hash_pw,
+        "verify_pw": verify_pw,
+        "needs_password_rehash": needs_password_rehash,
+        "create_session": create_session,
+        "build_session_cookie": build_session_cookie,
+        "clear_session_cookie": clear_session_cookie,
         "uuid": uuid,
         "now": now,
         "json_resp": json_resp,
@@ -1985,8 +2211,15 @@ def app(environ, start_response):
         "render_html": render_html,
         "text_resp": text_resp,
         "parse_body": parse_body,
+        "parse_cookie": parse_cookie,
         "get_db": get_db,
         "hash_pw": hash_pw,
+        "verify_pw": verify_pw,
+        "needs_password_rehash": needs_password_rehash,
+        "create_session": create_session,
+        "build_session_cookie": build_session_cookie,
+        "clear_session_cookie": clear_session_cookie,
+        "invalidate_session": invalidate_session,
         "uuid": uuid,
         "now": now,
         "redirect": redirect,
