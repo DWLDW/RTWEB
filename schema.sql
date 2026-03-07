@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS students (
   guardian_name TEXT,
   guardian_phone TEXT,
   current_class_id INTEGER,
+  homeroom_teacher_id INTEGER,
   remaining_credits REAL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   enrolled_at TEXT,

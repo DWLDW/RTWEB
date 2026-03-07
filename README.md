@@ -228,3 +228,17 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ## Handoff
 - Latest Codex handoff: `docs/handoff_latest.md`
+
+## Encoding/Parsing Troubleshooting
+
+If you suspect encoding breakage or parse errors after edits:
+
+```powershell
+python scripts/check_encoding.py
+python -m py_compile app.py
+```
+
+Recommended editing rules:
+- Keep `app.py` as UTF-8 text.
+- Avoid bulk rewrite commands that re-encode whole files unexpectedly.
+- Prefer patch-based edits for large files.
