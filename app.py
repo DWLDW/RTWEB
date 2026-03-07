@@ -3920,6 +3920,72 @@ def app(environ, start_response):
         ])
         package_card = f"<div class='card'><h4>수납 패키지</h4>{helper_html}<form method='post' class='form-row'><input type='hidden' name='type' value='payment_package'><label>코드 <input name='code' placeholder='RT30'></label><label>패키지명 <input name='name' placeholder='RT30 30크레딧'></label><label>수업 크레딧 <input name='lesson_credits' type='number' step='0.5' placeholder='30'></label><label>정가(CNY) <input name='list_price' type='number' step='0.01' placeholder='9900'></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><button>{t('common.add')}</button></form><div class='table-wrap'><table><tr><th>코드</th><th>패키지명</th><th>크레딧</th><th>정가</th><th>{t('academics.status')}</th><th>{t('common.delete')}</th></tr>{package_rows_md if load_master else ''}{(f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>") if (load_master and not package_rows_md) else ''}</table></div></div>"
         section_body = classes_card if md_view == 'classes' else course_cards if md_view == 'courses' else teacher_card if md_view == 'teachers' else room_cards if md_view == 'rooms' else package_card
+        if md_view == "classes":
+            register_card = f"""
+            <details class='card' open>
+              <summary style='cursor:pointer; font-weight:700'>{t('academics.register')}</summary>
+              <div style='margin-top:14px'>
+                <form method='post' class='form-row'>
+                  <input type='hidden' name='type' value='class'>
+                  <label>{t('academics.class_name')} <input name='name'></label>
+                  <label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label>
+                  <label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels_ref])}</select></label>
+                  <label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label>
+                  <label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label>
+                  <label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label>
+                  <label>{t('field.note')} <input name='memo'></label>
+                  <button>{t('common.add')}</button>
+                </form>
+              </div>
+            </details>
+            """
+        elif md_view == "courses":
+            register_card = f"""
+            <details class='card' open>
+              <summary style='cursor:pointer; font-weight:700'>{t('academics.register')}</summary>
+              <div style='margin-top:14px'>
+                <form method='post' class='form-row'>
+                  <input type='hidden' name='type' value='course'>
+                  <label>{t('academics.course_name')} <input name='name'></label>
+                  <button>{t('common.add')}</button>
+                </form>
+                <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                  <input type='hidden' name='type' value='level'>
+                  <label>{t('academics.level_name')} <input name='name'></label>
+                  <label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label>
+                  <button>{t('common.add')}</button>
+                </form>
+              </div>
+            </details>
+            """
+        elif md_view == "rooms":
+            register_card = f"""
+            <details class='card' open>
+              <summary style='cursor:pointer; font-weight:700'>{t('academics.register')}</summary>
+              <div style='margin-top:14px'>
+                <form method='post' class='form-row'>
+                  <input type='hidden' name='type' value='classroom'>
+                  <label>{t('academics.classroom')} <input name='name'></label>
+                  <button>{t('common.add')}</button>
+                </form>
+                <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                  <input type='hidden' name='type' value='time_slot'>
+                  <label>{t('academics.start_time')} <input type='time' name='start_time'></label>
+                  <label>{t('academics.end_time')} <input type='time' name='end_time'></label>
+                  <button>{t('common.add')}</button>
+                </form>
+              </div>
+            </details>
+            """
+        elif md_view == "packages":
+            register_card = ""
+        else:
+            register_card = f"""
+            <div class='card'>
+              <h4>{t('academics.register')}</h4>
+              <div class='empty-msg'>이 섹션은 조회 전용입니다.</div>
+            </div>
+            """
 
         html = render_html(t('menu.masterdata'), f"""
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
@@ -3933,14 +3999,7 @@ def app(environ, start_response):
             <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}&md_view={md_view}'>{t('common.reset')}</a>
           </form>
         </div>
-        <div class='card'>
-          <h4>{t('academics.register')}</h4>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels_ref])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
-        </div>
+        {register_card}
         {section_body}
         """, user, current_menu="masterdata", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
