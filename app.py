@@ -1716,8 +1716,9 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .student-line { color:#334155; font-size:11px; line-height:1.3; margin-top:4px; }
       .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
       .lesson-main-actions, .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
-      .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:28px; padding:5px 8px; border-radius:6px; font-size:11px; }
-      .mini-link { font-size:11px; padding:5px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:24px; padding:4px 6px; border-radius:6px; font-size:10px; }
+      .mini-link { font-size:10px; padding:4px 6px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .schedule-form-compact select { min-width:0; width:auto; max-width:160px; }
       .schedule-editor-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr); gap:14px; }
       .print-only { display:none; }
       .schedule-print-head { margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #cbd5e1; }
@@ -4177,7 +4178,6 @@ def app(environ, start_response):
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
                         <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
                         {delete_link}
                       </div>
                     </div>
@@ -4412,7 +4412,7 @@ def app(environ, start_response):
             <div class='card' id='schedule-form'>
               <h4>{t('academics.schedule_form')}</h4>
               {form_class_picker}
-              <form method='post' class='form-row'>
+              <form method='post' class='form-row schedule-form-compact'>
                 <input type='hidden' name='type' value='schedule'>
                 <input type='hidden' name='schedule_id' value='{selected_schedule['id'] if selected_schedule else ''}'>
                 <input type='hidden' name='selected_form_class_id' value='{selected_form_class_id}'>
