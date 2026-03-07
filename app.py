@@ -387,6 +387,9 @@ I18N_TEXTS["zh"].update({
     "attendance.makeup_date": "补课日期",
     "attendance.makeup_done": "已完成补课"
 })
+I18N_TEXTS["en"].update({"common.more": "More"})
+I18N_TEXTS["ko"].update({"common.more": "더보기"})
+I18N_TEXTS["zh"].update({"common.more": "更多"})
 
 
 I18N_TEXTS["en"].update({
@@ -1846,10 +1849,18 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .lesson-title { font-size:13px; font-weight:700; line-height:1.2; margin-bottom:2px; }
       .lesson-meta { color:#475569; font-size:11px; line-height:1.25; }
       .student-line { color:#334155; font-size:11px; line-height:1.3; margin-top:4px; }
-      .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+      .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; align-items:flex-start; }
       .lesson-main-actions, .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
       .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:24px; padding:4px 6px; border-radius:6px; font-size:10px; }
       .mini-link { font-size:10px; padding:4px 6px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .lesson-overflow { position:relative; margin-left:auto; }
+      .lesson-overflow summary { list-style:none; cursor:pointer; }
+      .lesson-overflow summary::-webkit-details-marker { display:none; }
+      .lesson-overflow-trigger { font-size:10px; padding:4px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .lesson-overflow[open] .lesson-overflow-menu { display:flex; }
+      .lesson-overflow-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); min-width:138px; z-index:20; flex-direction:column; gap:4px; padding:6px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 8px 20px rgba(15,23,42,0.12); }
+      .lesson-overflow-menu .mini-link, .lesson-overflow-menu form { width:100%; }
+      .lesson-overflow-menu .mini-link, .lesson-overflow-menu button.mini-link { display:block; text-align:left; width:100%; }
       .schedule-form-compact select { min-width:0; width:auto; max-width:160px; }
       .schedule-editor-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr); gap:14px; }
       .print-only { display:none; }
@@ -4823,13 +4834,18 @@ def app(environ, start_response):
                       <div class='lesson-meta'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'} {status_html}</div>
                       <div class='student-line'>{students_label or '-'}</div>
                       {makeup_label}
-                      <div class='lesson-main-actions'>
-                        <a class='mini-link admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&schedule_id={les['id']}#lesson-makeup'>{t('attendance.makeup_assign')}</a>
+                      <div class='lesson-actions'>
                         <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
-                        <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
-                        <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
-                        <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
-                        {delete_link}
+                        <details class='lesson-overflow'>
+                          <summary><span class='lesson-overflow-trigger'>{t('common.more')}</span></summary>
+                          <div class='lesson-overflow-menu'>
+                            <a class='mini-link admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&schedule_id={les['id']}#schedule-makeup-panel'>{t('attendance.makeup_assign')}</a>
+                            <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
+                            <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
+                            <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
+                            {delete_link}
+                          </div>
+                        </details>
                       </div>
                     </div>
                     """
@@ -4839,7 +4855,7 @@ def app(environ, start_response):
                     blocks = f"""
                     <div class='lesson-block empty-slot-block'>
                       <div class='lesson-meta'>{selected_day} {slot}</div>
-                      <div class='lesson-main-actions'>
+                      <div class='lesson-actions'>
                         <a class='mini-link admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&form_day_of_week={selected_day}&form_time_slot={slot_start}|{slot_end}&form_teacher_id={rowkey}&form_classroom={quote(row_room) if row_room else ""}#schedule-form'>{t('academics.add_lesson')}</a>
                       </div>
                     </div>
@@ -4947,6 +4963,7 @@ def app(environ, start_response):
 
         detail_html = f"<div class='card'><h4>{t('academics.lesson_detail')}</h4><p class='empty-msg'>{t('common.no_data')}</p></div>"
         register_forms = f"<div class='card'><a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}'>{t('academics.go_structure')}</a></div>"
+        makeup_editor_html = ""
         if selected_schedule:
             stu_rows = conn.execute("SELECT name_ko FROM students WHERE current_class_id=? ORDER BY id LIMIT 20", (selected_schedule['class_id'],)).fetchall()
             stu_text = ", ".join([r['name_ko'] for r in stu_rows]) if stu_rows else "-"
@@ -4982,6 +4999,24 @@ def app(environ, start_response):
                 f"<tr><td>{h(item['name_ko'] or '-')}</td><td>{h(item['student_no'] or '-')}</td><td>{h(homeroom_display_name(item['homeroom_teacher_name']))}</td><td>{h(item['source_class_name'] or '-')} / {h(item['source_lesson_date'] or '-')}</td><td>{h(item['makeup_lesson_date'] or '-')}</td><td>{h(item['status'] or 'assigned')}</td><td>{'' if (item['status'] or 'assigned') != 'assigned' else f'<form method=\"post\" class=\"preserve-scroll-form\" data-preserve-scroll=\"1\" onsubmit=\"return confirm(&quot;Remove this makeup assignment?&quot;);\"><input type=\"hidden\" name=\"type\" value=\"delete_makeup_assignment\"><input type=\"hidden\" name=\"assignment_id\" value=\"{item['id']}\"><button class=\"btn secondary small\" type=\"submit\">{t('common.delete')}</button></form>'}</td></tr>"
                 for item in selected_schedule_assignments
             ])
+            makeup_editor_html = f"""
+            <div class='card' id='schedule-makeup-panel'>
+              <h4>{t('attendance.makeup_assign')}</h4>
+              <div class='muted' style='margin-bottom:10px'>{selected_schedule['class_name'] or '-'} / {selected_schedule['day_of_week'] or '-'} {selected_schedule['start_time'] or '-'}~{selected_schedule['end_time'] or '-'} / {selected_schedule['classroom'] or '-'}</div>
+              {makeup_picker}
+              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                <input type='hidden' name='type' value='assign_makeup'>
+                <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
+                <input type='hidden' name='source_attendance_id' value='{selected_makeup_source_id}'>
+                <label>{t('attendance.makeup_source_absence')} <input value='{selected_makeup_label or "-"}' readonly></label>
+                <button {'disabled' if not selected_makeup_source_id else ''}>{t('attendance.makeup_assign')}</button>
+              </form>
+              <div class='table-wrap' style='margin-top:10px'><table>
+                <tr><th>{t('field.student')}</th><th>{t('students.field.student_no')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('attendance.makeup_source_absence')}</th><th>{t('attendance.makeup_date')}</th><th>{t('academics.status')}</th><th>{t('common.delete')}</th></tr>
+                {makeup_rows or f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+              </table></div>
+            </div>
+            """
             detail_html = f"""
             <div class='card'>
               <h4>{t('academics.lesson_detail')}</h4>
@@ -5008,23 +5043,6 @@ def app(environ, start_response):
                 <button class='btn secondary' type='submit'>{t('common.delete')}</button>
               </form>
             </div>
-            <details class='card' id='lesson-makeup' {'open' if (query.get('makeup_load','')=='1' or selected_makeup_source_id) else ''}>
-              <summary><strong>{t('attendance.makeup_assign')}</strong></summary>
-              <div style='margin-top:12px'>
-                {makeup_picker}
-                <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
-                  <input type='hidden' name='type' value='assign_makeup'>
-                  <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
-                  <input type='hidden' name='source_attendance_id' value='{selected_makeup_source_id}'>
-                  <label>{t('attendance.makeup_source_absence')} <input value='{selected_makeup_label or "-"}' readonly></label>
-                  <button {'disabled' if not selected_makeup_source_id else ''}>{t('attendance.makeup_assign')}</button>
-                </form>
-                <div class='table-wrap' style='margin-top:10px'><table>
-                  <tr><th>{t('field.student')}</th><th>{t('students.field.student_no')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('attendance.makeup_source_absence')}</th><th>{t('attendance.makeup_date')}</th><th>{t('academics.status')}</th><th>{t('common.delete')}</th></tr>
-                  {makeup_rows or f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-                </table></div>
-              </div>
-            </details>
             """
 
         if print_mode:
@@ -5139,6 +5157,7 @@ def app(environ, start_response):
               </form>
               <div class='muted'>{t('academics.schedule_autofill')} / {t('academics.schedule_teacher_auto')}</div>
             </div>
+            {makeup_editor_html}
           </div>
           <div>
             {detail_html}

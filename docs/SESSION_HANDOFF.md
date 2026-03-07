@@ -68,6 +68,8 @@ Behavior added or fixed:
 - completed makeup assignments now remain visible in the target lesson context for that lesson date instead of disappearing immediately after save
 - schedule lesson cards, lesson detail, class detail, and attendance CSV/list now include the makeup lesson date so operators can see when the makeup actually happened
 - lesson-mode attendance now continues to include makeup-assigned students even after completion for the same lesson date, so Monday lesson rosters/history remain stable after save
+- `/schedule` lesson cards now use a primary `Attendance & Evaluation` action plus a compact `More` dropdown for secondary actions, which frees space for student names and makeup labels
+- the schedule-side makeup assignment UI is no longer a separate collapsed card in the right column; it now sits open under the schedule create/edit form when a lesson is selected
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
@@ -77,6 +79,7 @@ Known issues:
 - makeup assignment UI is implemented server-side but still needs browser validation for the end-to-end schedule -> attendance -> auto-complete flow
 - attendance edit UI still needs one more browser pass to visually hide/show absence-only fields based on selected status
 - completed makeup status labels in some schedule/detail tables still show raw `assigned/completed` values and should be translated in the next UX pass
+- schedule `More` dropdown behavior was validated by compile only; browser layout verification is still needed for overlap/z-index edge cases
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
@@ -85,6 +88,7 @@ Quick verification done:
 - one-off Python validation confirmed `makeup_assignments` table is created in `lms.db`
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the attendance rule normalization changes
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the makeup credit/date persistence changes
+- `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the schedule action/menu cleanup
 
 Next recommended task:
-- browser-verify one full makeup cycle (`assign -> Monday attendance save -> source row credit deducted -> Monday lesson still shows student -> makeup date visible`), then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks
+- browser-verify the schedule card `More` menu and the moved makeup assignment panel, then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks
