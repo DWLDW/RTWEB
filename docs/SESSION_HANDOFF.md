@@ -62,6 +62,7 @@ Behavior added or fixed:
 - global attendance CSV exports now include `makeup_attendance_id`, `target_schedule_id`, and assignment status for auditability
 - fixed two route-entry crashes caused by late variable initialization: `/attendance?lesson_mode=1` now initializes `target_schedule_id` before the makeup-student query, and `/exams` now initializes `score_exam_id` on GET as well as POST
 - fixed schedule lesson-date generation so `Attendance & Evaluation` now passes the actual date for the selected weekday in the current week instead of reusing the raw reference date
+- fixed attendance boolean filters for `requires_makeup` and `makeup_completed`; they now bind integer params instead of string params, which restores the `Students Needing Makeup` query results
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above

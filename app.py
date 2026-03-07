@@ -5599,10 +5599,10 @@ def app(environ, start_response):
             params.append(deductible_filter)
         if requires_makeup_filter in ("0", "1"):
             where.append("COALESCE(a.requires_makeup,0)=?")
-            params.append(requires_makeup_filter)
+            params.append(int(requires_makeup_filter))
         if makeup_completed_filter in ("0", "1"):
             where.append("COALESCE(a.makeup_completed,0)=?")
-            params.append(makeup_completed_filter)
+            params.append(int(makeup_completed_filter))
         if is_valid_date(date_from):
             where.append("a.lesson_date>=?")
             params.append(date_from)
