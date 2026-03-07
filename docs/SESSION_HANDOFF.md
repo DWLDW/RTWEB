@@ -85,7 +85,7 @@ Known issues:
 - completed makeup status labels in some schedule/detail tables still show raw `assigned/completed` values and should be translated in the next UX pass
 - schedule `More` dropdown behavior was validated by compile only; browser layout verification is still needed for overlap/z-index edge cases
 - the makeup search pager range text is currently English-only (`Showing x-y`) and should be moved to translations in the next i18n pass
-- library sort headers still use the shared generic sort helper and should get route-specific page reset cleanup in the next table UX pass
+- library sort headers now reset the correct page key for each table (`book_page`, `loan_page`); browser verification is still pending
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
