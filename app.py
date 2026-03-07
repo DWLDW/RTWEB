@@ -2295,7 +2295,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
             qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
             sep = "&" if qp else ""
             student_short, student_full = summarize_student_names(c['student_names'] if 'student_names' in c.keys() else '')
-            rows += f"<tr><td class='col-class'><a class='picker-link' data-preserve-scroll='1' href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} ? {c['name']}</a></td><td class='col-course'>{c['course_name'] or '-'}</td><td class='col-level'>{c['level_name'] or '-'}</td><td class='col-teacher'>{c['foreign_teacher_name'] or '-'}</td><td class='col-teacher'>{c['chinese_teacher_name'] or '-'}</td><td class='col-students' title='{h(student_full)}'>{h(student_short)}</td><td>{c['student_count'] or 0}</td></tr>"
+            rows += f"<tr><td class='col-class'><a class='picker-link' data-preserve-scroll='1' href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} - {c['name']}</a></td><td class='col-course'>{c['course_name'] or '-'}</td><td class='col-level'>{c['level_name'] or '-'}</td><td class='col-teacher'>{c['foreign_teacher_name'] or '-'}</td><td class='col-teacher'>{c['chinese_teacher_name'] or '-'}</td><td class='col-students' title='{h(student_full)}'>{h(student_short)}</td><td>{c['student_count'] or 0}</td></tr>"
         class_table = f"""
         <div class='table-wrap'><table>
           <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.student_count')}</th></tr>
@@ -4057,10 +4057,10 @@ def app(environ, start_response):
             for c in classes:
                 delete_cell = ""
                 if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-                    delete_cell = f"<td><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' onsubmit='return confirm(`Delete this class?`);'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary' type='submit'>{t('common.delete')}</button></form></td>"
+                    delete_cell = f"<td><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' onsubmit='return confirm(&quot;Delete this class?&quot;);'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary' type='submit'>{t('common.delete')}</button></form></td>"
                 class_rows += f"""
                 <tr>
-                  <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} ? {c['name']}</a></td>
+                  <td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} - {c['name']}</a></td>
                   <td>{c['course_name'] or '-'}</td>
                   <td>{c['level_name'] or '-'}</td>
                   <td>{c['foreign_teacher_name'] or '-'}</td>
@@ -4163,6 +4163,9 @@ def app(environ, start_response):
                         meta_bits.append(les['chinese_teacher_name'])
                     meta_html = " | ".join(meta_bits)
                     status_html = f"<span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span>"
+                    delete_link = ""
+                    if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+                        delete_link = f"<form method='post' class='preserve-scroll-form' data-preserve-scroll='1' style='display:inline-block; margin:0'><input type='hidden' name='type' value='delete_schedule'><input type='hidden' name='schedule_id' value='{les['id']}'><button class='mini-link' type='submit' onclick='return confirm(&quot;Delete this lesson?&quot;)'>{t('common.delete')}</button></form>"
                     blocks += f"""
                     <div class='lesson-block'>
                       <div class='lesson-title'>{les['class_name'] or '-'}</div>
@@ -4175,6 +4178,7 @@ def app(environ, start_response):
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
                         <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
                         <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
+                        {delete_link}
                       </div>
                     </div>
                     """
