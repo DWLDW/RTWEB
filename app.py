@@ -1,4 +1,4 @@
-import html as html_lib
+﻿import html as html_lib
 import json
 import os
 import sqlite3
@@ -3804,6 +3804,10 @@ def app(environ, start_response):
         selected_class_q = ""
         selected_schedule_id = query.get("schedule_id", "")
         selected_form_class_id = query.get("selected_form_class_id", "")
+        selected_form_day_query = (query.get("form_day_of_week", "") or "").strip()
+        selected_form_slot_query = (query.get("form_time_slot", "") or "").strip()
+        selected_form_room_query = (query.get("form_classroom", "") or "").strip()
+        selected_form_teacher_query = (query.get("form_teacher_id", "") or "").strip()
         recent_class_ids = query.get("recent_class_ids", "")
 
         flash_msg = ""
@@ -3912,6 +3916,21 @@ def app(environ, start_response):
                             )
                             flash_msg = t("academics.saved")
                         conn.commit()
+            elif typ == "delete_schedule":
+                schedule_id = (data.get("schedule_id") or "").strip()
+                if not str(schedule_id).isdigit():
+                    flash_msg = "schedule_id: invalid schedule"
+                    flash_type = "error"
+                else:
+                    deleted = conn.execute("DELETE FROM schedules WHERE id=?", (schedule_id,))
+                    conn.commit()
+                    if deleted.rowcount:
+                        flash_msg = t("common.delete")
+                        selected_schedule_id = ""
+                        selected_form_class_id = ""
+                    else:
+                        flash_msg = "schedule_id: not found"
+                        flash_type = "error"
             if flash_type == "error" and flash_msg:
                 log_event(conn, "ERROR", path, "시간표 저장 실패", flash_msg, user["id"])
 
@@ -4137,6 +4156,17 @@ def app(environ, start_response):
                       </div>
                     </div>
                     """
+                if not blocks and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+                    slot_start, slot_end = slot.split("~", 1)
+                    row_room = room.strip() if room and "," not in room else ""
+                    blocks = f"""
+                    <div class='lesson-block empty-slot-block'>
+                      <div class='lesson-meta'>{selected_day} {slot}</div>
+                      <div class='lesson-main-actions'>
+                        <a class='mini-link admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&form_day_of_week={selected_day}&form_time_slot={slot_start}|{slot_end}&form_teacher_id={rowkey}&form_classroom={quote(row_room) if row_room else ""}#schedule-form'>{t('academics.add_lesson')}</a>
+                      </div>
+                    </div>
+                    """
                 timetable_cells += f"<div class='tt-cell'>{blocks}</div>"
 
         week_label = f"{week_year}-{week_start.month:02d} W{week_no}"
@@ -4177,15 +4207,15 @@ def app(environ, start_response):
             (selected_form_class_id,),
         ).fetchone() if selected_form_class_id else None
 
-        selected_schedule_day = selected_schedule['day_of_week'] if selected_schedule else ''
+        selected_schedule_day = selected_schedule['day_of_week'] if selected_schedule else selected_form_day_query
         selected_schedule_status = selected_schedule['status'] if selected_schedule else 'active'
-        selected_teacher_form = str((selected_schedule['teacher_id'] if selected_schedule and selected_schedule['teacher_id'] else ((selected_form_class['foreign_teacher_id'] or selected_form_class['teacher_id']) if selected_form_class else '')) or '')
+        selected_teacher_form = str((selected_schedule['teacher_id'] if selected_schedule and selected_schedule['teacher_id'] else (selected_form_teacher_query or ((selected_form_class['foreign_teacher_id'] or selected_form_class['teacher_id']) if selected_form_class else ''))) or '')
         teacher_select_options = ["<option value=''>-</option>"]
         for tr in teacher_rows:
             sel = "selected" if str(tr['id']) == selected_teacher_form else ""
             teacher_select_options.append(f"<option value='{tr['id']}' {sel}>{tr['name']}</option>")
 
-        selected_room_form = (selected_schedule['classroom'] if selected_schedule else '') or ''
+        selected_room_form = (selected_schedule['classroom'] if selected_schedule else selected_form_room_query) or ''
         master_rooms = [r['name'] for r in conn.execute("SELECT name FROM classrooms ORDER BY name").fetchall()]
         existing_rooms = sorted(set(master_rooms) | {(r['classroom'] or '').strip() for r in schedules if (r['classroom'] or '').strip()} | ({selected_room_form} if selected_room_form else set()))
         room_options = ["<option value=''>-</option>"]
@@ -4202,6 +4232,8 @@ def app(environ, start_response):
             slot_pairs = [("16:25", "17:20"), ("17:25", "18:20"), ("18:30", "19:25"), ("19:35", "20:30")]
         selected_start = selected_schedule['start_time'] if selected_schedule else ''
         selected_end = selected_schedule['end_time'] if selected_schedule else ''
+        if not selected_schedule and selected_form_slot_query and "|" in selected_form_slot_query:
+            selected_start, selected_end = [p.strip() for p in selected_form_slot_query.split("|", 1)]
         selected_slot = f"{selected_start}|{selected_end}" if selected_start and selected_end else ""
         slot_options = ["<option value=''>-</option>"]
         for st, et in slot_pairs:
@@ -4257,6 +4289,11 @@ def app(environ, start_response):
                 <a class='btn' href='/homework?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_homework')}</a>
                 <a class='btn' href='/exams?lang={CURRENT_LANG}&selected_class_id={selected_schedule['class_id']}'>{t('academics.go_exams')}</a>
               </div>
+              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1' style='margin-top:10px' onsubmit="return confirm('Delete this schedule?');">
+                <input type='hidden' name='type' value='delete_schedule'>
+                <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
+                <button class='btn secondary' type='submit'>{t('common.delete')}</button>
+              </form>
             </div>
             """
 
