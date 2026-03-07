@@ -60,6 +60,7 @@ Behavior added or fixed:
 - lesson attendance entry now includes assigned makeup students for that schedule so they can be marked present/late in the actual class roster flow
 - class detail now shows makeup-assigned students targeting that class, and class attendance CSV exports now include makeup-related columns
 - global attendance CSV exports now include `makeup_attendance_id`, `target_schedule_id`, and assignment status for auditability
+- fixed two route-entry crashes caused by late variable initialization: `/attendance?lesson_mode=1` now initializes `target_schedule_id` before the makeup-student query, and `/exams` now initializes `score_exam_id` on GET as well as POST
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above

@@ -5184,6 +5184,7 @@ def app(environ, start_response):
                     "SELECT id, day_of_week, start_time, end_time, classroom, teacher_id FROM schedules WHERE id=? AND class_id=?",
                     (schedule_id, class_id_for_lesson),
                 ).fetchone()
+            target_schedule_id = schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None)
 
             students_in_class = conn.execute(
                 "SELECT id, user_id, student_no, name_ko FROM students WHERE current_class_id=? ORDER BY name_ko, id",
@@ -5224,8 +5225,6 @@ def app(environ, start_response):
                 "homework_score": t("lesson.score.homework"),
                 "attitude_score": t("lesson.score.attitude"),
             }
-
-            target_schedule_id = schedule_info["id"] if schedule_info else (schedule_id if str(schedule_id).isdigit() else None)
 
             if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
                 d = parse_body(environ)
@@ -6019,6 +6018,7 @@ def app(environ, start_response):
         selected_class = conn.execute("SELECT id, name FROM classes WHERE id=?", (q_exam_class_id,)).fetchone() if q_exam_class_id.isdigit() else None
         selected_student = conn.execute("SELECT id, user_id, student_no, name_ko FROM students WHERE id=?", (q_exam_student_id,)).fetchone() if q_exam_student_id.isdigit() else None
         selected_student_user_id = str(selected_student["user_id"]) if selected_student else q_exam_student_id
+        score_exam_id = (query.get("exam_id", "") or "").strip()
         load_exams = query.get("load", "") == "1" or bool(q_exam_class_id) or bool(selected_student_user_id)
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
