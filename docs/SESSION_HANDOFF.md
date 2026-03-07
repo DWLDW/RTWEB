@@ -63,6 +63,11 @@ Behavior added or fixed:
 - fixed two route-entry crashes caused by late variable initialization: `/attendance?lesson_mode=1` now initializes `target_schedule_id` before the makeup-student query, and `/exams` now initializes `score_exam_id` on GET as well as POST
 - fixed schedule lesson-date generation so `Attendance & Evaluation` now passes the actual date for the selected weekday in the current week instead of reusing the raw reference date
 - fixed attendance boolean filters for `requires_makeup` and `makeup_completed`; they now bind integer params instead of string params, which restores the `Students Needing Makeup` query results
+- makeup completion now moves credit ownership back to the original absence row: when a makeup lesson is completed, the source absence is updated to `absence_charge_type=deduct`, `makeup_completed=1`, and a deducted credit delta
+- lesson-mode attendance rows for makeup students now keep `credit_delta=0` on the makeup lesson itself so makeup completion does not double-deduct credits
+- completed makeup assignments now remain visible in the target lesson context for that lesson date instead of disappearing immediately after save
+- schedule lesson cards, lesson detail, class detail, and attendance CSV/list now include the makeup lesson date so operators can see when the makeup actually happened
+- lesson-mode attendance now continues to include makeup-assigned students even after completion for the same lesson date, so Monday lesson rosters/history remain stable after save
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
@@ -71,6 +76,7 @@ Known issues:
 - payments still use a snapshot-style table and need a true ledger model in the next operational phase
 - makeup assignment UI is implemented server-side but still needs browser validation for the end-to-end schedule -> attendance -> auto-complete flow
 - attendance edit UI still needs one more browser pass to visually hide/show absence-only fields based on selected status
+- completed makeup status labels in some schedule/detail tables still show raw `assigned/completed` values and should be translated in the next UX pass
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
@@ -78,6 +84,7 @@ Quick verification done:
 - local HTTP replay confirmed `/payments` POST returns and stores package payment with discount and credit recharge
 - one-off Python validation confirmed `makeup_assignments` table is created in `lms.db`
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the attendance rule normalization changes
+- `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the makeup credit/date persistence changes
 
 Next recommended task:
-- browser-verify the attendance/makeup rule flow end-to-end, then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks
+- browser-verify one full makeup cycle (`assign -> Monday attendance save -> source row credit deducted -> Monday lesson still shows student -> makeup date visible`), then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks
