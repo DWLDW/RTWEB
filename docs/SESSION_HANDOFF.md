@@ -46,17 +46,22 @@ Behavior added or fixed:
 - added an integrated roadmap that combines operational must-haves, UX stabilization, branding timing, and phased structural cleanup
 - `/attendance` now stays in a true query-first state and does not render large result tables until Search is pressed
 - `/attendance` row editing now uses a collapsible edit panel instead of always showing every dropdown in the table cell
+- added `makeup_assignments` to connect original absences to target schedule lessons instead of only flipping a boolean on the source attendance row
+- `/schedule` now supports assigning pending makeup students to a specific lesson and shows assigned makeup students in the lesson detail/card context
+- lesson attendance save now auto-completes matching makeup assignments and writes back to the original absence via `makeup_completed` + `makeup_attendance_id`
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
 - schedule quick-fill still requires selecting a class before saving; it only fills slot context
 - browser verification is still pending for the latest `/counseling`, `/payments`, `/masterdata`, `/schedule`, `/attendance`, `/library`, and `/exams` UI changes
 - payments still use a snapshot-style table and need a true ledger model in the next operational phase
+- makeup assignment UI is implemented server-side but still needs browser validation for the end-to-end schedule -> attendance -> auto-complete flow
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
 - package rows confirmed in `lms.db`
 - local HTTP replay confirmed `/payments` POST returns and stores package payment with discount and credit recharge
+- one-off Python validation confirmed `makeup_assignments` table is created in `lms.db`
 
 Next recommended task:
-- continue Phase 1 with `/masterdata` and `/attendance`, using the `/users` page as the baseline pattern for collapsed forms and focused edit flows
+- browser-verify the new makeup flow, then continue Phase 1 cleanup on `/library` and remaining translation/raw-key leaks

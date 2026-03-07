@@ -315,7 +315,15 @@ I18N_TEXTS["en"].update({
     "attendance.validation.charge_required": "Please choose absence charge type for absent students",
     "attendance.validation.charge_invalid": "Invalid absence charge type",
     "attendance.validation.bool_invalid": "Invalid boolean option",
-    "attendance.list_desc": "Use filters below to manage attendance and makeup follow-ups."
+    "attendance.list_desc": "Use filters below to manage attendance and makeup follow-ups.",
+    "attendance.makeup_assign": "Assign Makeup Student",
+    "attendance.makeup_assigned": "Makeup student assigned",
+    "attendance.makeup_assignment_exists": "This makeup absence is already assigned",
+    "attendance.makeup_assignment_invalid": "Invalid makeup assignment",
+    "attendance.makeup_pending": "Pending Makeup",
+    "attendance.makeup_assigned_list": "Assigned Makeup Students",
+    "attendance.makeup_source_absence": "Original Absence",
+    "attendance.makeup_auto_completed": "Makeup matched and completed automatically"
 })
 I18N_TEXTS["ko"].update({
     "attendance.absence_charge_type": "결석 차감 유형",
@@ -335,7 +343,15 @@ I18N_TEXTS["ko"].update({
     "attendance.validation.charge_required": "결석 학생은 차감 유형을 선택해야 합니다",
     "attendance.validation.charge_invalid": "잘못된 결석 차감 유형입니다",
     "attendance.validation.bool_invalid": "잘못된 예/아니오 값입니다",
-    "attendance.list_desc": "아래 필터로 출결 및 보강 대상 상태를 관리하세요."
+    "attendance.list_desc": "아래 필터로 출결 및 보강 대상 상태를 관리하세요.",
+    "attendance.makeup_assign": "보강 학생 추가",
+    "attendance.makeup_assigned": "보강 학생이 배정되었습니다",
+    "attendance.makeup_assignment_exists": "이미 다른 수업에 배정된 보강 대상입니다",
+    "attendance.makeup_assignment_invalid": "잘못된 보강 배정입니다",
+    "attendance.makeup_pending": "대기 중인 보강",
+    "attendance.makeup_assigned_list": "배정된 보강 학생",
+    "attendance.makeup_source_absence": "원래 결석",
+    "attendance.makeup_auto_completed": "보강 출결과 자동 매칭되어 완료 처리되었습니다"
 })
 I18N_TEXTS["zh"].update({
     "attendance.absence_charge_type": "缺勤扣课类型",
@@ -355,7 +371,15 @@ I18N_TEXTS["zh"].update({
     "attendance.validation.charge_required": "缺勤学生必须选择扣课类型",
     "attendance.validation.charge_invalid": "缺勤扣课类型无效",
     "attendance.validation.bool_invalid": "布尔值无效",
-    "attendance.list_desc": "使用以下筛选管理考勤与补课跟进。"
+    "attendance.list_desc": "使用以下筛选管理考勤与补课跟进。",
+    "attendance.makeup_assign": "添加补课学生",
+    "attendance.makeup_assigned": "补课学生已分配",
+    "attendance.makeup_assignment_exists": "该补课缺勤已分配到其他课程",
+    "attendance.makeup_assignment_invalid": "补课分配无效",
+    "attendance.makeup_pending": "待补课",
+    "attendance.makeup_assigned_list": "已分配补课学生",
+    "attendance.makeup_source_absence": "原缺勤记录",
+    "attendance.makeup_auto_completed": "已与补课出勤自动匹配并完成"
 })
 
 
@@ -803,6 +827,36 @@ def ensure_master_tables(conn):
             "INSERT OR IGNORE INTO payment_packages(code, name, lesson_credits, list_price, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
             (code, name, credits, price, "active", now(), now()),
         )
+    conn.execute("""CREATE TABLE IF NOT EXISTS makeup_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_attendance_id INTEGER NOT NULL,
+      student_id INTEGER NOT NULL,
+      target_schedule_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'assigned',
+      assigned_by INTEGER,
+      assigned_at TEXT NOT NULL,
+      completed_attendance_id INTEGER,
+      completed_at TEXT,
+      note TEXT,
+      FOREIGN KEY(source_attendance_id) REFERENCES attendance(id),
+      FOREIGN KEY(student_id) REFERENCES users(id),
+      FOREIGN KEY(target_schedule_id) REFERENCES schedules(id),
+      FOREIGN KEY(assigned_by) REFERENCES users(id),
+      FOREIGN KEY(completed_attendance_id) REFERENCES attendance(id)
+    )""")
+    ma_cols = {r["name"] for r in conn.execute("PRAGMA table_info(makeup_assignments)").fetchall()}
+    if "status" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN status TEXT NOT NULL DEFAULT 'assigned'")
+    if "assigned_by" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN assigned_by INTEGER")
+    if "assigned_at" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN assigned_at TEXT")
+    if "completed_attendance_id" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN completed_attendance_id INTEGER")
+    if "completed_at" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN completed_at TEXT")
+    if "note" not in ma_cols:
+        conn.execute("ALTER TABLE makeup_assignments ADD COLUMN note TEXT")
 
 
 def repair_profile_integrity(conn):
@@ -2097,6 +2151,84 @@ def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
         ORDER BY c.id DESC LIMIT ?""",
         tuple(params),
     ).fetchall()
+
+
+def fetch_makeup_candidates(conn, keyword, limit=10, show_all_when_empty=False):
+    kw = (keyword or "").strip()
+    if not kw and not show_all_when_empty:
+        return []
+    params = []
+    where_sql = ""
+    if kw:
+        like = f"%{kw}%"
+        where_sql = """AND (
+            st.name_ko LIKE ? OR
+            COALESCE(st.student_no, '') LIKE ? OR
+            COALESCE(c.name, '') LIKE ? OR
+            COALESCE(ht.name, '') LIKE ?
+        )"""
+        params.extend([like, like, like, like])
+    params.append(limit)
+    return conn.execute(
+        f"""SELECT
+            a.id,
+            a.id AS source_attendance_id,
+            a.lesson_date,
+            st.id AS student_row_id,
+            st.user_id AS student_id,
+            st.name_ko,
+            st.student_no,
+            c.name AS class_name,
+            ht.name AS homeroom_teacher_name,
+            (
+                st.name_ko || ' (' || COALESCE(st.student_no, '-') || ')'
+                || ' / ' || COALESCE(c.name, '-')
+                || ' / ' || COALESCE(a.lesson_date, '-')
+            ) AS label
+        FROM attendance a
+        JOIN students st ON st.user_id=a.student_id
+        LEFT JOIN classes c ON c.id=a.class_id
+        LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+        WHERE COALESCE(a.requires_makeup,0)=1
+          AND COALESCE(a.makeup_completed,0)=0
+          AND NOT EXISTS (
+            SELECT 1 FROM makeup_assignments ma
+            WHERE ma.source_attendance_id=a.id
+              AND COALESCE(ma.status, 'assigned')='assigned'
+          )
+          {where_sql}
+        ORDER BY a.lesson_date DESC, a.id DESC
+        LIMIT ?""",
+        tuple(params),
+    ).fetchall()
+
+
+def complete_makeup_assignment(conn, student_user_id, schedule_id, attendance_id):
+    if not student_user_id or not schedule_id or not attendance_id:
+        return None
+    assignment = conn.execute(
+        """SELECT id, source_attendance_id
+        FROM makeup_assignments
+        WHERE student_id=? AND target_schedule_id=? AND COALESCE(status,'assigned')='assigned'
+        ORDER BY assigned_at, id
+        LIMIT 1""",
+        (student_user_id, schedule_id),
+    ).fetchone()
+    if not assignment:
+        return None
+    conn.execute(
+        """UPDATE makeup_assignments
+        SET status='completed', completed_attendance_id=?, completed_at=?
+        WHERE id=?""",
+        (attendance_id, now(), assignment["id"]),
+    )
+    conn.execute(
+        "UPDATE attendance SET makeup_completed=1, makeup_attendance_id=? WHERE id=?",
+        (attendance_id, assignment["source_attendance_id"]),
+    )
+    return assignment["id"]
+
+
 def list_teacher_profiles(conn, limit=200):
     return conn.execute(
         """SELECT t.user_id AS id, u.name, u.username, t.teacher_type
@@ -4090,6 +4222,7 @@ def app(environ, start_response):
         selected_class_q = ""
         selected_schedule_id = query.get("schedule_id", "")
         selected_form_class_id = query.get("selected_form_class_id", "")
+        selected_makeup_source_id = query.get("selected_makeup_source_id", "")
         selected_form_day_query = (query.get("form_day_of_week", "") or "").strip()
         selected_form_slot_query = (query.get("form_time_slot", "") or "").strip()
         selected_form_room_query = (query.get("form_classroom", "") or "").strip()
@@ -4105,9 +4238,15 @@ def app(environ, start_response):
         selected_day = selected_day_query.capitalize() if selected_day_query.capitalize() in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") else selected_weekday
         print_mode = query.get("print", "") == "1"
 
-        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
+        if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             data = parse_body(environ)
             typ = data.get("type")
+            teacher_allowed_types = {"assign_makeup", "delete_makeup_assignment"}
+            if has_role(user, [ROLE_TEACHER]) and typ not in teacher_allowed_types:
+                conn.close()
+                status, headers, body = forbidden_html(user, t('common.forbidden'))
+                start_response(status, headers)
+                return [body]
             if typ == "copy_week":
                 source_week_start = iso_monday_str(ref_date_str, week_offset)
                 target_week_start = (datetime.strptime(source_week_start, "%Y-%m-%d").date() + timedelta(days=7)).isoformat()
@@ -4202,6 +4341,73 @@ def app(environ, start_response):
                             )
                             flash_msg = t("academics.saved")
                         conn.commit()
+            elif typ == "assign_makeup":
+                source_attendance_id = (data.get("source_attendance_id") or "").strip()
+                target_schedule_id = (data.get("schedule_id") or selected_schedule_id or "").strip()
+                source_row = conn.execute(
+                    """SELECT a.id, a.student_id, a.class_id, c.teacher_id
+                    FROM attendance a
+                    LEFT JOIN classes c ON c.id=a.class_id
+                    WHERE a.id=? AND COALESCE(a.requires_makeup,0)=1 AND COALESCE(a.makeup_completed,0)=0""",
+                    (source_attendance_id,),
+                ).fetchone() if source_attendance_id.isdigit() else None
+                target_row = conn.execute(
+                    """SELECT sc.id, sc.class_id, COALESCE(sc.teacher_id, c.foreign_teacher_id, c.teacher_id) AS effective_teacher_id
+                    FROM schedules sc
+                    LEFT JOIN classes c ON c.id=sc.class_id
+                    WHERE sc.id=?""",
+                    (target_schedule_id,),
+                ).fetchone() if target_schedule_id.isdigit() else None
+                if not source_row or not target_row:
+                    flash_msg = t("attendance.makeup_assignment_invalid")
+                    flash_type = "error"
+                elif has_role(user, [ROLE_TEACHER]) and str(target_row["effective_teacher_id"] or "") != str(user["id"]):
+                    conn.close()
+                    status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+                    start_response(status, headers)
+                    return [body]
+                else:
+                    existing_assignment = conn.execute(
+                        """SELECT id FROM makeup_assignments
+                        WHERE source_attendance_id=? AND COALESCE(status,'assigned')='assigned'""",
+                        (source_attendance_id,),
+                    ).fetchone()
+                    if existing_assignment:
+                        flash_msg = t("attendance.makeup_assignment_exists")
+                        flash_type = "error"
+                    else:
+                        conn.execute(
+                            """INSERT INTO makeup_assignments(
+                            source_attendance_id, student_id, target_schedule_id, status, assigned_by, assigned_at
+                            ) VALUES(?,?,?,?,?,?)""",
+                            (source_attendance_id, source_row["student_id"], target_schedule_id, "assigned", user["id"], now()),
+                        )
+                        conn.commit()
+                        flash_msg = t("attendance.makeup_assigned")
+                        selected_schedule_id = target_schedule_id
+                        selected_makeup_source_id = ""
+            elif typ == "delete_makeup_assignment":
+                assignment_id = (data.get("assignment_id") or "").strip()
+                assignment_row = conn.execute(
+                    """SELECT ma.id, ma.target_schedule_id, sc.class_id, COALESCE(sc.teacher_id, c.foreign_teacher_id, c.teacher_id) AS effective_teacher_id
+                    FROM makeup_assignments ma
+                    JOIN schedules sc ON sc.id=ma.target_schedule_id
+                    LEFT JOIN classes c ON c.id=sc.class_id
+                    WHERE ma.id=?""",
+                    (assignment_id,),
+                ).fetchone() if assignment_id.isdigit() else None
+                if not assignment_row:
+                    flash_msg = t("attendance.makeup_assignment_invalid")
+                    flash_type = "error"
+                elif has_role(user, [ROLE_TEACHER]) and str(assignment_row["effective_teacher_id"] or "") != str(user["id"]):
+                    conn.close()
+                    status, headers, body = forbidden_html(user, t('forbidden.teacher_class_only'))
+                    start_response(status, headers)
+                    return [body]
+                else:
+                    conn.execute("DELETE FROM makeup_assignments WHERE id=?", (assignment_id,))
+                    conn.commit()
+                    selected_schedule_id = str(assignment_row["target_schedule_id"])
             elif typ == "delete_schedule":
                 schedule_id = (data.get("schedule_id") or "").strip()
                 if not str(schedule_id).isdigit():
@@ -4336,6 +4542,26 @@ def app(environ, start_response):
                 if str(r["id"]) == selected_schedule_id:
                     selected_schedule = r
                     break
+        makeup_query_enabled = query.get("makeup_load", "") == "1" or bool((query.get("makeup_q", "") or "").strip()) or bool(selected_makeup_source_id)
+        makeup_candidates = fetch_makeup_candidates(conn, query.get("makeup_q", ""), limit=12, show_all_when_empty=makeup_query_enabled)
+        selected_makeup_source = conn.execute(
+            """SELECT
+                a.id,
+                a.id AS source_attendance_id,
+                a.lesson_date,
+                st.id AS student_row_id,
+                st.user_id AS student_id,
+                st.name_ko,
+                st.student_no,
+                c.name AS class_name,
+                ht.name AS homeroom_teacher_name
+            FROM attendance a
+            JOIN students st ON st.user_id=a.student_id
+            LEFT JOIN classes c ON c.id=a.class_id
+            LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+            WHERE a.id=?""",
+            (selected_makeup_source_id,),
+        ).fetchone() if selected_makeup_source_id and selected_makeup_source_id.isdigit() else None
 
         class_rows = ""
         if load_schedule_classes and classes:
@@ -4382,6 +4608,33 @@ def app(environ, start_response):
                 class_student_details.setdefault(str(sr["current_class_id"]), []).append(
                     f"{sr['name_ko'] or '-'} ({homeroom_display_name(sr['homeroom_teacher_name'])})"
                 )
+
+        schedule_ids = [str(r["id"]) for r in schedules if r["id"] is not None]
+        makeup_assignments_by_schedule = {}
+        if schedule_ids:
+            assignment_rows = conn.execute(
+                f"""SELECT
+                    ma.id,
+                    ma.target_schedule_id,
+                    ma.source_attendance_id,
+                    ma.status,
+                    st.name_ko,
+                    st.student_no,
+                    src.lesson_date AS source_lesson_date,
+                    cls.name AS source_class_name,
+                    ht.name AS homeroom_teacher_name
+                FROM makeup_assignments ma
+                JOIN attendance src ON src.id=ma.source_attendance_id
+                JOIN students st ON st.user_id=ma.student_id
+                LEFT JOIN classes cls ON cls.id=src.class_id
+                LEFT JOIN users ht ON ht.id=st.homeroom_teacher_id
+                WHERE ma.target_schedule_id IN ({','.join(['?'] * len(schedule_ids))})
+                  AND COALESCE(ma.status,'assigned')='assigned'
+                ORDER BY ma.id DESC""",
+                tuple(schedule_ids),
+            ).fetchall()
+            for ar in assignment_rows:
+                makeup_assignments_by_schedule.setdefault(str(ar["target_schedule_id"]), []).append(ar)
 
         print_teacher_grouped = {}
         print_teacher_rooms = {}
@@ -4440,6 +4693,15 @@ def app(environ, start_response):
                 blocks = ""
                 for les in lessons:
                     students_label = (les['student_names'] or '').strip()
+                    makeup_items = makeup_assignments_by_schedule.get(str(les['id']), [])
+                    makeup_label = ""
+                    if makeup_items:
+                        makeup_names = ", ".join([
+                            f"{item['name_ko'] or '-'} ({homeroom_display_name(item['homeroom_teacher_name'])})"
+                            for item in makeup_items[:3]
+                        ])
+                        more_suffix = "" if len(makeup_items) <= 3 else f" +{len(makeup_items)-3}"
+                        makeup_label = f"<div class='lesson-meta'>{t('attendance.makeup_pending')}: {h(makeup_names)}{more_suffix}</div>"
                     meta_bits = [
                         f"{les['course_name'] or '-'} / {les['level_name'] or '-'}",
                         f"{t('academics.classroom')}: {les['classroom'] or '-'}",
@@ -4457,7 +4719,9 @@ def app(environ, start_response):
                       <div class='lesson-meta'>{meta_html}</div>
                       <div class='lesson-meta'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'} {status_html}</div>
                       <div class='student-line'>{students_label or '-'}</div>
+                      {makeup_label}
                       <div class='lesson-main-actions'>
+                        <a class='mini-link admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ""}&schedule_id={les['id']}#lesson-makeup'>{t('attendance.makeup_assign')}</a>
                         <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
@@ -4583,6 +4847,38 @@ def app(environ, start_response):
         if selected_schedule:
             stu_rows = conn.execute("SELECT name_ko FROM students WHERE current_class_id=? ORDER BY id LIMIT 20", (selected_schedule['class_id'],)).fetchall()
             stu_text = ", ".join([r['name_ko'] for r in stu_rows]) if stu_rows else "-"
+            selected_schedule_assignments = makeup_assignments_by_schedule.get(str(selected_schedule['id']), [])
+            selected_makeup_label = ""
+            if selected_makeup_source:
+                selected_makeup_label = (
+                    f"{selected_makeup_source['name_ko'] or '-'} ({selected_makeup_source['student_no'] or '-'})"
+                    f" / {selected_makeup_source['class_name'] or '-'} / {selected_makeup_source['lesson_date'] or '-'}"
+                )
+            makeup_picker = render_picker_block(
+                t("attendance.students_needing_makeup"),
+                "makeup_q",
+                query.get("makeup_q", ""),
+                "selected_makeup_source_id",
+                selected_makeup_source_id,
+                selected_makeup_label,
+                makeup_candidates,
+                "/schedule",
+                CURRENT_LANG,
+                {
+                    "week": str(week_offset),
+                    "ref_date": ref_date_str,
+                    "day": selected_day,
+                    "teacher_id": selected_teacher_id,
+                    "classroom": selected_room,
+                    "schedule_id": selected_schedule['id'],
+                },
+                query_flag_name="makeup_load",
+                query_enabled=makeup_query_enabled,
+            )
+            makeup_rows = "".join([
+                f"<tr><td>{h(item['name_ko'] or '-')}</td><td>{h(item['student_no'] or '-')}</td><td>{h(homeroom_display_name(item['homeroom_teacher_name']))}</td><td>{h(item['source_class_name'] or '-')} / {h(item['source_lesson_date'] or '-')}</td><td><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' onsubmit='return confirm(&quot;Remove this makeup assignment?&quot;);'><input type='hidden' name='type' value='delete_makeup_assignment'><input type='hidden' name='assignment_id' value='{item['id']}'><button class='btn secondary small' type='submit'>{t('common.delete')}</button></form></td></tr>"
+                for item in selected_schedule_assignments
+            ])
             detail_html = f"""
             <div class='card'>
               <h4>{t('academics.lesson_detail')}</h4>
@@ -4608,6 +4904,21 @@ def app(environ, start_response):
                 <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
                 <button class='btn secondary' type='submit'>{t('common.delete')}</button>
               </form>
+            </div>
+            <div class='card' id='lesson-makeup'>
+              <h4>{t('attendance.makeup_assign')}</h4>
+              {makeup_picker}
+              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                <input type='hidden' name='type' value='assign_makeup'>
+                <input type='hidden' name='schedule_id' value='{selected_schedule['id']}'>
+                <input type='hidden' name='source_attendance_id' value='{selected_makeup_source_id}'>
+                <label>{t('attendance.makeup_source_absence')} <input value='{selected_makeup_label or "-"}' readonly></label>
+                <button {'disabled' if not selected_makeup_source_id else ''}>{t('attendance.makeup_assign')}</button>
+              </form>
+              <div class='table-wrap' style='margin-top:10px'><table>
+                <tr><th>{t('field.student')}</th><th>{t('students.field.student_no')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('attendance.makeup_source_absence')}</th><th>{t('common.delete')}</th></tr>
+                {makeup_rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+              </table></div>
             </div>
             """
 
@@ -4925,6 +5236,8 @@ def app(environ, start_response):
                             )
                             keep_id = cur.lastrowid
                             apply_credit_adjustment(conn, row["student_user_id"], 0.0, row_credit_delta)
+                        if target_schedule_id is not None and row["status"] in ("present", "late", "makeup"):
+                            complete_makeup_assignment(conn, row["student_user_id"], target_schedule_id, keep_id)
                         if target_schedule_id is not None:
                             conn.execute("DELETE FROM attendance WHERE id<>? AND schedule_id=? AND student_id=? AND lesson_date=?", (keep_id, target_schedule_id, row["student_user_id"], post_lesson_date))
                         else:
@@ -5094,6 +5407,9 @@ def app(environ, start_response):
                         (status_v, note_v or None, charge_type or None, requires_makeup, makeup_completed, new_delta, attendance_id),
                     )
                     apply_credit_adjustment(conn, row["student_id"], row["credit_delta"], new_delta)
+                    attendance_schedule_id = conn.execute("SELECT schedule_id FROM attendance WHERE id=?", (attendance_id,)).fetchone()
+                    if attendance_schedule_id and attendance_schedule_id["schedule_id"] and status_v in ("present", "late", "makeup"):
+                        complete_makeup_assignment(conn, row["student_id"], attendance_schedule_id["schedule_id"], attendance_id)
                     conn.commit()
                     flash_msg = t("attendance.updated")
             elif typ == "mark_makeup_completed":
