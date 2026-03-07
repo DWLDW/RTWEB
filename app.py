@@ -1036,12 +1036,40 @@ def ensure_class(conn, name, course_id, level_id, foreign_teacher_id, chinese_te
     return conn.execute("SELECT id FROM classes WHERE name=?", (name,)).fetchone()["id"]
 
 
+def find_schedule_conflict(conn, class_id, day_of_week, start_time, end_time, classroom, teacher_id, week_start_date, ignore_id=None):
+    rows = conn.execute(
+        """SELECT sc.id, sc.class_id, sc.teacher_id, sc.start_time, sc.end_time, COALESCE(sc.classroom, '') AS classroom,
+        c.teacher_id AS class_teacher_id, COALESCE(c.foreign_teacher_id, c.teacher_id) AS class_foreign_teacher_id
+        FROM schedules sc
+        LEFT JOIN classes c ON c.id=sc.class_id
+        WHERE sc.day_of_week=?
+          AND COALESCE(sc.week_start_date,'') IN ('', ?)""",
+        (day_of_week, week_start_date),
+    ).fetchall()
+    for ex in rows:
+        if ignore_id and str(ex["id"]) == str(ignore_id):
+            continue
+        if not is_time_overlap(start_time, end_time, ex["start_time"], ex["end_time"]):
+            continue
+        if str(ex["class_id"]) == str(class_id):
+            return t("academics.validation_conflict_class")
+        existing_teacher_id = ex["teacher_id"] or ex["class_foreign_teacher_id"] or ex["class_teacher_id"]
+        if teacher_id and existing_teacher_id and str(existing_teacher_id) == str(teacher_id):
+            return t("academics.validation_conflict_teacher")
+        if classroom and ex["classroom"] and ex["classroom"].strip().lower() == classroom.strip().lower():
+            return t("academics.validation_conflict_room")
+    return None
+
+
 def ensure_schedule_row(conn, class_id, day_of_week, start_time, end_time, classroom, teacher_id, week_start_date):
     row = conn.execute(
         """SELECT id FROM schedules WHERE class_id=? AND day_of_week=? AND start_time=? AND end_time=?
         AND COALESCE(classroom,'')=COALESCE(?, '') AND COALESCE(week_start_date,'') IN ('', ?)""",
         (class_id, day_of_week, start_time, end_time, classroom, week_start_date),
     ).fetchone()
+    conflict = find_schedule_conflict(conn, class_id, day_of_week, start_time, end_time, classroom, teacher_id, week_start_date, ignore_id=(row["id"] if row else None))
+    if conflict:
+        raise ValueError(conflict)
     if row:
         conn.execute("UPDATE schedules SET teacher_id=?, status='active', classroom=?, week_start_date=? WHERE id=?", (teacher_id, classroom, week_start_date, row["id"]))
         return row["id"]
@@ -1236,15 +1264,42 @@ def seed_demo_data(conn, force=False, options=None):
     week_start = iso_monday_str(datetime.utcnow().date().isoformat(), 0)
     weekday_cycle = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     slot_cycle = [(st, et) for _, st, et in slots[:4]]
+    available_slots = [(day, st, et) for day in weekday_cycle for st, et in slot_cycle]
+
+    if force and class_ids:
+        placeholders = ",".join(["?"] * len(class_ids))
+        conn.execute(f"DELETE FROM attendance WHERE class_id IN ({placeholders})", tuple(class_ids))
+        conn.execute(f"DELETE FROM schedules WHERE class_id IN ({placeholders})", tuple(class_ids))
+
     schedule_rows = []
+    teacher_slot_index = {tid: 0 for tid in foreign_ids}
+    used_teacher_slots = set()
+    used_room_slots = set()
     for idx, cls_id in enumerate(class_ids):
         lesson_count = 2 if idx % 4 == 0 else 3
-        for j in range(lesson_count):
-            day = weekday_cycle[(idx + j) % len(weekday_cycle)]
-            st, et = slot_cycle[(idx + j) % len(slot_cycle)]
-            room = classrooms[(idx + j) % len(classrooms)]
-            teacher_id = foreign_ids[idx % len(foreign_ids)]
+        teacher_id = foreign_ids[idx % len(foreign_ids)]
+        cursor = teacher_slot_index[teacher_id]
+        for lesson_idx in range(lesson_count):
+            assigned = None
+            for slot_offset in range(len(available_slots)):
+                day, st, et = available_slots[(cursor + slot_offset) % len(available_slots)]
+                if (teacher_id, day, st, et) in used_teacher_slots:
+                    continue
+                for room_offset in range(len(classrooms)):
+                    room = classrooms[(idx + lesson_idx + room_offset) % len(classrooms)]
+                    if (room, day, st, et) in used_room_slots:
+                        continue
+                    assigned = (day, st, et, room, (cursor + slot_offset + 1) % len(available_slots))
+                    break
+                if assigned:
+                    break
+            if not assigned:
+                raise ValueError(f"No free timetable slot for teacher {teacher_id} class {cls_id}")
+            day, st, et, room, next_cursor = assigned
             sc_id = ensure_schedule_row(conn, cls_id, day, st, et, room, teacher_id, week_start)
+            used_teacher_slots.add((teacher_id, day, st, et))
+            used_room_slots.add((room, day, st, et))
+            teacher_slot_index[teacher_id] = next_cursor
             schedule_rows.append((sc_id, cls_id, day, st, et, room))
 
     class_students = {}
@@ -1608,15 +1663,20 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .flash.success { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
       .flash.error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
       .timetable-wrap { overflow:auto; border:1px solid #e5e7eb; border-radius:12px; background:white; }
-      .timetable-grid { min-width:980px; display:grid; gap:0; }
-      .tt-head { background:#f3f4f6; font-weight:600; padding:10px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; }
-      .tt-cell { min-height:140px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:8px; background:#fff; }
-      .tt-rowhead { background:#f9fafb; padding:10px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; min-width:220px; }
-      .lesson-block { border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px; padding:10px; margin-bottom:8px; font-size:14px; line-height:1.4; }
+      .timetable-grid { min-width:860px; display:grid; gap:0; }
+      .tt-head { background:#f3f4f6; font-weight:600; padding:8px 10px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; font-size:13px; }
+      .tt-cell { min-height:92px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:4px; background:#fff; }
+      .tt-rowhead { background:#f9fafb; padding:8px 10px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; min-width:150px; font-size:13px; }
+      .tt-rowhead strong { display:block; font-size:15px; line-height:1.2; }
+      .lesson-block { border:1px solid #bfdbfe; background:#eff6ff; border-radius:8px; padding:8px; margin-bottom:4px; font-size:12px; line-height:1.3; }
+      .lesson-title { font-size:13px; font-weight:700; line-height:1.2; margin-bottom:2px; }
+      .lesson-meta { color:#475569; font-size:11px; line-height:1.25; }
+      .student-line { color:#334155; font-size:11px; line-height:1.3; margin-top:4px; }
       .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
-      .lesson-main-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-      .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-      .mini-link { font-size:12px; padding:6px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .lesson-main-actions, .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+      .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:28px; padding:5px 8px; border-radius:6px; font-size:11px; }
+      .mini-link { font-size:11px; padding:5px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .schedule-editor-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr); gap:14px; }
       .score-input { width:88px; min-width:88px; }
       .memo-input { min-width:220px; }
       .sticky-head thead th { position:sticky; top:0; z-index:2; background:#f9fafb; }
@@ -1628,6 +1688,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .muted { color:#6b7280; font-size:12px; overflow-wrap:anywhere; }
       @media (max-width: 1100px) {
         .two-col { grid-template-columns:1fr; }
+        .schedule-editor-grid { grid-template-columns:1fr; }
       }
       @media (max-width: 900px) {
         body { font-size:15px; line-height:1.5; }
@@ -1642,6 +1703,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         .card h3, .card h4 { font-size:19px; line-height:1.35; }
         th, td { font-size:14px; line-height:1.45; }
         button, .btn, input, select, textarea { font-size:15px; }
+        .tt-cell { min-height:110px; }
       }
       @media (max-width: 768px) {
         body { font-size:16px; line-height:1.55; }
@@ -3722,27 +3784,7 @@ def app(environ, start_response):
                     form_teacher_id = selected_teacher if selected_teacher else class_teacher_id
                     ignore_id = schedule_id if str(schedule_id).isdigit() else "0"
                     target_week_start = iso_monday_str(ref_date_str, week_offset)
-                    existing = conn.execute(
-                        """SELECT sc.*, c.teacher_id AS cls_teacher_id
-                        FROM schedules sc LEFT JOIN classes c ON c.id=sc.class_id
-                        WHERE sc.day_of_week=? AND sc.id<>?
-                          AND COALESCE(sc.week_start_date,'') IN ('', ?)""",
-                        (day_of_week, ignore_id, target_week_start),
-                    ).fetchall()
-                    conflict = None
-                    for ex in existing:
-                        if not is_time_overlap(start_time, end_time, ex["start_time"], ex["end_time"]):
-                            continue
-                        if str(ex["class_id"]) == str(class_id):
-                            conflict = t("academics.validation_conflict_class")
-                            break
-                        ex_teacher_id = ex["teacher_id"] or ex["cls_teacher_id"]
-                        if form_teacher_id and ex_teacher_id and str(ex_teacher_id) == str(form_teacher_id):
-                            conflict = t("academics.validation_conflict_teacher")
-                            break
-                        if classroom and ex["classroom"] and ex["classroom"].strip().lower() == classroom.lower():
-                            conflict = t("academics.validation_conflict_room")
-                            break
+                    conflict = find_schedule_conflict(conn, class_id, day_of_week, start_time, end_time, classroom, form_teacher_id, target_week_start, ignore_id=ignore_id)
                     if conflict:
                         flash_msg = conflict
                         flash_type = "error"
@@ -3839,21 +3881,24 @@ def app(environ, start_response):
             time_slots = ["16:25~17:20", "17:25~18:20", "18:30~19:25", "19:35~20:30"]
 
         grouped = {}
+        teacher_rooms = {}
         for r in schedules:
             slot = f"{r['start_time']}~{r['end_time']}"
-            rowkey = f"{r['effective_teacher_id'] or ''}|{r['classroom'] or '-'}"
+            rowkey = str(r["effective_teacher_id"] or "")
             grouped.setdefault((rowkey, slot), []).append(r)
+            teacher_rooms.setdefault(rowkey, set())
+            if (r["classroom"] or "").strip():
+                teacher_rooms[rowkey].add((r["classroom"] or "").strip())
 
         row_headers = []
         row_seen = set()
         for r in schedules:
-            room = r["classroom"] or "-"
-            tname = r["foreign_teacher_name"] or "-"
-            rowkey = f"{r['effective_teacher_id'] or ''}|{room}"
+            rowkey = str(r["effective_teacher_id"] or "")
             if rowkey in row_seen:
                 continue
             row_seen.add(rowkey)
-            row_headers.append((rowkey, tname, room))
+            rooms = ", ".join(sorted(teacher_rooms.get(rowkey) or []))
+            row_headers.append((rowkey, r["foreign_teacher_name"] or "-", rooms))
         row_headers.sort(key=lambda x: (x[1], x[2]))
 
         selected_schedule = None
@@ -3893,32 +3938,36 @@ def app(environ, start_response):
         timetable_cols = ["<div class='tt-head'>" + t("academics.teacher_room") + "</div>"] + [f"<div class='tt-head'>{slot}</div>" for slot in time_slots]
         timetable_cells = ""
         for rowkey, tname, room in row_headers:
-            timetable_cells += f"<div class='tt-rowhead'><strong>{tname}</strong><div class='muted'>{t('academics.classroom')}: {room}</div></div>"
+            room_meta = f"<div class='muted'>{t('academics.classroom')}: {room}</div>" if room else ""
+            timetable_cells += f"<div class='tt-rowhead'><strong>{tname}</strong>{room_meta}</div>"
             for slot in time_slots:
                 lessons = grouped.get((rowkey, slot), [])
                 blocks = ""
                 for les in lessons:
-                    students_label = (les['student_names'] or '-').strip() or '-'
+                    students_label = (les['student_names'] or '').strip()
+                    meta_bits = [
+                        f"{les['course_name'] or '-'} / {les['level_name'] or '-'}",
+                        f"{t('academics.classroom')}: {les['classroom'] or '-'}",
+                    ]
+                    if les['chinese_teacher_name']:
+                        meta_bits.append(les['chinese_teacher_name'])
+                    meta_html = " | ".join(meta_bits)
+                    status_html = f"<span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span>"
                     blocks += f"""
                     <div class='lesson-block'>
-                      <div><strong>{les['class_name'] or '-'}</strong></div>
-                      <div class='muted'>{les['course_name'] or '-'} / {les['level_name'] or '-'} · {t('academics.foreign_teacher')}: {les['foreign_teacher_name'] or '-'} · {t('academics.chinese_teacher')}: {les['chinese_teacher_name'] or '-'}</div>
-                      <div class='muted'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'}</div>
-                      <div class='muted'>{t('academics.students')}: {students_label}</div>
-                      <div><span class='badge {les['status'] or ''}'>{status_t(les['status']) if les['status'] else '-'}</span></div>
+                      <div class='lesson-title'>{les['class_name'] or '-'}</div>
+                      <div class='lesson-meta'>{meta_html}</div>
+                      <div class='lesson-meta'>{les['day_of_week'] or '-'} {les['start_time'] or '-'}~{les['end_time'] or '-'} {status_html}</div>
+                      <div class='student-line'>{students_label or '-'}</div>
                       <div class='lesson-main-actions'>
-                        <a class='btn' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
                         <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&lesson_mode=1&schedule_id={les['id']}&class_id={les['class_id']}&lesson_date={selected_view_date}&teacher_id={les['effective_teacher_id'] or ''}'>{t('academics.action.attendance_eval')}</a>
-                      </div>
-                      <div class='lesson-sub-actions'>
                         <a class='mini-link' href='/homework?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_homework')}</a>
                         <a class='mini-link' href='/exams?lang={CURRENT_LANG}&selected_class_id={les['class_id']}'>{t('academics.go_exams')}</a>
+                        <a class='mini-link' href='/classes/{les['class_id']}?lang={CURRENT_LANG}'>{t('academics.view_class')}</a>
                         <a class='mini-link' href='/schedule?lang={CURRENT_LANG}&schedule_id={les['id']}&week={week_offset}&ref_date={ref_date_str}'>{t('common.edit')}</a>
                       </div>
                     </div>
                     """
-                if not blocks:
-                    blocks = f"<div class='empty-msg'>{t('common.no_data')}</div>"
                 timetable_cells += f"<div class='tt-cell'>{blocks}</div>"
 
         week_label = f"{week_year}-{week_start.month:02d} W{week_no}"
@@ -4071,17 +4120,18 @@ def app(environ, start_response):
           </form>
         </div>
 
-        <div class='two-col'>
-          <div>
-            <div class='card'>
-              <h4>{t('academics.timetable')}</h4>
-              <div class='table-wrap timetable-wrap'>
-                <div class='timetable-grid' style='grid-template-columns: 240px repeat({len(time_slots)}, minmax(220px,1fr));'>
-                  {''.join(timetable_cols)}
-                  {timetable_cells}
-                </div>
-              </div>
+        <div class='card'>
+          <h4>{t('academics.timetable')}</h4>
+          <div class='table-wrap timetable-wrap'>
+            <div class='timetable-grid' style='grid-template-columns: 160px repeat({len(time_slots)}, minmax(170px,1fr));'>
+              {''.join(timetable_cols)}
+              {timetable_cells}
             </div>
+          </div>
+        </div>
+
+        <div class='schedule-editor-grid'>
+          <div>
             <div class='card' id='schedule-form'>
               <h4>{t('academics.schedule_form')}</h4>
               {form_class_picker}
@@ -4106,7 +4156,7 @@ def app(environ, start_response):
                 <label>{t('field.note')} <input name='note' value='{selected_schedule['note'] if selected_schedule else ''}'></label>
                 <button>{t('common.save')}</button>
               </form>
-              <div class='muted'>{t('academics.schedule_autofill')} · {t('academics.schedule_teacher_auto')}</div>
+              <div class='muted'>{t('academics.schedule_autofill')} / {t('academics.schedule_teacher_auto')}</div>
             </div>
           </div>
           <div>
