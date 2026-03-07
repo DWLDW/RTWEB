@@ -390,6 +390,9 @@ I18N_TEXTS["zh"].update({
 I18N_TEXTS["en"].update({"common.more": "More"})
 I18N_TEXTS["ko"].update({"common.more": "더보기"})
 I18N_TEXTS["zh"].update({"common.more": "更多"})
+I18N_TEXTS["en"].update({"common.prev": "Previous", "common.next": "Next"})
+I18N_TEXTS["ko"].update({"common.prev": "이전", "common.next": "다음"})
+I18N_TEXTS["zh"].update({"common.prev": "上一页", "common.next": "下一页"})
 
 
 I18N_TEXTS["en"].update({
@@ -1849,18 +1852,19 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
       .lesson-title { font-size:13px; font-weight:700; line-height:1.2; margin-bottom:2px; }
       .lesson-meta { color:#475569; font-size:11px; line-height:1.25; }
       .student-line { color:#334155; font-size:11px; line-height:1.3; margin-top:4px; }
-      .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; align-items:flex-start; }
+      .lesson-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; align-items:center; }
       .lesson-main-actions, .lesson-sub-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
       .lesson-main-actions .btn, .lesson-sub-actions .mini-link { min-height:24px; padding:4px 6px; border-radius:6px; font-size:10px; }
       .mini-link { font-size:10px; padding:4px 6px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
       .lesson-overflow { position:relative; margin-left:auto; }
       .lesson-overflow summary { list-style:none; cursor:pointer; }
       .lesson-overflow summary::-webkit-details-marker { display:none; }
-      .lesson-overflow-trigger { font-size:10px; padding:4px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; }
+      .lesson-overflow-trigger { font-size:10px; padding:4px 8px; border-radius:6px; text-decoration:none; background:#dbeafe; color:#1e3a8a; display:inline-block; min-height:28px; line-height:18px; }
       .lesson-overflow[open] .lesson-overflow-menu { display:flex; }
       .lesson-overflow-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); min-width:138px; z-index:20; flex-direction:column; gap:4px; padding:6px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 8px 20px rgba(15,23,42,0.12); }
       .lesson-overflow-menu .mini-link, .lesson-overflow-menu form { width:100%; }
       .lesson-overflow-menu .mini-link, .lesson-overflow-menu button.mini-link { display:block; text-align:left; width:100%; }
+      .lesson-actions .btn.secondary { min-height:28px; padding:5px 10px; font-size:11px; border-radius:8px; }
       .schedule-form-compact select { min-width:0; width:auto; max-width:160px; }
       .schedule-editor-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr); gap:14px; }
       .print-only { display:none; }
@@ -2197,10 +2201,10 @@ def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
     ).fetchall()
 
 
-def fetch_makeup_candidates(conn, keyword, limit=10, show_all_when_empty=False):
+def fetch_makeup_candidates(conn, keyword, limit=10, offset=0, show_all_when_empty=False):
     kw = (keyword or "").strip()
     if not kw and not show_all_when_empty:
-        return []
+        return [], False
     params = []
     where_sql = ""
     if kw:
@@ -2212,8 +2216,9 @@ def fetch_makeup_candidates(conn, keyword, limit=10, show_all_when_empty=False):
             COALESCE(ht.name, '') LIKE ?
         )"""
         params.extend([like, like, like, like])
-    params.append(limit)
-    return conn.execute(
+    fetch_limit = max(1, int(limit)) + 1
+    params.extend([fetch_limit, max(0, int(offset or 0))])
+    rows = conn.execute(
         f"""SELECT
             a.id,
             a.id AS source_attendance_id,
@@ -2244,9 +2249,11 @@ def fetch_makeup_candidates(conn, keyword, limit=10, show_all_when_empty=False):
           )
           {where_sql}
         ORDER BY a.lesson_date DESC, a.id DESC
-        LIMIT ?""",
+        LIMIT ? OFFSET ?""",
         tuple(params),
     ).fetchall()
+    has_more = len(rows) > limit
+    return rows[:limit], has_more
 
 
 def complete_makeup_assignment(conn, student_user_id, schedule_id, attendance_id):
@@ -2488,7 +2495,7 @@ def read_upload_rows(filename, content_bytes):
     return headers, rows
 
 
-def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None, query_flag_name="do_search", query_enabled=True):
+def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None, query_flag_name="do_search", query_enabled=True, extra_html=""):
     query_keep = query_keep or {}
     hidden = "".join([f"<input type='hidden' name='{k}' value='{v}'>" for k, v in query_keep.items() if v not in (None, "")])
     cand_rows = ""
@@ -2569,6 +2576,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
       {helper}
       {class_table if query_enabled else ''}
       {list_html if (query_enabled and not class_table) else ''}
+      {extra_html if query_enabled else ''}
     </div>
     """
 
@@ -4638,12 +4646,20 @@ def app(environ, start_response):
                 if str(r["id"]) == selected_schedule_id:
                     selected_schedule = r
                     break
+        makeup_page_size = 12
+        makeup_offset = max(0, as_int(query.get("makeup_offset", "0")) or 0)
         makeup_query_enabled = bool(selected_schedule_id) and (
             query.get("makeup_load", "") == "1"
             or bool((query.get("makeup_q", "") or "").strip())
             or bool(selected_makeup_source_id)
         )
-        makeup_candidates = fetch_makeup_candidates(conn, query.get("makeup_q", ""), limit=12, show_all_when_empty=makeup_query_enabled)
+        makeup_candidates, makeup_has_more = fetch_makeup_candidates(
+            conn,
+            query.get("makeup_q", ""),
+            limit=makeup_page_size,
+            offset=makeup_offset,
+            show_all_when_empty=makeup_query_enabled,
+        )
         selected_makeup_source = conn.execute(
             """SELECT
                 a.id,
@@ -4991,9 +5007,25 @@ def app(environ, start_response):
                     "teacher_id": selected_teacher_id,
                     "classroom": selected_room,
                     "schedule_id": selected_schedule['id'],
+                    "makeup_offset": str(makeup_offset),
                 },
                 query_flag_name="makeup_load",
                 query_enabled=True,
+                extra_html=(
+                    (
+                        "<div class='btn-row' style='margin-top:8px'>"
+                        + (
+                            f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ''}&schedule_id={selected_schedule['id']}&makeup_load=1&makeup_q={quote(query.get('makeup_q', '') or '')}&makeup_offset={max(0, makeup_offset - makeup_page_size)}#schedule-makeup-panel'>{t('common.prev')}</a>"
+                            if makeup_offset > 0 else ""
+                        )
+                        + (
+                            f"<a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/schedule?lang={CURRENT_LANG}&week={week_offset}&ref_date={ref_date_str}&day={selected_day}&teacher_id={selected_teacher_id}&classroom={quote(selected_room) if selected_room else ''}&schedule_id={selected_schedule['id']}&makeup_load=1&makeup_q={quote(query.get('makeup_q', '') or '')}&makeup_offset={makeup_offset + makeup_page_size}#schedule-makeup-panel'>{t('common.next')}</a>"
+                            if makeup_has_more else ""
+                        )
+                        + f"<span class='muted'>Showing {makeup_offset + 1 if makeup_candidates else 0}-{makeup_offset + len(makeup_candidates)}"
+                        + "</span></div>"
+                    ) if makeup_query_enabled else ""
+                ),
             )
             makeup_rows = "".join([
                 f"<tr><td>{h(item['name_ko'] or '-')}</td><td>{h(item['student_no'] or '-')}</td><td>{h(homeroom_display_name(item['homeroom_teacher_name']))}</td><td>{h(item['source_class_name'] or '-')} / {h(item['source_lesson_date'] or '-')}</td><td>{h(item['makeup_lesson_date'] or '-')}</td><td>{h(item['status'] or 'assigned')}</td><td>{'' if (item['status'] or 'assigned') != 'assigned' else f'<form method=\"post\" class=\"preserve-scroll-form\" data-preserve-scroll=\"1\" onsubmit=\"return confirm(&quot;Remove this makeup assignment?&quot;);\"><input type=\"hidden\" name=\"type\" value=\"delete_makeup_assignment\"><input type=\"hidden\" name=\"assignment_id\" value=\"{item['id']}\"><button class=\"btn secondary small\" type=\"submit\">{t('common.delete')}</button></form>'}</td></tr>"
@@ -6689,12 +6721,3 @@ if __name__ == "__main__":
     with make_server("0.0.0.0", 8000, app, server_class=ThreadedWSGIServer) as httpd:
         print(t('server.start') + ': http://127.0.0.1:8000')
         httpd.serve_forever()
-
-
-
-
-
-
-
-
-
