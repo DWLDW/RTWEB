@@ -4,6 +4,9 @@ import os
 import sqlite3
 import traceback
 import uuid
+import io
+import csv
+import cgi
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -95,7 +98,7 @@ I18N_TEXTS = {
         "students.detail.section.basic": "Basic Info", "students.detail.section.attendance": "Recent Attendance", "students.detail.section.homework": "Recent Homework Submissions/Feedback",
         "students.detail.section.exams": "Recent Exams/Scores", "students.detail.section.counseling": "Recent Counseling Records", "students.detail.section.payments": "Recent Payments", "students.detail.section.loans": "Recent Book Loans",
         "students.field.student_no": "Student No", "students.field.name_ko": "Chinese Name", "students.field.name_en": "English Name", "students.field.phone": "Phone",
-        "students.field.guardian_name": "Guardian", "students.field.guardian_phone": "Guardian Phone", "students.field.class": "Class", "students.field.credits": "Remaining Credits",
+        "students.field.guardian_name": "Guardian", "students.field.guardian_phone": "Guardian Phone", "students.field.class": "Class", "students.field.homeroom_teacher": "Homeroom Teacher", "students.field.credits": "Remaining Credits",
         "students.field.status": "Status", "students.field.enrolled_at": "Enrollment Date", "students.field.leave_period": "Leave Period", "students.field.memo": "Memo",
         "students.field.lesson_date": "Date", "students.field.note": "Note", "students.field.homework": "Homework", "students.field.submitted": "Submitted", "students.field.submitted_at": "Submitted At",
         "students.field.feedback": "Feedback", "students.field.exam_name": "Exam", "students.field.score": "Score", "students.field.exam_date": "Exam Date", "students.field.recorded_at": "Recorded At",
@@ -347,6 +350,39 @@ I18N_TEXTS["zh"].update({
 })
 
 
+I18N_TEXTS["en"].update({
+    "common.query_to_load": "Press Query to load data.",
+    "students.export_excel": "Download Excel",
+    "students.upload_students": "Upload Students",
+    "students.upload_template": "Download Upload Template",
+    "students.upload.file_required": "Upload file is required",
+    "students.upload.empty_file": "Empty file",
+    "students.upload.invalid_headers": "Invalid headers. Missing: {missing}",
+    "students.upload.failed": "Upload failed: {error}",
+    "students.export.query_first": "Please run query first",
+})
+I18N_TEXTS["ko"].update({
+    "common.query_to_load": "Press Query to load data.",
+    "students.export_excel": "Download Excel",
+    "students.upload_students": "Upload Students",
+    "students.upload_template": "Download Upload Template",
+    "students.upload.file_required": "Upload file is required",
+    "students.upload.empty_file": "Empty file",
+    "students.upload.invalid_headers": "Invalid headers. Missing: {missing}",
+    "students.upload.failed": "Upload failed: {error}",
+    "students.export.query_first": "Please run query first",
+})
+I18N_TEXTS["zh"].update({
+    "common.query_to_load": "Press Query to load data.",
+    "students.export_excel": "Download Excel",
+    "students.upload_students": "Upload Students",
+    "students.upload_template": "Download Upload Template",
+    "students.upload.file_required": "Upload file is required",
+    "students.upload.empty_file": "Empty file",
+    "students.upload.invalid_headers": "Invalid headers. Missing: {missing}",
+    "students.upload.failed": "Upload failed: {error}",
+    "students.export.query_first": "Please run query first",
+})
 def load_locale_files():
     locales_dir = os.path.join(BASE_DIR, "locales")
     if not os.path.isdir(locales_dir):
@@ -701,6 +737,10 @@ def ensure_extended_columns(conn):
     if "memo" not in rcols:
         conn.execute("ALTER TABLE classrooms ADD COLUMN memo TEXT")
 
+    stcols = {r["name"] for r in conn.execute("PRAGMA table_info(students)").fetchall()}
+    if "homeroom_teacher_id" not in stcols:
+        conn.execute("ALTER TABLE students ADD COLUMN homeroom_teacher_id INTEGER")
+
 
 def ensure_master_tables(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS classrooms (
@@ -1012,26 +1052,27 @@ def seed_demo_data(conn, force=False):
         class_id = class_ids[(i - 1) % len(class_ids)]
         status_v = statuses[i - 1]
         credits = float(6 + (i % 10))
+        homeroom_teacher_id = foreign_ids[(i - 1) % len(foreign_ids)] if i % 2 else chinese_ids[(i - 1) % len(chinese_ids)]
         row = conn.execute("SELECT id FROM students WHERE user_id=?", (uid,)).fetchone()
         if row:
             conn.execute(
                 """UPDATE students SET student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
-                current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                current_class_id=?, homeroom_teacher_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
                 WHERE user_id=?""",
                 (
                     f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
-                    class_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
+                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
                     "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), uid,
                 ),
             )
         else:
             conn.execute(
                 """INSERT INTO students(user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone, current_class_id,
-                remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                homeroom_teacher_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     uid, f"ST{i:03d}", name_ko, name_en, f"1380000{i:04d}", guardian_user["name"], f"1391000{i:04d}",
-                    class_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
+                    class_id, homeroom_teacher_id, credits, status_v, "2025-09-01", "2026-01-10" if status_v == "leave" else None,
                     "2026-02-01" if status_v == "leave" else None, "Demo seeded student", now(), now(),
                 ),
             )
@@ -1235,6 +1276,22 @@ def parse_body(environ):
     if "application/json" in ctype:
         return json.loads(body.decode("utf-8") or "{}")
     return {k: v[0] for k, v in parse_qs(body.decode("utf-8")).items()}
+
+def parse_multipart_form(environ):
+    fs = cgi.FieldStorage(fp=environ.get("wsgi.input"), environ=environ, keep_blank_values=True)
+    data = {}
+    files = {}
+    if not fs:
+        return data, files
+    fields = fs.list if getattr(fs, "list", None) else [fs]
+    for f in fields:
+        if not getattr(f, "name", None):
+            continue
+        if getattr(f, "filename", None):
+            files[f.name] = {"filename": f.filename, "content": (f.file.read() if f.file else b"")}
+        else:
+            data[f.name] = f.value
+    return data, files
 def parse_cookie(cookie):
     out = {}
     if not cookie:
@@ -1400,7 +1457,27 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         """
     else:
         layout = f"<div style='max-width:980px;margin:24px auto'><h2 class='page-title'>{title}</h2>{body}</div>"
-    return f"<html><head><meta charset='utf-8'><title>{title}</title>{css}</head><body>{layout}</body></html>".encode("utf-8")
+    scroll_js = """
+    <script>
+    (function(){
+      var key = 'rtweb:scroll:' + window.location.pathname;
+      try {
+        var restore = sessionStorage.getItem(key);
+        if (restore !== null) {
+          window.scrollTo(0, parseInt(restore, 10) || 0);
+          sessionStorage.removeItem(key);
+        }
+      } catch (e) {}
+      var forms = document.querySelectorAll("form[method='get'], form.query-form");
+      forms.forEach(function(form){
+        form.addEventListener('submit', function(){
+          try { sessionStorage.setItem(key, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
+        });
+      });
+    })();
+    </script>
+    """
+    return f"<html><head><meta charset='utf-8'><title>{title}</title>{css}</head><body>{layout}{scroll_js}</body></html>".encode("utf-8")
 def require_login(environ):
     user = current_user(environ)
     if not user:
@@ -1452,6 +1529,16 @@ def fetch_student_candidates(conn, keyword, limit=10):
         ORDER BY id DESC LIMIT ?""",
         (like, like, like, limit),
     ).fetchall()
+def summarize_student_names(names_text, threshold=38):
+    names = [x.strip() for x in (names_text or "").split(",") if x and x.strip()]
+    if not names:
+        return "-", ""
+    full = ", ".join(names)
+    if len(full) <= threshold or len(names) <= 2:
+        return full, full
+    return ", ".join(names[:2]) + f" +{len(names)-2}", full
+
+
 def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
     kw = (keyword or "").strip()
     if not kw and not show_all_when_empty:
@@ -1460,17 +1547,21 @@ def fetch_class_candidates(conn, keyword, limit=10, show_all_when_empty=False):
     where_sql = ""
     if kw:
         like = f"%{kw}%"
-        where_sql = "WHERE c.name LIKE ? OR co.name LIKE ? OR l.name LIKE ? OR u.name LIKE ?"
-        params.extend([like, like, like, like])
+        where_sql = "WHERE c.name LIKE ? OR co.name LIKE ? OR l.name LIKE ? OR uf.name LIKE ? OR uc.name LIKE ?"
+        params.extend([like, like, like, like, like])
     params.append(limit)
     return conn.execute(
         f"""SELECT c.id, c.name, COALESCE(co.name, '') AS course_name, COALESCE(l.name, '') AS level_name,
-        COALESCE(u.name, '') AS teacher_name,
-        (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
+        COALESCE(uf.name, '') AS foreign_teacher_name,
+        COALESCE(uc.name, '') AS chinese_teacher_name,
+        COALESCE(uf.name, '') AS teacher_name,
+        (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count,
+        (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=c.id ORDER BY s2.id) AS student_names
         FROM classes c
         LEFT JOIN courses co ON co.id=c.course_id
         LEFT JOIN levels l ON l.id=c.level_id
-        LEFT JOIN users u ON u.id=c.teacher_id
+        LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+        LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
         {where_sql}
         ORDER BY c.id DESC LIMIT ?""",
         tuple(params),
@@ -1516,13 +1607,174 @@ def fetch_teacher_candidates(conn, keyword, limit=10):
         ORDER BY t.id DESC LIMIT ?""",
         tuple(params),
     ).fetchall()
-def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None):
+def homeroom_display_name(name):
+    return (name or "-").strip() or "-"
+
+
+def find_teacher_id_by_name(conn, teacher_name):
+    name = (teacher_name or "").strip()
+    if not name:
+        return None
+    row = conn.execute(
+        "SELECT id FROM users WHERE role='teacher' AND LOWER(TRIM(name))=LOWER(TRIM(?)) ORDER BY id LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row["id"] if row else None
+
+
+def parse_leave_period_range(value):
+    v = (value or "").strip()
+    if not v:
+        return None, None
+    v = v.replace(" to ", "~").replace(" - ", "~")
+    parts = [x.strip() for x in v.split("~") if x.strip()]
+    if len(parts) == 1 and is_valid_date(parts[0]):
+        return parts[0], parts[0]
+    if len(parts) >= 2 and is_valid_date(parts[0]) and is_valid_date(parts[1]):
+        return parts[0], parts[1]
+    return None, None
+
+
+def build_students_csv(rows):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "student_no", "chinese_name", "english_name", "phone", "guardian_name", "guardian_phone",
+        "current_class", "homeroom_teacher", "remaining_credits", "status", "enrollment_date", "leave_period", "memo"
+    ])
+    for r in rows:
+        writer.writerow([
+            r.get("student_no") or "",
+            r.get("name_ko") or "",
+            r.get("name_en") or "",
+            r.get("phone") or "",
+            r.get("guardian_name") or "",
+            r.get("guardian_phone") or "",
+            r.get("class_name") or "",
+            homeroom_display_name(r.get("homeroom_teacher_name")),
+            r.get("remaining_credits") if r.get("remaining_credits") is not None else "",
+            status_t(r.get("status")) if r.get("status") else "",
+            r.get("enrolled_at") or "",
+            f"{r.get('leave_start_date') or ''} ~ {r.get('leave_end_date') or ''}".strip(" ~"),
+            r.get("memo") or "",
+        ])
+    return output.getvalue().encode("utf-8-sig")
+
+
+def build_students_xlsx(rows):
+    try:
+        import openpyxl
+    except Exception:
+        return None
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "students"
+    ws.append([
+        "student_no", "chinese_name", "english_name", "phone", "guardian_name", "guardian_phone",
+        "current_class", "homeroom_teacher", "remaining_credits", "status", "enrollment_date", "leave_period", "memo"
+    ])
+    for r in rows:
+        ws.append([
+            r.get("student_no") or "",
+            r.get("name_ko") or "",
+            r.get("name_en") or "",
+            str(r.get("phone") or ""),
+            r.get("guardian_name") or "",
+            str(r.get("guardian_phone") or ""),
+            r.get("class_name") or "",
+            homeroom_display_name(r.get("homeroom_teacher_name")),
+            float(r.get("remaining_credits") or 0),
+            status_t(r.get("status")) if r.get("status") else "",
+            r.get("enrolled_at") or "",
+            f"{r.get('leave_start_date') or ''} ~ {r.get('leave_end_date') or ''}".strip(" ~"),
+            r.get("memo") or "",
+        ])
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
+UPLOAD_TEMPLATE_HEADERS = [
+    "student_no", "chinese_name", "english_name", "phone", "guardian_name", "guardian_phone",
+    "class_name", "homeroom_teacher_name", "status", "enrollment_date", "leave_period", "memo"
+]
+
+
+def build_upload_template_xlsx():
+    try:
+        import openpyxl
+    except Exception:
+        return None
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "upload_template"
+    ws.append(UPLOAD_TEMPLATE_HEADERS)
+    ws.append(["ST9001", "Li Hua", "Lily", "13800009999", "Parent 01", "13910009999", "Phonics Starter A", "Alex Carter", "active", "2026-03-01", "", "new student"])
+    ws.append(["ST9002", "Wang Ming", "Mike", "13800008888", "Parent 02", "13910008888", "Reading Starter A", "Wang Li", "leave", "2026-01-15", "2026-02-01~2026-02-20", "medical leave"])
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
+def build_upload_template_csv():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(UPLOAD_TEMPLATE_HEADERS)
+    writer.writerow(["ST9001", "Li Hua", "Lily", "13800009999", "Parent 01", "13910009999", "Phonics Starter A", "Alex Carter", "active", "2026-03-01", "", "new student"])
+    writer.writerow(["ST9002", "Wang Ming", "Mike", "13800008888", "Parent 02", "13910008888", "Reading Starter A", "Wang Li", "leave", "2026-01-15", "2026-02-01~2026-02-20", "medical leave"])
+    return output.getvalue().encode("utf-8-sig")
+
+
+def read_upload_rows(filename, content_bytes):
+    name = (filename or "").lower()
+    if name.endswith(".csv"):
+        text = content_bytes.decode("utf-8-sig", errors="ignore")
+        rdr = csv.DictReader(io.StringIO(text))
+        rows = []
+        for row in rdr:
+            cleaned = {}
+            for k, v in (row or {}).items():
+                cleaned[(k or "").strip()] = (v or "").strip()
+            if any(cleaned.values()):
+                rows.append(cleaned)
+        return rdr.fieldnames or [], rows
+
+    try:
+        import openpyxl
+    except Exception as e:
+        raise ValueError("xlsx upload requires openpyxl") from e
+
+    wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
+    ws = wb.active
+    values = list(ws.iter_rows(values_only=True))
+    if not values:
+        return [], []
+    headers = [str(x).strip() if x is not None else "" for x in values[0]]
+    rows = []
+    for row in values[1:]:
+        if row is None:
+            continue
+        row_dict = {}
+        has_any = False
+        for idx, hname in enumerate(headers):
+            if not hname:
+                continue
+            cell = row[idx] if idx < len(row) else ""
+            val = "" if cell is None else str(cell).strip()
+            if val:
+                has_any = True
+            row_dict[hname] = val
+        if has_any:
+            rows.append(row_dict)
+    return headers, rows
+
+
+def render_picker_block(title, search_name, search_value, selected_name, selected_id, selected_label, candidates, base_path, lang, query_keep=None, query_flag_name="do_search", query_enabled=True):
     query_keep = query_keep or {}
     hidden = "".join([f"<input type='hidden' name='{k}' value='{v}'>" for k, v in query_keep.items() if v not in (None, "")])
     cand_rows = ""
     is_class_picker = any('course_name' in c.keys() for c in candidates) if candidates else False
     recent_ids = [x for x in str(query_keep.get("recent_class_ids", "")).split(",") if x]
-    recent_set = set(recent_ids)
     ordered = []
     if is_class_picker and recent_ids:
         by_id = {str(r['id']): r for r in candidates}
@@ -1540,7 +1792,8 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
             if 'student_no' in c.keys():
                 label = f"{c['name_ko']} ({c['student_no'] or '-'}, {c['phone'] or '-'})"
             elif 'course_name' in c.keys():
-                label = f"{c['name']} / {c['course_name'] or '-'} / {c['level_name'] or '-'} / {c['teacher_name'] or '-'} / {c['student_count'] or 0}"
+                student_short, _ = summarize_student_names(c['student_names'] if 'student_names' in c.keys() else '')
+                label = f"{c['name']} / {c['course_name'] or '-'} / {c['level_name'] or '-'} / {student_short}"
             else:
                 label = f"{c['name']} ({c['username']})"
         keep = dict(query_keep)
@@ -1550,6 +1803,7 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
         qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
         sep = "&" if qp else ""
         cand_rows += f"<li><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{label}</a></li>"
+
     class_table = ""
     if is_class_picker:
         rows = ""
@@ -1561,30 +1815,40 @@ def render_picker_block(title, search_name, search_value, selected_name, selecte
                 keep["recent_class_ids"] = ",".join(new_recent[:5])
             qp = "&".join([f"{k}={v}" for k, v in keep.items() if v not in (None, "")])
             sep = "&" if qp else ""
-            rows += f"<tr><td><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} · {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['teacher_name'] or '-'}</td><td>{c['student_count'] or 0}</td></tr>"
+            student_short, student_full = summarize_student_names(c['student_names'] if 'student_names' in c.keys() else '')
+            rows += f"<tr><td><a href='{base_path}?lang={lang}{sep}{qp}&{selected_name}={cid}'>{op_code('C', c['id'])} ? {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['foreign_teacher_name'] or '-'}</td><td>{c['chinese_teacher_name'] or '-'}</td><td title='{h(student_full)}'>{h(student_short)}</td><td>{c['student_count'] or 0}</td></tr>"
         class_table = f"""
-        <table>
-          <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.teacher')}</th><th>{t('academics.student_count')}</th></tr>
-          {rows or f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-        </table>
+        <div class='table-wrap'><table>
+          <tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.student_count')}</th></tr>
+          {rows or f"<tr><td colspan='7' class='empty-msg'>{t('common.no_data')}</td></tr>"}
+        </table></div>
         """
 
     list_inner = cand_rows if cand_rows else ("<li class='empty-msg'>" + t('common.no_data') + "</li>")
     list_html = "<ul style='margin:0; padding-left:18px'>" + list_inner + "</ul>"
 
+    query_flag_html = f"<input type='hidden' name='{query_flag_name}' value='1'>" if query_flag_name else ""
+    helper = "" if query_enabled else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")
     return f"""
     <div class='card'>
       <h4>{title}</h4>
-      <form method='get' class='mobile-stack'>
+      <form method='get' class='mobile-stack query-form'>
         <input type='hidden' name='lang' value='{lang}'>
         {hidden}
+        {query_flag_html}
         <input name='{search_name}' value='{search_value or ''}' placeholder='search'>
-        <button>{t("common.search")}</button>
+        <div class='btn-row'>
+          <button>{t('common.search')}</button>
+          <a class='btn secondary' href='{base_path}?lang={lang}'>{t('common.reset')}</a>
+        </div>
       </form>
-      <div style='margin:6px 0'>{t("common.selected")}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
-      {class_table or list_html}
+      <div style='margin:6px 0'>{t('common.selected')}: <strong>{selected_label or '-'}</strong> (ID: {selected_id or '-'})</div>
+      {helper}
+      {class_table if query_enabled else ''}
+      {list_html if (query_enabled and not class_table) else ''}
     </div>
     """
+
 def app(environ, start_response):
     global CURRENT_LANG
     query = parse_query(environ)
@@ -1758,7 +2022,21 @@ def app(environ, start_response):
                     log_event(conn, "ERROR", path, "사용자 저장 실패", traceback.format_exc(), user["id"])
                     conn.commit()
 
-        users = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
+        load_users = query.get("load", "") == "1"
+        q_user_name = (query.get("q_name", "") or "").strip()
+        q_role = (query.get("q_role", "") or "").strip()
+        users = []
+        if load_users:
+            where = []
+            params = []
+            if q_user_name:
+                where.append("(name LIKE ? OR username LIKE ?)")
+                params.extend([f"%{q_user_name}%", f"%{q_user_name}%"])
+            if q_role in (ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT):
+                where.append("role=?")
+                params.append(q_role)
+            where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+            users = conn.execute(f"SELECT * FROM users{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
         rows = "".join([
             f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(u['teacher_type'] or '-')}</td></tr>"
             for u in users
@@ -1798,10 +2076,33 @@ def app(environ, start_response):
         body_html = form + f"""
         <div class='card'>
           <h3>{t("users.list")}</h3>
-          <table>
+          <form method='get' class='mobile-stack query-form'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='load' value='1'>
+            <div class='filter-grid'>
+              <label>{t('field.name')} <input name='q_name' value='{h(q_user_name)}'></label>
+              <label>{t('field.role')}
+                <select name='q_role'>
+                  <option value=''>{t('academics.day_all')}</option>
+                  <option value='owner' {'selected' if q_role=='owner' else ''}>{role_label('owner')}</option>
+                  <option value='manager' {'selected' if q_role=='manager' else ''}>{role_label('manager')}</option>
+                  <option value='teacher' {'selected' if q_role=='teacher' else ''}>{role_label('teacher')}</option>
+                  <option value='parent' {'selected' if q_role=='parent' else ''}>{role_label('parent')}</option>
+                  <option value='student' {'selected' if q_role=='student' else ''}>{role_label('student')}</option>
+                </select>
+              </label>
+            </div>
+            <div class='btn-row'>
+              <button>{t('common.search')}</button>
+              <a class='btn secondary' href='/users?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            </div>
+          </form>
+          {'' if load_users else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
+          <div class='table-wrap'><table>
             <tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th><th>{t('users.teacher_type')}</th></tr>
-            {rows or "<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-          </table>
+            {rows if load_users else ''}
+            {("<tr><td colspan='5' class='empty-msg'>" + t('common.no_data') + "</td></tr>") if (load_users and not rows) else ''}
+          </table></div>
         </div>
         """
         html = render_html(t("users.page_title"), body_html, user, current_menu="users", flash_msg=flash_msg, flash_type=flash_type)
@@ -1830,6 +2131,9 @@ def app(environ, start_response):
                 class_id_val = d.get("current_class_id") or None
                 if class_id_val and not ensure_exists(conn, "classes", class_id_val):
                     add_error(errs, "current_class_id", "존재하지 않는 반입니다")
+                homeroom_teacher_id = (d.get("homeroom_teacher_id") or "").strip() or None
+                if homeroom_teacher_id and not ensure_exists(conn, "users", homeroom_teacher_id, extra_where="role='teacher'"):
+                    add_error(errs, "homeroom_teacher_id", "invalid homeroom teacher")
                 for date_field in ["enrolled_at", "leave_start_date", "leave_end_date"]:
                     dv = (d.get(date_field) or "").strip()
                     if dv and not is_valid_date(dv):
@@ -1840,11 +2144,11 @@ def app(environ, start_response):
                     conn.execute(
                         """UPDATE students SET
                         student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
-                        current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                        current_class_id=?, homeroom_teacher_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
                         WHERE id=?""",
                         (
                             d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                            class_id_val, credits, d.get("status") or "active", d.get("enrolled_at"),
+                            class_id_val, homeroom_teacher_id, credits, d.get("status") or "active", d.get("enrolled_at"),
                             d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_id,
                         ),
                     )
@@ -1873,9 +2177,12 @@ def app(environ, start_response):
                 start_response(status, headers)
                 return [body]
         student = conn.execute(
-            """SELECT s.*, u.username, c.name AS class_name, c.teacher_id AS current_class_teacher_id FROM students s
+            """SELECT s.*, u.username, c.name AS class_name, c.teacher_id AS current_class_teacher_id,
+            ht.name AS homeroom_teacher_name
+            FROM students s
             LEFT JOIN users u ON u.id=s.user_id
             LEFT JOIN classes c ON c.id=s.current_class_id
+            LEFT JOIN users ht ON ht.id=s.homeroom_teacher_id
             WHERE s.id=?""",
             (student_id,),
         ).fetchone()
@@ -2024,6 +2331,11 @@ def app(environ, start_response):
             selected = "selected" if student["current_class_id"] == c["id"] else ""
             class_opts.append(f"<option value='{c['id']}' {selected}>{c['name']}</option>")
         class_options = "".join(class_opts)
+        teacher_opts = ["<option value=''>-</option>"]
+        for tr in list_teacher_profiles(conn):
+            selected = "selected" if str(student["homeroom_teacher_id"] or "") == str(tr["id"]) else ""
+            teacher_opts.append(f"<option value='{tr['id']}' {selected}>{h(tr['name'])}</option>")
+        homeroom_options = "".join(teacher_opts)
         edit_form = ""
         pw_form = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
@@ -2038,6 +2350,7 @@ def app(environ, start_response):
               {t('students.field.guardian_name')} <input name='guardian_name' value='{student['guardian_name'] or ''}'>
               {t('students.field.guardian_phone')} <input name='guardian_phone' value='{student['guardian_phone'] or ''}'><br>
               {t('students.field.class')} <select name='current_class_id'>{class_options}</select>
+              {t('students.field.homeroom_teacher')} <select name='homeroom_teacher_id'>{homeroom_options}</select>
               {t('students.field.credits')} <input name='remaining_credits' value='{student['remaining_credits'] or 0}'>
               {t('students.field.status')} <select name='status'>
                 <option value='active' {'selected' if student['status']=='active' else ''}>{status_t('active')}</option>
@@ -2072,6 +2385,7 @@ def app(environ, start_response):
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.name_ko')}</div><div class='student-summary-value'>{student['name_ko'] or '-'}</div></div>
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.name_en')}</div><div class='student-summary-value'>{student['name_en'] or '-'}</div></div>
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.class')}</div><div class='student-summary-value'>{student['class_name'] or '-'}</div></div>
+            <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.homeroom_teacher')}</div><div class='student-summary-value'>{homeroom_display_name(student['homeroom_teacher_name'])}</div></div>
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.credits')}</div><div class='student-summary-value'>{student['remaining_credits'] or 0}</div></div>
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.status')}</div><div class='student-summary-value'>{status_t(student['status']) if student['status'] else '-'}</div></div>
             <div class='student-summary-item'><div class='student-summary-label'>{t('students.field.phone')}</div><div class='student-summary-value'>{student['phone'] or '-'}</div></div>
@@ -2144,91 +2458,268 @@ def app(environ, start_response):
     if path == "/students":
         flash_msg = ""
         flash_type = "success"
+        load_students = query.get("load", "") == "1"
+
+        teacher_rows = list_teacher_profiles(conn)
+        q_homeroom_teacher_id = (query.get("homeroom_teacher_id", "") or "").strip()
+        homeroom_options = [f"<option value=''>{t('academics.day_all')}</option>"]
+        for tr in teacher_rows:
+            sel = "selected" if str(tr["id"]) == q_homeroom_teacher_id else ""
+            homeroom_options.append(f"<option value='{tr['id']}' {sel}>{h(tr['name'])}</option>")
+
+        class_rows_for_map = conn.execute("SELECT id, name FROM classes ORDER BY id DESC").fetchall()
+        class_name_to_id = {((r['name'] or '').strip().lower()): r['id'] for r in class_rows_for_map}
+
+        def build_student_filters(source):
+            q_name = (source.get("name", "") or "").strip()
+            q_student_no = (source.get("student_no", "") or "").strip()
+            q_phone = (source.get("phone", "") or "").strip()
+            q_status = (source.get("status", "") or "").strip()
+            q_homeroom = (source.get("homeroom_teacher_id", "") or "").strip()
+            where = []
+            params = []
+            if q_name:
+                where.append("(s.name_ko LIKE ? OR s.name_en LIKE ?)")
+                params += [f"%{q_name}%", f"%{q_name}%"]
+            if q_student_no:
+                where.append("s.student_no LIKE ?")
+                params.append(f"%{q_student_no}%")
+            if q_phone:
+                where.append("s.phone LIKE ?")
+                params.append(f"%{q_phone}%")
+            if q_status in ("active", "leave", "ended"):
+                where.append("COALESCE(s.status, 'active')=?")
+                params.append(q_status)
+            if q_homeroom.isdigit():
+                where.append("COALESCE(s.homeroom_teacher_id,0)=?")
+                params.append(q_homeroom)
+            return q_name, q_student_no, q_phone, q_status, q_homeroom, where, params
+
+        q_name, q_student_no, q_phone, q_status, q_homeroom_teacher_id, where, params = build_student_filters(query)
+
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
-            d = parse_body(environ)
-            errs = []
-            student_user_id = d.get("user_id")
-            if not ensure_exists(conn, "users", student_user_id, extra_where="role='student'"):
-                add_error(errs, "user_id", "학생 role 사용자만 가능합니다")
-            if not (d.get("name_ko") or "").strip():
-                add_error(errs, "name_ko", "필수값입니다")
-            credits = as_float(d.get("remaining_credits") or 0)
-            if credits is None:
-                add_error(errs, "remaining_credits", "숫자 형식이어야 합니다")
-            status_v = d.get("status") or "active"
-            if status_v not in ("active", "leave", "ended"):
-                add_error(errs, "status", "허용되지 않는 상태값입니다")
-            class_id_val = d.get("current_class_id") or None
-            if class_id_val and not ensure_exists(conn, "classes", class_id_val):
-                add_error(errs, "current_class_id", "존재하지 않는 반입니다")
-            for date_field in ["enrolled_at", "leave_start_date", "leave_end_date"]:
-                dv = (d.get(date_field) or "").strip()
-                if dv and not is_valid_date(dv):
-                    add_error(errs, date_field, "YYYY-MM-DD 형식이어야 합니다")
-            if errs:
-                flash_msg = format_errors(errs)
-                flash_type = "error"
-                log_event(conn, "ERROR", path, "학생 저장 검증 실패", "\n".join(errs), user["id"])
+            ctype = environ.get("CONTENT_TYPE", "")
+            files = {}
+            if "multipart/form-data" in ctype:
+                d, files = parse_multipart_form(environ)
             else:
-                try:
+                d = parse_body(environ)
+            typ = (d.get("type") or "save").strip()
+
+            if typ == "bulk_upload":
+                upload_file = files.get("upload_file") if files else None
+                required_headers = list(UPLOAD_TEMPLATE_HEADERS)
+                if not upload_file or not upload_file.get("content"):
+                    flash_msg = t('students.upload.file_required')
+                    flash_type = "error"
+                else:
+                    try:
+                        headers, upload_rows = read_upload_rows(upload_file.get("filename"), upload_file.get("content"))
+                        normalized_headers = [h.strip() for h in headers if h and h.strip()]
+                        missing_headers = sorted(set(required_headers) - set(normalized_headers))
+                        if not normalized_headers:
+                            flash_msg = t('students.upload.empty_file')
+                            flash_type = "error"
+                        elif missing_headers:
+                            flash_msg = t('students.upload.invalid_headers').format(missing=(', '.join(missing_headers)))
+                            flash_type = "error"
+                        else:
+                            total = len(upload_rows)
+                            success = 0
+                            failed = 0
+                            row_errors = []
+                            for idx, row in enumerate(upload_rows, start=2):
+                                student_no = (row.get("student_no") or "").strip()
+                                name_ko = (row.get("chinese_name") or "").strip()
+                                name_en = (row.get("english_name") or "").strip()
+                                phone = (row.get("phone") or "").strip()
+                                guardian_name = (row.get("guardian_name") or "").strip()
+                                guardian_phone = (row.get("guardian_phone") or "").strip()
+                                class_name = (row.get("class_name") or "").strip()
+                                homeroom_teacher_name = (row.get("homeroom_teacher_name") or "").strip()
+                                status_v = (row.get("status") or "").strip().lower()
+                                enrolled_at = (row.get("enrollment_date") or "").strip()
+                                leave_period = (row.get("leave_period") or "").strip()
+                                memo = (row.get("memo") or "").strip()
+
+                                errs = []
+                                if not student_no:
+                                    errs.append(f"Row {idx}: student_no is missing")
+                                if not (name_ko or name_en):
+                                    errs.append(f"Row {idx}: chinese_name or english_name is required")
+                                if not guardian_name:
+                                    errs.append(f"Row {idx}: guardian_name is missing")
+                                if not guardian_phone:
+                                    errs.append(f"Row {idx}: guardian_phone is missing")
+                                if not class_name:
+                                    errs.append(f"Row {idx}: class_name is missing")
+                                if not homeroom_teacher_name:
+                                    errs.append(f"Row {idx}: homeroom_teacher_name is missing")
+                                if status_v not in ("active", "leave", "ended"):
+                                    errs.append(f"Row {idx}: status must be active/leave/ended")
+                                if enrolled_at and not is_valid_date(enrolled_at):
+                                    errs.append(f"Row {idx}: enrollment_date format must be YYYY-MM-DD")
+
+                                class_id = class_name_to_id.get(class_name.lower())
+                                if not class_id:
+                                    errs.append(f"Row {idx}: class_name not found ({class_name})")
+                                homeroom_teacher_id = find_teacher_id_by_name(conn, homeroom_teacher_name)
+                                if homeroom_teacher_name and not homeroom_teacher_id:
+                                    errs.append(f"Row {idx}: homeroom_teacher_name not found ({homeroom_teacher_name})")
+
+                                leave_start, leave_end = parse_leave_period_range(leave_period)
+                                if leave_period and (not leave_start or not leave_end):
+                                    errs.append(f"Row {idx}: leave_period format should be YYYY-MM-DD~YYYY-MM-DD")
+
+                                exists_student_no = conn.execute("SELECT id FROM students WHERE student_no=?", (student_no,)).fetchone() if student_no else None
+                                if exists_student_no:
+                                    errs.append(f"Row {idx}: student_no already exists ({student_no})")
+
+                                if errs:
+                                    failed += 1
+                                    row_errors.extend(errs)
+                                    continue
+
+                                base_username = f"stu_{student_no.lower()}".replace(" ", "_")
+                                username = base_username
+                                seq = 1
+                                while conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+                                    seq += 1
+                                    username = f"{base_username}_{seq}"
+
+                                conn.execute(
+                                    "INSERT INTO users(name, username, password_hash, role, created_at) VALUES(?,?,?,?,?)",
+                                    ((name_ko or name_en), username, hash_pw("1234"), ROLE_STUDENT, now()),
+                                )
+                                user_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+                                conn.execute(
+                                    """INSERT INTO students(
+                                    user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone,
+                                    current_class_id, homeroom_teacher_id, remaining_credits, status, enrolled_at,
+                                    leave_start_date, leave_end_date, memo, created_at, updated_at
+                                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                    (
+                                        user_id, student_no, (name_ko or name_en), name_en, phone, guardian_name, guardian_phone,
+                                        class_id, homeroom_teacher_id, 0, status_v, enrolled_at or None,
+                                        leave_start, leave_end, memo or None, now(), now(),
+                                    ),
+                                )
+                                success += 1
+
+                            conn.commit()
+                            load_students = True
+                            summary = [f"Total rows: {total}", f"Success: {success}", f"Failed: {failed}"]
+                            if row_errors:
+                                summary.append("Details:")
+                                summary.extend(row_errors[:80])
+                            flash_msg = "<br>".join(summary)
+                            flash_type = "error" if failed else "success"
+                    except Exception as e:
+                        conn.rollback()
+                        flash_msg = t('students.upload.failed').format(error=h(str(e)))
+                        flash_type = "error"
+
+            else:
+                errs = []
+                student_user_id = d.get("user_id")
+                if not ensure_exists(conn, "users", student_user_id, extra_where="role='student'"):
+                    add_error(errs, "user_id", "student role user only")
+                if not (d.get("name_ko") or "").strip():
+                    add_error(errs, "name_ko", "required")
+                credits = as_float(d.get("remaining_credits") or 0)
+                if credits is None:
+                    add_error(errs, "remaining_credits", "number format")
+                status_v = d.get("status") or "active"
+                if status_v not in ("active", "leave", "ended"):
+                    add_error(errs, "status", "invalid status")
+                class_id_val = d.get("current_class_id") or None
+                if class_id_val and not ensure_exists(conn, "classes", class_id_val):
+                    add_error(errs, "current_class_id", "invalid class")
+                homeroom_teacher_id = (d.get("homeroom_teacher_id") or "").strip() or None
+                if homeroom_teacher_id and not ensure_exists(conn, "users", homeroom_teacher_id, extra_where="role='teacher'"):
+                    add_error(errs, "homeroom_teacher_id", "invalid homeroom teacher")
+                for date_field in ["enrolled_at", "leave_start_date", "leave_end_date"]:
+                    dv = (d.get(date_field) or "").strip()
+                    if dv and not is_valid_date(dv):
+                        add_error(errs, date_field, "YYYY-MM-DD required")
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+                else:
                     exists = conn.execute("SELECT id FROM students WHERE user_id=?", (student_user_id,)).fetchone()
                     if exists:
                         conn.execute(
                             """UPDATE students SET
                             student_no=?, name_ko=?, name_en=?, phone=?, guardian_name=?, guardian_phone=?,
-                            current_class_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
+                            current_class_id=?, homeroom_teacher_id=?, remaining_credits=?, status=?, enrolled_at=?, leave_start_date=?, leave_end_date=?, memo=?, updated_at=?
                             WHERE user_id=?""",
                             (
                                 (d.get("student_no") or f"S{int(student_user_id):05d}"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                                class_id_val, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
+                                class_id_val, homeroom_teacher_id, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), student_user_id,
                             ),
                         )
                     else:
                         conn.execute(
                             """INSERT INTO students(
                             user_id, student_no, name_ko, name_en, phone, guardian_name, guardian_phone,
-                            current_class_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at
-                            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            current_class_id, homeroom_teacher_id, remaining_credits, status, enrolled_at, leave_start_date, leave_end_date, memo, created_at, updated_at
+                            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
                                 student_user_id, d.get("student_no"), d.get("name_ko"), d.get("name_en"), d.get("phone"), d.get("guardian_name"), d.get("guardian_phone"),
-                                class_id_val, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
+                                class_id_val, homeroom_teacher_id, credits, status_v, d.get("enrolled_at"), d.get("leave_start_date"), d.get("leave_end_date"), d.get("memo"), now(), now(),
                             ),
                         )
                     conn.commit()
-                    flash_msg = "저장되었습니다"
-                except Exception:
-                    conn.rollback()
-                    flash_msg = "학생 저장 실패: 입력값 또는 중복값을 확인하세요"
-                    flash_type = "error"
-                    log_event(conn, "ERROR", path, "학생 저장 예외", traceback.format_exc(), user["id"])
-                    conn.commit()
-        where = []
-        params = []
-        q_name = query.get("name", "").strip()
-        q_student_no = query.get("student_no", "").strip()
-        q_phone = query.get("phone", "").strip()
-        if q_name:
-            where.append("(s.name_ko LIKE ? OR s.name_en LIKE ?)")
-            params += [f"%{q_name}%", f"%{q_name}%"]
-        if q_student_no:
-            where.append("s.student_no LIKE ?")
-            params.append(f"%{q_student_no}%")
-        if q_phone:
-            where.append("s.phone LIKE ?")
-            params.append(f"%{q_phone}%")
-        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
-        students = conn.execute(
-            f"""SELECT s.*, c.name AS class_name, c.teacher_id AS current_class_teacher_id
-            FROM students s
-            LEFT JOIN classes c ON c.id=s.current_class_id
-            {where_sql}
-            ORDER BY s.id DESC""",
-            params,
-        ).fetchall()
+                    flash_msg = "saved"
+                    load_students = True
+
+        if query.get("template") == "1":
+            xlsx_bytes = build_upload_template_xlsx()
+            file_date = datetime.utcnow().date().isoformat()
+            if xlsx_bytes:
+                conn.close()
+                start_response("200 OK", [("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), ("Content-Disposition", f"attachment; filename=students_upload_template_{file_date}.xlsx")])
+                return [xlsx_bytes]
+            csv_bytes = build_upload_template_csv()
+            conn.close()
+            start_response("200 OK", [("Content-Type", "text/csv; charset=utf-8"), ("Content-Disposition", f"attachment; filename=students_upload_template_{file_date}.csv")])
+            return [csv_bytes]
+
+        students = []
+        if load_students:
+            where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+            students_all = conn.execute(
+                f"""SELECT s.*, c.name AS class_name, c.teacher_id AS current_class_teacher_id,
+                ht.name AS homeroom_teacher_name
+                FROM students s
+                LEFT JOIN classes c ON c.id=s.current_class_id
+                LEFT JOIN users ht ON ht.id=s.homeroom_teacher_id
+                {where_sql}
+                ORDER BY s.id DESC""",
+                params,
+            ).fetchall()
+            students = [st for st in students_all if can_view_student_row(user, st)]
+
+        if query.get("export") in ("xlsx", "csv"):
+            if not load_students:
+                flash_msg = t('students.export.query_first')
+                flash_type = "error"
+            else:
+                file_date = datetime.utcnow().date().isoformat()
+                as_dict = [dict(r) for r in students]
+                if query.get("export") == "xlsx":
+                    xlsx_bytes = build_students_xlsx(as_dict)
+                    if xlsx_bytes:
+                        conn.close()
+                        start_response("200 OK", [("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), ("Content-Disposition", f"attachment; filename=students_{file_date}.xlsx")])
+                        return [xlsx_bytes]
+                csv_bytes = build_students_csv(as_dict)
+                conn.close()
+                start_response("200 OK", [("Content-Type", "text/csv; charset=utf-8"), ("Content-Disposition", f"attachment; filename=students_{file_date}.csv")])
+                return [csv_bytes]
+
         rows = ""
         for st in students:
-            if not can_view_student_row(user, st):
-                continue
             rows += f"""
             <tr>
               <td>{h(st['student_no'] or '-')}</td>
@@ -2238,37 +2729,62 @@ def app(environ, start_response):
               <td>{h(st['guardian_name'] or '-')}</td>
               <td>{h(st['guardian_phone'] or '-')}</td>
               <td>{h(st['class_name'] or '-')}</td>
+              <td>{h(homeroom_display_name(st['homeroom_teacher_name']))}</td>
               <td>{h(st['remaining_credits'] or 0)}</td>
               <td><span class='badge {h(st['status'] or '')}'>{h(status_t(st['status']) if st['status'] else '-')}</span></td>
             </tr>
             """
+
         html = render_html(t('menu.students'), f"""
         <div class='card'>
           <h3>{t("students.search")}</h3>
-          <form method='get' class='filter-row'>
+          <form method='get' class='mobile-stack query-form'>
             <input type='hidden' name='lang' value='{CURRENT_LANG}'>
-            <label>{t('field.name')} <input name='name' value='{h(q_name)}'></label>
-            <label>{t('students.field.student_no')} <input name='student_no' value='{h(q_student_no)}'></label>
-            <label>{t('students.field.phone')} <input name='phone' value='{h(q_phone)}'></label>
-            <button>{t("common.search")}</button>
-            <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+            <input type='hidden' name='load' value='1'>
+            <div class='filter-grid'>
+              <label>{t('field.name')} <input name='name' value='{h(q_name)}'></label>
+              <label>{t('students.field.student_no')} <input name='student_no' value='{h(q_student_no)}'></label>
+              <label>{t('students.field.phone')} <input name='phone' value='{h(q_phone)}'></label>
+              <label>{t('students.field.status')} <select name='status'>
+                <option value=''>{t('academics.day_all')}</option>
+                <option value='active' {'selected' if q_status=='active' else ''}>{status_t('active')}</option>
+                <option value='leave' {'selected' if q_status=='leave' else ''}>{status_t('leave')}</option>
+                <option value='ended' {'selected' if q_status=='ended' else ''}>{status_t('ended')}</option>
+              </select></label>
+              <label>{t('students.field.homeroom_teacher')} <select name='homeroom_teacher_id'>{''.join(homeroom_options)}</select></label>
+            </div>
+            <div class='btn-row'>
+              <button>{t("common.search")}</button>
+              <a class='btn secondary' href='/students?lang={CURRENT_LANG}'>{t('common.reset')}</a>
+              {f"<a class='btn secondary' href='/students?lang={CURRENT_LANG}&load=1&name={h(q_name)}&student_no={h(q_student_no)}&phone={h(q_phone)}&status={h(q_status)}&homeroom_teacher_id={h(q_homeroom_teacher_id)}&export=xlsx'>{t('students.export_excel')}</a>" if load_students else f"<span class='muted'>{t('students.export.query_first')}</span>"}
+            </div>
+          </form>
+          <div class='btn-row' style='margin-top:10px'>
+            <a class='btn secondary' href='/students?lang={CURRENT_LANG}&template=1'>{t('students.upload_template')}</a>
+          </div>
+          <form method='post' enctype='multipart/form-data' class='form-row' style='margin-top:10px'>
+            <input type='hidden' name='type' value='bulk_upload'>
+            <label>{t('students.upload_students')} <input type='file' name='upload_file' accept='.xlsx,.csv'></label>
+            <button>{t('students.upload_students')}</button>
           </form>
         </div>
         <div class='card'>
           <h3>{t("students.list")}</h3>
-          <table>
+          {'' if load_students else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
+          <div class='table-wrap'><table>
             <tr>
-              <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
+              <th>{t('students.field.student_no')}</th><th>{t('students.field.name_ko')}</th><th>{t('students.field.name_en')}</th><th>{t('students.field.phone')}</th><th>{t('students.field.guardian_name')}</th><th>{t('students.field.guardian_phone')}</th><th>{t('students.field.class')}</th><th>{t('students.field.homeroom_teacher')}</th><th>{t('students.field.credits')}</th><th>{t('students.field.status')}</th>
             </tr>
-            {rows or "<tr><td colspan='9' class='empty-msg'>{t('common.no_data')}</td></tr>"}
-          </table>
+            {rows if load_students else ''}
+            {("<tr><td colspan='10' class='empty-msg'>" + t('common.no_data') + "</td></tr>") if (load_students and not rows) else ""}
+          </table></div>
         </div>
         """, user, current_menu="students", flash_msg=flash_msg, flash_type=flash_type)
         status, headers, body = text_resp(html)
         conn.close()
         start_response(status, headers)
         return [body]
-    # 학사 구조
+
     if path.startswith("/classes/"):
         if not has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             conn.close()
@@ -2636,24 +3152,35 @@ def app(environ, start_response):
                 log_event(conn, "ERROR", path, "마스터데이터 예외", traceback.format_exc(), user["id"])
                 conn.commit()
 
-        courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
-        levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
+        load_master = query.get("load", "") == "1"
+        courses_ref = conn.execute("SELECT id, name FROM courses ORDER BY id DESC").fetchall()
+        levels_ref = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id
                                FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
-        classes = conn.execute("""SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
-                COALESCE(c.status, 'active') AS status, COALESCE(c.memo, '') AS memo,
-                co.name AS course_name, l.name AS level_name,
-                uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
-                (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count
-                FROM classes c
-                LEFT JOIN courses co ON co.id=c.course_id
-                LEFT JOIN levels l ON l.id=c.level_id
-                LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
-                LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
-                ORDER BY c.id DESC""").fetchall()
         teachers = list_teacher_profiles(conn)
-        classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
-        time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
 
+        courses = []
+        levels = []
+        classes = []
+        classrooms = []
+        time_slots = []
+        if load_master:
+            courses = conn.execute("SELECT id, name, created_at FROM courses ORDER BY id DESC").fetchall()
+            levels = conn.execute("""SELECT l.id, l.name, c.name AS course_name, l.course_id, l.created_at
+                               FROM levels l LEFT JOIN courses c ON c.id=l.course_id ORDER BY l.id DESC""").fetchall()
+            classes = conn.execute("""SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
+                    COALESCE(c.status, 'active') AS status, COALESCE(c.memo, '') AS memo,
+                    co.name AS course_name, l.name AS level_name,
+                    uf.name AS foreign_teacher_name, uc.name AS chinese_teacher_name,
+                    (SELECT COUNT(*) FROM students s WHERE s.current_class_id=c.id) AS student_count,
+                    (SELECT GROUP_CONCAT(name_ko, ', ') FROM students s2 WHERE s2.current_class_id=c.id ORDER BY s2.id) AS student_names
+                    FROM classes c
+                    LEFT JOIN courses co ON co.id=c.course_id
+                    LEFT JOIN levels l ON l.id=c.level_id
+                    LEFT JOIN users uf ON uf.id=COALESCE(c.foreign_teacher_id, c.teacher_id)
+                    LEFT JOIN users uc ON uc.id=c.chinese_teacher_id
+                    ORDER BY c.id DESC""").fetchall()
+            classrooms = conn.execute("SELECT id, name, created_at FROM classrooms ORDER BY id DESC").fetchall()
+            time_slots = conn.execute("SELECT id, label, start_time, end_time, created_at FROM time_slots ORDER BY id DESC").fetchall()
         teacher_options = "".join([f"<option value='{tr['id']}'>{tr['name']} [{op_code('T', tr['id'])}] ({tr['username']}, {tr['teacher_type'] or '-'})</option>" for tr in teachers])
 
         def rows_html(rows, cols):
@@ -2674,7 +3201,7 @@ def app(environ, start_response):
         """
 
         class_rows_md = "".join([
-            f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['foreign_teacher_name'] or '-'}</td><td>{c['chinese_teacher_name'] or '-'}</td><td>{status_t(c['status']) if c['status'] else '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
+            f"<tr><td><a href='/classes/{c['id']}?lang={CURRENT_LANG}'>{op_code('C', c['id'])} · {c['name']}</a></td><td>{c['course_name'] or '-'}</td><td>{c['level_name'] or '-'}</td><td>{c['foreign_teacher_name'] or '-'}</td><td>{c['chinese_teacher_name'] or '-'}</td><td title='{h(summarize_student_names(c['student_names'])[1])}'>{h(summarize_student_names(c['student_names'])[0])}</td><td>{status_t(c['status']) if c['status'] else '-'}</td><td>{c['student_count'] or 0}</td><td><form method='post'><input type='hidden' name='type' value='delete_class'><input type='hidden' name='id' value='{c['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
             for c in classes
         ])
         course_rows_md = "".join([
@@ -2693,13 +3220,14 @@ def app(environ, start_response):
             f"<tr><td>{r['id']}</td><td>{r['label']}</td><td>{r['start_time']}</td><td>{r['end_time']}</td><td>{r['created_at']}</td><td><form method='post'><input type='hidden' name='type' value='delete_time_slot'><input type='hidden' name='id' value='{r['id']}'><button class='btn secondary'>{t('common.delete')}</button></form></td></tr>"
             for r in time_slots
         ])
-        empty8 = f"<tr><td colspan='8' class='empty-msg'>{t('common.no_data')}</td></tr>"
+        empty9 = f"<tr><td colspan='9' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty6 = f"<tr><td colspan='6' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty5 = f"<tr><td colspan='5' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty4 = f"<tr><td colspan='4' class='empty-msg'>{t('common.no_data')}</td></tr>"
         empty3 = f"<tr><td colspan='3' class='empty-msg'>{t('common.no_data')}</td></tr>"
-        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.status')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md or empty8}</table></div>"
-        course_cards = f"<div class='card'><h4>{t('academics.course')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.level')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows_md or empty5}</table></div>"
+        helper_html = "" if load_master else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")
+        classes_card = f"<div class='card'><h4>{t('academics.class_list')}</h4>{helper_html}<div class='table-wrap'><table><tr><th>{t('academics.class_name')}</th><th>{t('academics.course')}</th><th>{t('academics.level')}</th><th>{t('academics.foreign_teacher')}</th><th>{t('academics.chinese_teacher')}</th><th>{t('academics.students')}</th><th>{t('academics.status')}</th><th>{t('academics.student_count')}</th><th>{t('common.delete')}</th></tr>{class_rows_md if load_master else ''}{empty9 if (load_master and not class_rows_md) else ''}</table></div></div>"
+        course_cards = f"<div class='card'><h4>{t('academics.course')}</h4>{helper_html}<div class='table-wrap'><table><tr><th>{t('field.id')}</th><th>{t('academics.course_name')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{course_rows_md if load_master else ''}{empty4 if (load_master and not course_rows_md) else ''}</table></div></div><div class='card'><h4>{t('academics.level')}</h4><div class='table-wrap'><table><tr><th>{t('field.id')}</th><th>{t('academics.level_name')}</th><th>{t('academics.course')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{level_rows_md if load_master else ''}{empty5 if (load_master and not level_rows_md) else ''}</table></div></div>"
         teacher_rows_md = ''.join([f"<tr><td>{op_code('T', r['id'])}</td><td>{r['name']}</td><td>{r['username']}</td></tr>" for r in teachers])
         teacher_card = f"<div class='card'><h4>{t('academics.teacher')}</h4><table><tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th></tr>{teacher_rows_md or empty3}</table></div>"
         room_cards = f"<div class='card'><h4>{t('academics.classroom')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.classroom')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{room_rows_md or empty4}</table></div><div class='card'><h4>{t('academics.time_slot')}</h4><table><tr><th>{t('field.id')}</th><th>{t('academics.time_slot')}</th><th>{t('academics.start_time')}</th><th>{t('academics.end_time')}</th><th>{t('field.created_at')}</th><th>{t('common.delete')}</th></tr>{slot_rows_md or empty6}</table></div>"
@@ -2709,10 +3237,19 @@ def app(environ, start_response):
         <div class='card'><h4>{t('menu.masterdata')}</h4><div class='muted'>{t('academics.go_structure')}</div></div>
         {section_nav}
         <div class='card'>
+          <form method='get' class='btn-row query-form'>
+            <input type='hidden' name='lang' value='{CURRENT_LANG}'>
+            <input type='hidden' name='md_view' value='{md_view}'>
+            <input type='hidden' name='load' value='1'>
+            <button>{t('common.search')}</button>
+            <a class='btn secondary' href='/masterdata?lang={CURRENT_LANG}&md_view={md_view}'>{t('common.reset')}</a>
+          </form>
+        </div>
+        <div class='card'>
           <h4>{t('academics.register')}</h4>
           <form method='post' class='form-row'><input type='hidden' name='type' value='course'><label>{t('academics.course_name')} <input name='name'></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><button>{t('common.add')}</button></form>
-          <form method='post' class='form-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='level'><label>{t('academics.level_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label><button>{t('common.add')}</button></form>
+          <form method='post' class='form-row'><input type='hidden' name='type' value='class'><label>{t('academics.class_name')} <input name='name'></label><label>{t('academics.course')} <select name='course_id'><option value=''>-</option>{''.join([f"<option value='{c['id']}'>{c['name']}</option>" for c in courses_ref])}</select></label><label>{t('academics.level')} <select name='level_id'><option value=''>-</option>{''.join([f"<option value='{lv['id']}'>{lv['name']} ({lv['course_name'] or '-'})</option>" for lv in levels_ref])}</select></label><label>{t('academics.foreign_teacher')} <select name='foreign_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.chinese_teacher')} <select name='chinese_teacher_id'><option value=''>-</option>{teacher_options}</select></label><label>{t('academics.status')} <select name='status'><option value='active'>{status_t('active')}</option><option value='inactive'>{t('status.ended')}</option></select></label><label>{t('field.note')} <input name='memo'></label><button>{t('common.add')}</button></form>
           <form method='post' class='form-row'><input type='hidden' name='type' value='classroom'><label>{t('academics.classroom')} <input name='name'></label><button>{t('common.add')}</button></form>
           <form method='post' class='form-row'><input type='hidden' name='type' value='time_slot'><label>{t('academics.start_time')} <input type='time' name='start_time'></label><label>{t('academics.end_time')} <input type='time' name='end_time'></label><button>{t('common.add')}</button></form>
         </div>
@@ -3037,9 +3574,11 @@ def app(environ, start_response):
             sel = "selected" if d == selected_day else ""
             day_options.append(f"<option value='{d}' {sel}>{d}</option>")
 
-        class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=20, show_all_when_empty=True)
+        class_query_enabled = query.get("form_class_load", "") == "1" or bool((query.get("form_class_q", "") or "").strip()) or bool(selected_form_class_id)
+        class_candidates = fetch_class_candidates(conn, query.get("form_class_q", ""), limit=20, show_all_when_empty=class_query_enabled)
         if selected_schedule and not selected_form_class_id:
             selected_form_class_id = str(selected_schedule['class_id'])
+            class_query_enabled = True
         selected_form_class = conn.execute(
             """SELECT c.id, c.name, c.teacher_id, c.foreign_teacher_id, c.chinese_teacher_id,
             co.name AS course_name, l.name AS level_name,
@@ -3101,7 +3640,9 @@ def app(environ, start_response):
                 "week": str(week_offset), "ref_date": ref_date_str, "day": selected_day, "teacher_id": selected_teacher_id,
                 "classroom": selected_room,
                 "schedule_id": selected_schedule_id, "recent_class_ids": recent_class_ids,
-            }
+            },
+            query_flag_name="form_class_load",
+            query_enabled=class_query_enabled,
         )
 
         detail_html = f"<div class='card'><h4>{t('academics.lesson_detail')}</h4><p class='empty-msg'>{t('common.no_data')}</p></div>"
@@ -4406,3 +4947,8 @@ if __name__ == "__main__":
     with make_server("0.0.0.0", 8000, app) as httpd:
         print(t('server.start') + ': http://127.0.0.1:8000')
         httpd.serve_forever()
+
+
+
+
+
