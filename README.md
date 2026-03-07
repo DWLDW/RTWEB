@@ -225,6 +225,24 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
   - 역할-프로필 불일치(`role=student`인데 `students` 없음, `role=teacher`인데 `teachers` 프로필 없음)
   - `teachers.teacher_type` 유효성 및 `users.teacher_type` 누락 여부
   - 참조 무결성 이상(클래스/학생/교실/시험/도서 참조 깨짐)
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
 
 ## Handoff
 - Latest Codex handoff: `docs/handoff_latest.md`
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
