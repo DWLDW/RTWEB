@@ -11,6 +11,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
+from readingtown.routes.auth import handle_auth_routes
+from readingtown.routes.notifications import handle_notifications_routes
+from readingtown.routes.logs import handle_logs_routes
+from readingtown.routes.api import handle_api_routes
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "lms.db")
 ROLE_OWNER = "owner"
@@ -1225,6 +1229,7 @@ def seed_demo_data(conn, force=False):
 
 def init_db():
     conn = get_db()
+
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     ensure_schedule_columns(conn)
@@ -1860,63 +1865,34 @@ def app(environ, start_response):
         return _orig_start_response(status, headers, exc_info)
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
-    # 인증 API
-    if path == "/api/auth/login" and method == "POST":
-        data = parse_body(environ)
-        conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password_hash=?",
-            (data.get("username", ""), hash_pw(data.get("password", ""))),
-        ).fetchone()
-        if not user:
-            conn.close()
-            status, headers, body = json_resp({"error": t('login.failed')}, "401 Unauthorized")
-            start_response(status, headers)
-            return [body]
-        token = str(uuid.uuid4())
-        conn.execute("INSERT INTO sessions(user_id, token, created_at) VALUES(?,?,?)", (user["id"], token, now()))
-        conn.commit()
-        conn.close()
-        status, headers, body = json_resp({"message": "ok", "role": user["role"]})
-        headers.append(("Set-Cookie", f"session={token}; Path=/; HttpOnly"))
+    # auth/api routes extracted in Phase A modules
+    api_result = handle_api_routes(path, method, environ, None, None, {
+        "parse_body": parse_body,
+        "get_db": get_db,
+        "hash_pw": hash_pw,
+        "uuid": uuid,
+        "now": now,
+        "json_resp": json_resp,
+        "t": t,
+    })
+    if api_result is not None:
+        status, headers, body = api_result
         start_response(status, headers)
         return [body]
-    if path == "/login":
-        if method == "GET":
-            html = render_html(t("login.title"), f"""
-            <form method='post'>
-              <div>{t('login.username')} <input name='username'></div>
-              <div>{t('login.password')} <input name='password' type='password'></div>
-              <button type='submit'>{t('common.login')}</button>
-            </form>
-            <p>{t('login.default_accounts')}</p>
-            """)
-            status, headers, body = text_resp(html)
-            start_response(status, headers)
-            return [body]
-        data = parse_body(environ)
-        conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password_hash=?",
-            (data.get("username", ""), hash_pw(data.get("password", ""))),
-        ).fetchone()
-        if not user:
-            conn.close()
-            html = render_html(t("login.title"), f"<p style='color:red'>{t('login.failed')}</p>")
-            status, headers, body = text_resp(html, "401 Unauthorized")
-            start_response(status, headers)
-            return [body]
-        token = str(uuid.uuid4())
-        conn.execute("INSERT INTO sessions(user_id, token, created_at) VALUES(?,?,?)", (user["id"], token, now()))
-        conn.commit()
-        conn.close()
-        status, headers, body = redirect('/dashboard')
-        headers.append(("Set-Cookie", f"session={token}; Path=/; HttpOnly"))
-        start_response(status, headers)
-        return [body]
-    if path == "/logout":
-        status, headers, body = redirect('/login')
-        headers.append(("Set-Cookie", "session=; Path=/; Max-Age=0"))
+
+    auth_result = handle_auth_routes(path, method, environ, {
+        "t": t,
+        "render_html": render_html,
+        "text_resp": text_resp,
+        "parse_body": parse_body,
+        "get_db": get_db,
+        "hash_pw": hash_pw,
+        "uuid": uuid,
+        "now": now,
+        "redirect": redirect,
+    })
+    if auth_result is not None:
+        status, headers, body = auth_result
         start_response(status, headers)
         return [body]
     if path == "/":
@@ -1963,6 +1939,55 @@ def app(environ, start_response):
         start_response(status, headers)
         return [body]
     conn = get_db()
+
+    notifications_result = handle_notifications_routes(path, method, environ, user, conn, {
+        "has_role": has_role,
+        "ROLE_OWNER": ROLE_OWNER,
+        "ROLE_MANAGER": ROLE_MANAGER,
+        "ROLE_TEACHER": ROLE_TEACHER,
+        "parse_body": parse_body,
+        "now": now,
+        "render_html": render_html,
+        "t": t,
+        "text_resp": text_resp,
+    })
+    if notifications_result is not None:
+        status, headers, body = notifications_result
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
+    logs_result = handle_logs_routes(path, user, conn, {
+        "has_role": has_role,
+        "ROLE_OWNER": ROLE_OWNER,
+        "forbidden_html": forbidden_html,
+        "ensure_logs_table": ensure_logs_table,
+        "ensure_logs_columns": ensure_logs_columns,
+        "render_html": render_html,
+        "menu_t": menu_t,
+        "t": t,
+        "text_resp": text_resp,
+    })
+    if logs_result is not None:
+        status, headers, body = logs_result
+        conn.close()
+        start_response(status, headers)
+        return [body]
+
+    api_result = handle_api_routes(path, method, environ, user, conn, {
+        "parse_body": parse_body,
+        "get_db": get_db,
+        "hash_pw": hash_pw,
+        "uuid": uuid,
+        "now": now,
+        "json_resp": json_resp,
+        "t": t,
+    })
+    if api_result is not None:
+        status, headers, body = api_result
+        conn.close()
+        start_response(status, headers)
+        return [body]
     # 사용자 관리
     if path == "/users":
         if not has_role(user, [ROLE_OWNER]):
@@ -4804,7 +4829,7 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-    if path == "/announcements":
+    if False and path == "/announcements":  # moved to readingtown.routes.notifications
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER]):
             d = parse_body(environ)
             conn.execute("INSERT INTO announcements(title, content, created_by, created_at) VALUES(?,?,?,?)", (d.get("title"), d.get("content"), user["id"], now()))
@@ -4880,7 +4905,7 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-    if path == "/logs":
+    if False and path == "/logs":  # moved to readingtown.routes.logs
         if not has_role(user, [ROLE_OWNER]):
             conn.close()
             status, headers, body = forbidden_html(user)
@@ -4906,7 +4931,7 @@ def app(environ, start_response):
         conn.close()
         start_response(status, headers)
         return [body]
-    if path == "/api/announcements" and method == "GET":
+    if False and path == "/api/announcements" and method == "GET":  # moved to readingtown.routes.api
         rows = conn.execute("SELECT * FROM announcements ORDER BY id DESC").fetchall()
         conn.close()
         status, headers, body = json_resp([dict(r) for r in rows])
@@ -4947,6 +4972,10 @@ if __name__ == "__main__":
     with make_server("0.0.0.0", 8000, app) as httpd:
         print(t('server.start') + ': http://127.0.0.1:8000')
         httpd.serve_forever()
+
+
+
+
 
 
 
