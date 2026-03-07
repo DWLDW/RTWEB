@@ -906,7 +906,7 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
     css = """
     <style>
       * { box-sizing: border-box; }
-      body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; }
+      body { margin:0; font-family:Arial, sans-serif; background:#f5f7fb; color:#1f2937; line-height:1.45; }
       .app { display:flex; min-height:100vh; }
       .sidebar { width:240px; background:#111827; color:#e5e7eb; padding:18px 14px; flex-shrink:0; }
       .brand { font-size:18px; font-weight:700; margin-bottom:18px; }
@@ -949,22 +949,33 @@ def render_html(title, body, user=None, lang=None, current_menu=None, flash_msg=
         .two-col { grid-template-columns:1fr; }
       }
       @media (max-width: 900px) {
+        body { font-size:15px; line-height:1.5; }
         .app { flex-direction:column; }
         .sidebar { width:100%; padding:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-        .brand { margin:0 8px 6px 0; width:100%; }
-        .nav-link { display:inline-block; margin:0; }
+        .brand { margin:0 8px 8px 0; width:100%; font-size:19px; }
+        .nav-link { display:inline-block; margin:0; font-size:14px; padding:9px 11px; }
         .main { padding:12px; }
-        .topbar { flex-direction:column; align-items:flex-start; }
+        .topbar { flex-direction:column; align-items:flex-start; gap:12px; }
+        .topbar, .topbar select, .topbar .btn { font-size:14px; }
+        .card { padding:16px; }
+        .card h3, .card h4 { font-size:19px; line-height:1.35; }
+        th, td { font-size:14px; line-height:1.45; }
+        button, .btn, input, select, textarea { font-size:15px; }
       }
       @media (max-width: 720px) {
-        body { font-size:14px; }
-        .page-title { font-size:20px; }
-        .filter-row { flex-direction:column; align-items:stretch; }
+        body { font-size:16px; line-height:1.55; }
+        .page-title { font-size:24px; line-height:1.3; margin-bottom:16px; }
+        .card h3, .card h4 { font-size:20px; line-height:1.35; margin-bottom:12px; }
+        .muted { font-size:14px; line-height:1.5; }
+        .filter-row { flex-direction:column; align-items:stretch; gap:12px; }
         .filter-row > * { width:100%; }
-        .filter-row label { width:100%; }
-        .filter-row input, .filter-row select, .filter-row textarea, .filter-row button, .filter-row .btn { width:100%; }
+        .filter-row label { width:100%; display:block; font-size:15px; line-height:1.45; margin-bottom:2px; }
+        .filter-row input, .filter-row select, .filter-row textarea, .filter-row button, .filter-row .btn { width:100%; min-height:42px; font-size:16px; line-height:1.35; }
         table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        th, td { white-space:nowrap; }
+        th, td { white-space:nowrap; font-size:14px; line-height:1.45; padding:10px 8px; }
+        .lesson-block { font-size:14px; line-height:1.45; padding:10px; }
+        .mini-link { font-size:13px; padding:6px 8px; }
+        .flash { font-size:15px; line-height:1.45; }
         .timetable-wrap { overflow-x:auto; }
       }
     </style>
