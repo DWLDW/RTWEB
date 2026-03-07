@@ -9,12 +9,13 @@ import csv
 import re
 import hmac
 import hashlib
+from socketserver import ThreadingMixIn
 from email import policy
 from email.parser import BytesParser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, quote
-from wsgiref.simple_server import make_server
+from wsgiref.simple_server import make_server, WSGIServer
 from readingtown.routes.auth import handle_auth_routes
 from readingtown.routes.notifications import handle_notifications_routes
 from readingtown.routes.logs import handle_logs_routes
@@ -1606,12 +1607,18 @@ def get_lang(environ):
     if cookie_lang in SUPPORTED_LANGS:
         return cookie_lang
     return "en"
-def parse_body(environ):
+def read_request_body(environ):
+    if "_cached_request_body" in environ:
+        return environ["_cached_request_body"]
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
     except ValueError:
         length = 0
     body = environ["wsgi.input"].read(length) if length > 0 else b""
+    environ["_cached_request_body"] = body
+    return body
+def parse_body(environ):
+    body = read_request_body(environ)
     ctype = environ.get("CONTENT_TYPE", "")
     if "application/json" in ctype:
         return json.loads(body.decode("utf-8") or "{}")
@@ -1620,11 +1627,7 @@ def parse_body(environ):
 def parse_multipart_form(environ):
     data = {}
     files = {}
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-    except ValueError:
-        length = 0
-    body = environ["wsgi.input"].read(length) if length > 0 else b""
+    body = read_request_body(environ)
     ctype = environ.get("CONTENT_TYPE", "")
     if not body or "multipart/form-data" not in ctype:
         return data, files
@@ -1650,6 +1653,9 @@ def parse_multipart_form(environ):
             charset = part.get_content_charset() or "utf-8"
             data[name] = content.decode(charset, errors="replace")
     return data, files
+
+class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
+    daemon_threads = True
 def parse_cookie(cookie):
     out = {}
     if not cookie:
@@ -2543,57 +2549,107 @@ def app(environ, start_response):
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             errs = []
-            name = (data.get("name") or "").strip()
-            username = (data.get("username") or "").strip()
-            role = (data.get("role") or "").strip()
-            password = data.get("password", "1234")
-            teacher_type = (data.get("teacher_type") or "foreign").strip() or "foreign"
-            if not name:
-                add_error(errs, "name", "필수값입니다")
-            if not username:
-                add_error(errs, "username", "필수값입니다")
-            if role not in (ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT):
-                add_error(errs, "role", "허용되지 않는 역할입니다")
-            if role == ROLE_TEACHER and teacher_type not in ("foreign", "chinese"):
-                add_error(errs, "teacher_type", "foreign/chinese 중 하나여야 합니다")
-            if conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
-                add_error(errs, "username", "이미 사용 중입니다")
-
-            if errs:
-                flash_msg = format_errors(errs)
-                flash_type = "error"
-            else:
-                try:
-                    conn.execute("BEGIN")
-                    conn.execute(
-                        "INSERT INTO users(name, username, password_hash, role, teacher_type, created_at) VALUES(?,?,?,?,?,?)",
-                        (name, username, hash_pw(password), role, teacher_type if role == ROLE_TEACHER else None, now()),
-                    )
-                    user_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-                    if role == ROLE_STUDENT:
-                        conn.execute(
-                            """INSERT INTO students(user_id, student_no, name_ko, status, created_at, updated_at)
-                            VALUES(?,?,?,?,?,?)""",
-                            (user_id, f"S{user_id:05d}", name, "active", now(), now()),
-                        )
-                    elif role == ROLE_TEACHER:
-                        conn.execute(
-                            "INSERT INTO teachers(user_id, teacher_type, created_at, updated_at) VALUES(?,?,?,?)",
-                            (user_id, teacher_type, now(), now()),
-                        )
-                    conn.commit()
-                    flash_msg = t("users.saved")
-                except Exception:
-                    conn.rollback()
-                    flash_msg = "사용자 저장 실패: 입력값/중복값을 확인하세요"
+            action = (data.get("action") or "create_user").strip()
+            if action == "edit_user":
+                edit_user_id = (data.get("user_id") or "").strip()
+                edit_row = conn.execute("SELECT id, role FROM users WHERE id=?", (edit_user_id,)).fetchone() if edit_user_id.isdigit() else None
+                name = (data.get("name") or "").strip()
+                username = (data.get("username") or "").strip()
+                teacher_type = (data.get("teacher_type") or "foreign").strip() or "foreign"
+                password = (data.get("password") or "").strip()
+                if not edit_row:
+                    add_error(errs, "user_id", "수정할 사용자를 찾을 수 없습니다")
+                if not name:
+                    add_error(errs, "name", "필수값입니다")
+                if not username:
+                    add_error(errs, "username", "필수값입니다")
+                if edit_row and edit_row["role"] == ROLE_TEACHER and teacher_type not in ("foreign", "chinese"):
+                    add_error(errs, "teacher_type", "foreign/chinese 중 하나여야 합니다")
+                if conn.execute("SELECT 1 FROM users WHERE username=? AND id<>?", (username, edit_user_id or 0)).fetchone():
+                    add_error(errs, "username", "이미 사용 중입니다")
+                if errs:
+                    flash_msg = format_errors(errs)
                     flash_type = "error"
-                    log_event(conn, "ERROR", path, "사용자 저장 실패", traceback.format_exc(), user["id"])
-                    conn.commit()
+                else:
+                    try:
+                        conn.execute("BEGIN")
+                        if password:
+                            conn.execute(
+                                "UPDATE users SET name=?, username=?, teacher_type=?, password_hash=? WHERE id=?",
+                                (name, username, teacher_type if edit_row["role"] == ROLE_TEACHER else None, hash_pw(password), edit_user_id),
+                            )
+                        else:
+                            conn.execute(
+                                "UPDATE users SET name=?, username=?, teacher_type=? WHERE id=?",
+                                (name, username, teacher_type if edit_row["role"] == ROLE_TEACHER else None, edit_user_id),
+                            )
+                        if edit_row["role"] == ROLE_TEACHER:
+                            conn.execute(
+                                "UPDATE teachers SET teacher_type=?, updated_at=? WHERE user_id=?",
+                                (teacher_type, now(), edit_user_id),
+                            )
+                        conn.commit()
+                        flash_msg = "사용자 정보가 수정되었습니다"
+                    except Exception:
+                        conn.rollback()
+                        flash_msg = "사용자 수정 실패: 입력값/중복값을 확인하세요"
+                        flash_type = "error"
+                        log_event(conn, "ERROR", path, "사용자 수정 실패", traceback.format_exc(), user["id"])
+                        conn.commit()
+            else:
+                name = (data.get("name") or "").strip()
+                username = (data.get("username") or "").strip()
+                role = (data.get("role") or "").strip()
+                password = data.get("password", "1234")
+                teacher_type = (data.get("teacher_type") or "foreign").strip() or "foreign"
+                if not name:
+                    add_error(errs, "name", "필수값입니다")
+                if not username:
+                    add_error(errs, "username", "필수값입니다")
+                if role not in (ROLE_OWNER, ROLE_MANAGER, ROLE_TEACHER, ROLE_PARENT, ROLE_STUDENT):
+                    add_error(errs, "role", "허용되지 않는 역할입니다")
+                if role == ROLE_TEACHER and teacher_type not in ("foreign", "chinese"):
+                    add_error(errs, "teacher_type", "foreign/chinese 중 하나여야 합니다")
+                if conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+                    add_error(errs, "username", "이미 사용 중입니다")
+
+                if errs:
+                    flash_msg = format_errors(errs)
+                    flash_type = "error"
+                else:
+                    try:
+                        conn.execute("BEGIN")
+                        conn.execute(
+                            "INSERT INTO users(name, username, password_hash, role, teacher_type, created_at) VALUES(?,?,?,?,?,?)",
+                            (name, username, hash_pw(password), role, teacher_type if role == ROLE_TEACHER else None, now()),
+                        )
+                        user_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+                        if role == ROLE_STUDENT:
+                            conn.execute(
+                                """INSERT INTO students(user_id, student_no, name_ko, status, created_at, updated_at)
+                                VALUES(?,?,?,?,?,?)""",
+                                (user_id, f"S{user_id:05d}", name, "active", now(), now()),
+                            )
+                        elif role == ROLE_TEACHER:
+                            conn.execute(
+                                "INSERT INTO teachers(user_id, teacher_type, created_at, updated_at) VALUES(?,?,?,?)",
+                                (user_id, teacher_type, now(), now()),
+                            )
+                        conn.commit()
+                        flash_msg = t("users.saved")
+                    except Exception:
+                        conn.rollback()
+                        flash_msg = "사용자 저장 실패: 입력값/중복값을 확인하세요"
+                        flash_type = "error"
+                        log_event(conn, "ERROR", path, "사용자 저장 실패", traceback.format_exc(), user["id"])
+                        conn.commit()
 
         load_users = query.get("load", "") == "1"
         q_user_name = (query.get("q_name", "") or "").strip()
         q_role = (query.get("q_role", "") or "").strip()
+        edit_user_id = (query.get("edit_user_id", "") or "").strip()
         users = []
+        selected_edit_user = None
         if load_users:
             where = []
             params = []
@@ -2605,43 +2661,77 @@ def app(environ, start_response):
                 params.append(q_role)
             where_sql = (" WHERE " + " AND ".join(where)) if where else ""
             users = conn.execute(f"SELECT * FROM users{where_sql} ORDER BY id DESC", tuple(params)).fetchall()
+        if edit_user_id.isdigit():
+            selected_edit_user = conn.execute("SELECT id, name, username, role, teacher_type FROM users WHERE id=?", (edit_user_id,)).fetchone()
         rows = "".join([
-            f"<tr><td>{u['id']}</td><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(u['teacher_type'] or '-')}</td></tr>"
+            f"<tr><td>{u['name']}</td><td>{u['username']}</td><td><span class='badge'>{ROLE_LABELS.get(u['role'],u['role'])}</span></td><td>{(t('users.teacher_type.foreign') if u['teacher_type']=='foreign' else t('users.teacher_type.chinese') if u['teacher_type']=='chinese' else '-')}</td><td><a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/users?lang={CURRENT_LANG}&load=1&q_name={quote(q_user_name)}&q_role={quote(q_role)}&edit_user_id={u["id"]}'>관리</a></td></tr>"
             for u in users
         ])
         form = ""
         if has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             form = f"""
-            <div class='card'>
-              <h3>{t("users.add")}</h3>
-              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
-                <label>{t('field.name')} <input name='name' required></label>
-                <label>{t('login.username')} <input name='username' required></label>
-                <label>{t('login.password')} <input name='password' type='password'></label>
-                <label>{t('field.role')}
-                <select name='role'>
-                  <option value='owner'>{role_label('owner')}</option><option value='manager'>{role_label('manager')}</option><option value='teacher'>{role_label('teacher')}</option>
-                  <option value='parent'>{role_label('parent')}</option><option value='student'>{role_label('student')}</option>
-                </select></label>
-                <label id='teacher-type-wrap'>{t('users.teacher_type')}
+            <details class='card'>
+              <summary style='cursor:pointer; font-weight:700'>{t("users.add")}</summary>
+              <div style='margin-top:14px'>
+                <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                  <input type='hidden' name='action' value='create_user'>
+                  <label>{t('field.name')} <input name='name' required></label>
+                  <label>{t('login.username')} <input name='username' required></label>
+                  <label>{t('login.password')} <input name='password' type='password'></label>
+                  <label>{t('field.role')}
+                  <select name='role'>
+                    <option value='owner'>{role_label('owner')}</option><option value='manager'>{role_label('manager')}</option><option value='teacher'>{role_label('teacher')}</option>
+                    <option value='parent'>{role_label('parent')}</option><option value='student'>{role_label('student')}</option>
+                  </select></label>
+                  <label id='teacher-type-wrap'>{t('users.teacher_type')}
+                    <select name='teacher_type'>
+                      <option value='foreign'>{t('users.teacher_type.foreign')}</option>
+                      <option value='chinese'>{t('users.teacher_type.chinese')}</option>
+                    </select>
+                  </label>
+                  <button>{t("common.save")}</button>
+                </form>
+              </div>
+            </details>
+            <script>
+              (function(){{
+                var roleSel=document.querySelector("details.card select[name='role']");
+                var wrap=document.getElementById('teacher-type-wrap');
+                function sync(){{ if(!roleSel||!wrap) return; wrap.style.display=(roleSel.value==='teacher'?'':'none'); }}
+                if(roleSel){{ roleSel.addEventListener('change', sync); sync(); }}
+              }})();
+            </script>
+            """
+        edit_card = ""
+        if selected_edit_user:
+            teacher_type_field = ""
+            if selected_edit_user["role"] == ROLE_TEACHER:
+                teacher_type_field = f"""
+                <label>{t('users.teacher_type')}
                   <select name='teacher_type'>
-                    <option value='foreign'>{t('users.teacher_type.foreign')}</option>
-                    <option value='chinese'>{t('users.teacher_type.chinese')}</option>
+                    <option value='foreign' {'selected' if (selected_edit_user['teacher_type'] or 'foreign')=='foreign' else ''}>{t('users.teacher_type.foreign')}</option>
+                    <option value='chinese' {'selected' if (selected_edit_user['teacher_type'] or '')=='chinese' else ''}>{t('users.teacher_type.chinese')}</option>
                   </select>
                 </label>
+                """
+            edit_card = f"""
+            <div class='card'>
+              <h3>{t('common.edit')}</h3>
+              <form method='post' class='form-row preserve-scroll-form' data-preserve-scroll='1'>
+                <input type='hidden' name='action' value='edit_user'>
+                <input type='hidden' name='user_id' value='{selected_edit_user['id']}'>
+                <label>{t('field.name')} <input name='name' value='{h(selected_edit_user['name'] or '')}' required></label>
+                <label>{t('login.username')} <input name='username' value='{h(selected_edit_user['username'] or '')}' required></label>
+                <label>{t('field.role')} <input value='{role_label(selected_edit_user['role'])}' readonly></label>
+                {teacher_type_field}
+                <label>새 비밀번호 <input name='password' type='password' placeholder='변경할 때만 입력'></label>
                 <button>{t("common.save")}</button>
+                <a class='btn secondary admin-action-link' data-preserve-scroll='1' href='/users?lang={CURRENT_LANG}&load=1&q_name={quote(q_user_name)}&q_role={quote(q_role)}'>{t('common.reset')}</a>
               </form>
-              <script>
-                (function(){{
-                  var roleSel=document.querySelector("select[name='role']");
-                  var wrap=document.getElementById('teacher-type-wrap');
-                  function sync(){{ if(!roleSel||!wrap) return; wrap.style.display=(roleSel.value==='teacher'?'':'none'); }}
-                  if(roleSel){{ roleSel.addEventListener('change', sync); sync(); }}
-                }})();
-              </script>
             </div>
             """
         body_html = form + f"""
+        {edit_card}
         <div class='card'>
           <h3>{t("users.list")}</h3>
           <form method='get' class='mobile-stack query-form'>
@@ -2667,7 +2757,7 @@ def app(environ, start_response):
           </form>
           {'' if load_users else ("<div class='empty-msg'>" + t('common.query_to_load') + "</div>")}
           <div class='table-wrap'><table>
-            <tr><th>{t('field.id')}</th><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th><th>{t('users.teacher_type')}</th></tr>
+            <tr><th>{t('field.name')}</th><th>{t('login.username')}</th><th>{t('field.role')}</th><th>{t('users.teacher_type')}</th><th>{t('common.edit')}</th></tr>
             {rows if load_users else ''}
             {("<tr><td colspan='5' class='empty-msg'>" + t('common.no_data') + "</td></tr>") if (load_users and not rows) else ''}
           </table></div>
@@ -5972,7 +6062,7 @@ def app(environ, start_response):
     return ["Not Found".encode("utf-8")]
 if __name__ == "__main__":
     init_db()
-    with make_server("0.0.0.0", 8000, app) as httpd:
+    with make_server("0.0.0.0", 8000, app, server_class=ThreadedWSGIServer) as httpd:
         print(t('server.start') + ': http://127.0.0.1:8000')
         httpd.serve_forever()
 

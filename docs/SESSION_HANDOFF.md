@@ -3,9 +3,14 @@
 Files changed:
 - app.py
 - schema.sql
+- docs/ACCESS_POLICY.md
+- docs/ADMIN_UX_GUIDELINES.md
+- docs/ROADMAP.md
+- docs/PROJECT_STATE.md
 - docs/SESSION_HANDOFF.md
 
 Routes/pages modified:
+- /users
 - /schedule
 - /attendance
 - /payments
@@ -15,6 +20,8 @@ Routes/pages modified:
 - /masterdata
 
 Behavior added or fixed:
+- `/users` now follows the Phase 1 UX direction more closely: create form is collapsed by default, search/list stays separate, and list rows now open a focused edit panel instead of exposing only a raw ID table
+- `/users` now supports owner-side editing of name, username, teacher type, and optional password reset for existing users without exposing password hashes or mixing edit controls into the result table
 - restored `app.py` from the clean HEAD version after a workspace encoding corruption and then reapplied the current admin UX fixes
 - `/schedule` now supports deleting the selected schedule from the lesson detail panel
 - `/schedule` class list no longer auto-loads by default; it stays collapsed until Query is pressed
@@ -29,15 +36,23 @@ Behavior added or fixed:
 - `/masterdata` now has a `수납 패키지` section for package code/name/credits/list price management
 - `/payments` now uses package master values, stores package/list price/discount, and recharges `students.remaining_credits` on save
 - sample packages seeded: `RT30`, `RT60`, `WK24`, `VIP12`
+- request body parsing is now cached, so CSRF checks and route handlers do not consume POST bodies twice
+- dev server now runs with a threaded WSGI server so one stalled browser request does not freeze the whole app
+- added a repository-level access policy document to lock role visibility/edit rules before more UI changes
+- added shared admin UX guidelines to standardize query-first pages, collapsed forms, picker output, and result density
+- updated project priorities to move role policy and UX structure ahead of cosmetic polish
+- added an integrated roadmap that combines operational must-haves, UX stabilization, branding timing, and phased structural cleanup
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
 - schedule quick-fill still requires selecting a class before saving; it only fills slot context
 - browser verification is still pending for the latest `/counseling`, `/payments`, `/masterdata`, `/schedule`, `/attendance`, `/library`, and `/exams` UI changes
+- payments still use a snapshot-style table and need a true ledger model in the next operational phase
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
 - package rows confirmed in `lms.db`
+- local HTTP replay confirmed `/payments` POST returns and stores package payment with discount and credit recharge
 
 Next recommended task:
-- run one browser pass on `/masterdata?md_view=packages`, `/payments`, and `/counseling`, then continue the remaining query-mode cleanup where full lists still auto-open
+- continue Phase 1 with `/masterdata` and `/attendance`, using the `/users` page as the baseline pattern for collapsed forms and focused edit flows

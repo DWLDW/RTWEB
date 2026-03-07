@@ -44,11 +44,22 @@ Current Pain Points:
 - Legacy ID-driven admin UI in some modules
 
 Current Priorities:
-1. Global admin scroll stabilization
-2. Shared table readability improvements
-3. Explicit query mode consistency
-4. Modernize legacy admin pages
-5. Gradual modularization
+1. Product guardrails: role policy, query-first loading, raw-ID/internal-key cleanup
+2. Operational must-haves: payments ledger, refund/unpaid/discount handling, class history, multi-guardian support, stronger audit logs
+3. Workflow stabilization: search vs create/edit separation on heavy admin pages
+4. Practical efficiency: dashboard today-view, saved filters, export standardization, stronger student detail
+5. Education quality and parent communication after operations stabilize
+6. Branding and structural cleanup after workflow rules are stable
+
+Current UX Focus:
+- collapse create/edit forms by default on heavy admin pages
+- remove raw ID and untranslated internal field-key exposure
+- reduce first-load data volume
+- standardize picker results and empty states
+- define parent vs student visibility boundaries before more UI work
+
+Roadmap Reference:
+- see `docs/ROADMAP.md` for the integrated execution order
 
 Testing Expectations:
 - py_compile must pass
