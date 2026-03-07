@@ -50,6 +50,10 @@ Behavior added or fixed:
 - `/schedule` now supports assigning pending makeup students to a specific lesson and shows assigned makeup students in the lesson detail/card context
 - lesson attendance save now auto-completes matching makeup assignments and writes back to the original absence via `makeup_completed` + `makeup_attendance_id`
 - attendance rule handling is now server-driven: `present/late` always deduct credit, `absent + deduct` means charge now with no makeup, and `absent + no_deduct` means pending makeup with no immediate charge
+- attendance absence options are now labeled by business meaning in the UI: `Deduct Credit` vs `Need Makeup`
+- `Students Needing Makeup` now forces query-first load parameters so the pending makeup list actually renders instead of showing an empty pre-query state
+- the schedule-side makeup picker now allows blank search as a valid query and treats it as "show all pending makeup students for assignment"
+- makeup candidate labels in `/schedule` now show `absence date / original class / student / homeroom teacher` so operators can assign the right student without guessing
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above

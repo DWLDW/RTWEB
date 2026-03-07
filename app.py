@@ -300,7 +300,7 @@ I18N_TEXTS["zh"].update({
 I18N_TEXTS["en"].update({
     "attendance.absence_charge_type": "Absence Charge Type",
     "attendance.charge.deduct": "Deduct Credit",
-    "attendance.charge.no_deduct": "No Credit Deduction",
+    "attendance.charge.no_deduct": "Need Makeup",
     "attendance.requires_makeup": "Requires Makeup",
     "attendance.makeup_completed": "Makeup Completed",
     "attendance.students_needing_makeup": "Students Needing Makeup",
@@ -327,8 +327,8 @@ I18N_TEXTS["en"].update({
 })
 I18N_TEXTS["ko"].update({
     "attendance.absence_charge_type": "결석 차감 유형",
-    "attendance.charge.deduct": "수업 차감",
-    "attendance.charge.no_deduct": "차감 없음",
+    "attendance.charge.deduct": "차감",
+    "attendance.charge.no_deduct": "보강 필요",
     "attendance.requires_makeup": "보강 필요",
     "attendance.makeup_completed": "보강 완료",
     "attendance.students_needing_makeup": "보강 필요 학생",
@@ -356,7 +356,7 @@ I18N_TEXTS["ko"].update({
 I18N_TEXTS["zh"].update({
     "attendance.absence_charge_type": "缺勤扣课类型",
     "attendance.charge.deduct": "扣课",
-    "attendance.charge.no_deduct": "不扣课",
+    "attendance.charge.no_deduct": "需要补课",
     "attendance.requires_makeup": "需要补课",
     "attendance.makeup_completed": "补课完成",
     "attendance.students_needing_makeup": "需补课学生",
@@ -2202,9 +2202,11 @@ def fetch_makeup_candidates(conn, keyword, limit=10, show_all_when_empty=False):
             c.name AS class_name,
             ht.name AS homeroom_teacher_name,
             (
-                st.name_ko || ' (' || COALESCE(st.student_no, '-') || ')'
+                COALESCE(a.lesson_date, '-')
                 || ' / ' || COALESCE(c.name, '-')
-                || ' / ' || COALESCE(a.lesson_date, '-')
+                || ' / ' || COALESCE(st.name_ko, '-')
+                || ' (' || COALESCE(st.student_no, '-') || ')'
+                || ' / ' || COALESCE(ht.name, '-')
             ) AS label
         FROM attendance a
         JOIN students st ON st.user_id=a.student_id
@@ -4563,7 +4565,11 @@ def app(environ, start_response):
                 if str(r["id"]) == selected_schedule_id:
                     selected_schedule = r
                     break
-        makeup_query_enabled = query.get("makeup_load", "") == "1" or bool((query.get("makeup_q", "") or "").strip()) or bool(selected_makeup_source_id)
+        makeup_query_enabled = bool(selected_schedule_id) and (
+            query.get("makeup_load", "") == "1"
+            or bool((query.get("makeup_q", "") or "").strip())
+            or bool(selected_makeup_source_id)
+        )
         makeup_candidates = fetch_makeup_candidates(conn, query.get("makeup_q", ""), limit=12, show_all_when_empty=makeup_query_enabled)
         selected_makeup_source = conn.execute(
             """SELECT
@@ -4894,7 +4900,7 @@ def app(environ, start_response):
                     "schedule_id": selected_schedule['id'],
                 },
                 query_flag_name="makeup_load",
-                query_enabled=makeup_query_enabled,
+                query_enabled=True,
             )
             makeup_rows = "".join([
                 f"<tr><td>{h(item['name_ko'] or '-')}</td><td>{h(item['student_no'] or '-')}</td><td>{h(homeroom_display_name(item['homeroom_teacher_name']))}</td><td>{h(item['source_class_name'] or '-')} / {h(item['source_lesson_date'] or '-')}</td><td><form method='post' class='preserve-scroll-form' data-preserve-scroll='1' onsubmit='return confirm(&quot;Remove this makeup assignment?&quot;);'><input type='hidden' name='type' value='delete_makeup_assignment'><input type='hidden' name='assignment_id' value='{item['id']}'><button class='btn secondary small' type='submit'>{t('common.delete')}</button></form></td></tr>"
@@ -5629,7 +5635,7 @@ def app(environ, start_response):
           </div>
           <div class='btn-row'>
             <button>{t('common.search')}</button>
-            <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&makeup_needed=1'>{t('attendance.students_needing_makeup')}</a>
+            <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&load=1&makeup_needed=1&requires_makeup=1&makeup_completed=0'>{t('attendance.students_needing_makeup')}</a>
             <a class='btn secondary' href='/attendance?lang={CURRENT_LANG}&selected_student_id={selected_student_id}&selected_class_id={selected_class_id}&status={status_filter}&date_from={date_from}&date_to={date_to}&deductible={deductible_filter}&requires_makeup={requires_makeup_filter}&makeup_completed={makeup_completed_filter}&export=csv'>{t('attendance.export_csv')}</a>
           </div>
           </form>
