@@ -75,6 +75,7 @@ Behavior added or fixed:
 - `/users`, `/attendance`, `/payments`, and `/library` large tables now show total result counts and numeric page links instead of only prev/next-style paging
 - schedule makeup-student search now shows total candidate count and numeric page links as well, not just a truncated first page
 - `/counseling`, `/homework`, `/students`, and `/masterdata` class list now also use page-sized result views with total counts and numeric page links
+- `/attendance` now auto-loads the result table when a student or class is already selected, so picker-driven entry does not land on an empty-looking list state
 
 Known issues:
 - broader admin query-mode consistency still needs another pass in modules outside the routes touched above
@@ -88,6 +89,7 @@ Known issues:
 - the makeup search pager range text is currently English-only (`Showing x-y`) and should be moved to translations in the next i18n pass
 - library sort headers now reset the correct page key for each table (`book_page`, `loan_page`); browser verification is still pending
 - masterdata pagination currently covers the class list first; course/level/room/package tables can be paged later if they become large enough
+- a full browser click-pass across every secondary action still remains; the latest broad scenario run covered the main owner workflow, not every edge-case button in every module
 
 Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile app.py`
@@ -100,6 +102,45 @@ Quick verification done:
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after makeup-search pagination and schedule button-size adjustments
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after total-count/numeric-pagination updates
 - `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after counseling/homework/students/masterdata pagination updates
+- HTTP session verification confirmed pagination renders and page 2 responds on:
+  - `/users` -> `1-20 / 670`, `21-40 / 670`
+  - `/students` -> `1-20 / 401`
+  - `/attendance` -> `1-25 / 4423`, `26-50 / 4423`
+  - `/counseling` -> `1-20 / 133`
+  - `/homework` -> `1-20 / 41`
+  - `/payments` -> `1-20 / 936`, `21-40 / 936`
+  - `/library` books -> `1-20 / 500`, `21-40 / 500`
+  - `/library` history -> `1-20 / 100`, `21-40 / 100`
+  - `/masterdata?md_view=classes` -> `1-20 / 40`
+  - `/schedule` makeup search -> `1-12 / 328`, `13-24 / 328`
+- Playwright login/session is working again via local Node+npx
+- owner scenario flow completed end-to-end with live POSTs:
+  - created a new teacher user and a new student user
+  - assigned the student to class `1` and set the new teacher as homeroom teacher
+  - saved a package payment (`RT30`) and verified the student credit balance increased
+  - added a new book, loaned it to the student, and returned it successfully
+  - created an absent/no-deduct attendance record, assigned it to schedule `111` as makeup, and completed it through lesson-mode attendance
+  - verified the source absence became `deduct + makeup_completed=1 + makeup_attendance_id linked`
+  - verified the makeup attendance row remained on the target lesson date and the schedule card/lesson view still showed the student
+- broad HTTP route smoke pass returned `200` on:
+  - `/dashboard`
+  - `/users?load=1`
+  - `/students?load=1`
+  - `/masterdata?md_view=classes&load=1`
+  - `/schedule`
+  - `/attendance`
+  - `/homework?load=1`
+  - `/exams?load=1`
+  - `/counseling?load=1`
+  - `/payments?load=1`
+  - `/announcements`
+  - `/library?load=1`
+  - `/logs?load=1`
+  - `/classes/1`
+  - `/attendance?lesson_mode=1&schedule_id=111&class_id=1&lesson_date=2026-03-02&teacher_id=11`
+  - `/homework?selected_class_id=1`
+  - `/exams?selected_class_id=1`
+- `C:\Users\tooya\AppData\Local\Python\bin\python.exe -m py_compile C:\RTWEB\app.py` passed after the attendance auto-load fix
 
 Next recommended task:
-- browser-verify total-count and numeric page links on `/users`, `/students`, `/attendance`, `/counseling`, `/homework`, `/payments`, `/library`, `/masterdata`, and schedule makeup search, then clean up remaining table i18n/raw-key leaks
+- continue with a focused browser click-pass on remaining secondary actions (`More` menus, delete flows, exports, announcement/log pages), then clean up remaining i18n/raw-key leaks and legacy data inconsistencies in attendance rows

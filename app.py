@@ -2843,7 +2843,13 @@ def app(environ, start_response):
             return [body]
         flash_msg = ""
         flash_type = "success"
-        load_attendance = query.get("load", "") == "1" or query.get("export", "") == "csv"
+        load_attendance = (
+            query.get("load", "") == "1"
+            or query.get("export", "") == "csv"
+            or bool((query.get("selected_student_id", "") or "").strip())
+            or bool((query.get("selected_class_id", "") or "").strip())
+            or query.get("makeup_needed", "") == "1"
+        )
         if method == "POST" and has_role(user, [ROLE_OWNER, ROLE_MANAGER]):
             data = parse_body(environ)
             errs = []

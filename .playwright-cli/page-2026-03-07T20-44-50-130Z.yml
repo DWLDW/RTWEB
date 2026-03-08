@@ -1,0 +1,10 @@
+- generic [ref=e2]:
+  - heading "LMS Login" [level=2] [ref=e3]
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - text: Username
+      - textbox [ref=e6]
+    - generic [ref=e7]:
+      - text: Password
+      - textbox [ref=e8]
+    - button "Login" [ref=e9]

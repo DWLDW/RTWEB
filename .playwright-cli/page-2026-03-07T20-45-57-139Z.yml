@@ -1,0 +1,72 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]: ReadingTown LMS
+    - link "Dashboard" [ref=e5] [cursor=pointer]:
+      - /url: /dashboard?lang=en
+    - link "Users" [ref=e6] [cursor=pointer]:
+      - /url: /users?lang=en
+    - link "Students" [ref=e7] [cursor=pointer]:
+      - /url: /students?lang=en
+    - link "Master Data" [ref=e8] [cursor=pointer]:
+      - /url: /masterdata?lang=en
+    - link "Schedule" [ref=e9] [cursor=pointer]:
+      - /url: /schedule?lang=en
+    - link "Attendance" [ref=e10] [cursor=pointer]:
+      - /url: /attendance?lang=en
+    - link "Homework" [ref=e11] [cursor=pointer]:
+      - /url: /homework?lang=en
+    - link "Exams/Scores" [ref=e12] [cursor=pointer]:
+      - /url: /exams?lang=en
+    - link "Counseling" [ref=e13] [cursor=pointer]:
+      - /url: /counseling?lang=en
+    - link "Payments" [ref=e14] [cursor=pointer]:
+      - /url: /payments?lang=en
+    - link "Announcements" [ref=e15] [cursor=pointer]:
+      - /url: /announcements?lang=en
+    - link "Library" [ref=e16] [cursor=pointer]:
+      - /url: /library?lang=en
+    - link "System Logs" [ref=e17] [cursor=pointer]:
+      - /url: /logs?lang=en
+  - main [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - text: "Signed in:"
+          - strong [ref=e22]: 원장
+          - text: (Owner)
+        - generic [ref=e23]:
+          - text: "Language:"
+          - combobox [ref=e24]:
+            - option "한국어"
+            - option "English" [selected]
+            - option "中文"
+          - button "Logout" [ref=e26]
+      - heading "ReadingTown LMS Dashboard" [level=2] [ref=e27]
+      - generic [ref=e28]:
+        - heading "Operations Overview" [level=3] [ref=e29]
+        - generic [ref=e30]:
+          - generic [ref=e31]:
+            - strong [ref=e32]: Users
+            - generic [ref=e33]: "670"
+          - generic [ref=e34]:
+            - strong [ref=e35]: Students
+            - generic [ref=e36]: "401"
+          - generic [ref=e37]:
+            - strong [ref=e38]: Classes
+            - generic [ref=e39]: "40"
+          - generic [ref=e40]:
+            - strong [ref=e41]: Attendance Records
+            - generic [ref=e42]: "4423"
+      - generic [ref=e43]:
+        - heading "Quick Links" [level=3] [ref=e44]
+        - generic [ref=e45]:
+          - link "Students" [ref=e46] [cursor=pointer]:
+            - /url: /students?lang=en
+          - link "Master Data" [ref=e47] [cursor=pointer]:
+            - /url: /masterdata?lang=en
+          - link "Schedule" [ref=e48] [cursor=pointer]:
+            - /url: /schedule?lang=en
+          - link "Attendance" [ref=e49] [cursor=pointer]:
+            - /url: /attendance?lang=en
+          - link "Homework" [ref=e50] [cursor=pointer]:
+            - /url: /homework?lang=en
